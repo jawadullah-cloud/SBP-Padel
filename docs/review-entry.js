@@ -15,8 +15,37 @@
     btn.onclick=function(e){e.preventDefault();e.stopPropagation();openReview()};
     return true;
   }
+  function hydratePass(){
+    const p=JSON.parse(localStorage.getItem('sbpPadelPayment')||'{}');
+    const id=localStorage.getItem('sbpPadelBookingId')||'PDL-002381';
+    const pass=document.querySelector('#pass .passBody');
+    if(!pass)return;
+    const venue=pass.querySelector(':scope > small');
+    const court=pass.querySelector('h1');
+    const grid=pass.querySelector('.passGrid');
+    const booking=pass.querySelector('h3');
+    if(venue&&p.venue)venue.textContent=p.venue.toUpperCase();
+    if(court&&p.court)court.textContent=p.court.toUpperCase();
+    if(grid){
+      const cells=grid.querySelectorAll('div');
+      if(cells[0]&&p.date)cells[0].querySelector('b').textContent=p.date.replace(',','').toUpperCase();
+      if(cells[1]&&Array.isArray(p.slots)&&p.slots.length)cells[1].querySelector('b').textContent=p.slots.join(', ');
+    }
+    if(booking)booking.textContent=id;
+  }
+  function openRequestedScreen(){
+    const wanted=new URLSearchParams(location.search).get('open');
+    if(wanted!=='pass')return;
+    hydratePass();
+    setTimeout(()=>{
+      const target=document.querySelector('[data-nav="pass"]');
+      if(target)target.click();
+    },30);
+  }
   if(!wire()){
     const obs=new MutationObserver(()=>{if(wire())obs.disconnect()});
     obs.observe(document.body,{childList:true,subtree:true});
   }
+  hydratePass();
+  openRequestedScreen();
 })();
