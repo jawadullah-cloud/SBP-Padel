@@ -1,0 +1,31 @@
+[project]
+name = "sbp-padel-backend"
+version = "0.1.0"
+description = "Sports Board Punjab Padel booking and venue management API"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116,<1.0",
+  "uvicorn[standard]>=0.35,<1.0",
+  "sqlalchemy[asyncio]>=2.0,<3.0",
+  "asyncpg>=0.30,<1.0",
+  "aiosqlite>=0.21,<1.0",
+  "pydantic-settings>=2.10,<3.0",
+  "alembic>=1.16,<2.0",
+  "python-jose[cryptography]>=3.5,<4.0",
+  "passlib[bcrypt]>=1.7,<2.0",
+  "python-multipart>=0.0.20,<1.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4,<9.0",
+  "pytest-asyncio>=1.1,<2.0",
+  "httpx>=0.28,<1.0",
+  "ruff>=0.12,<1.0"
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
