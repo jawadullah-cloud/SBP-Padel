@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
 from app.api.bookings import router as bookings_router
 from app.api.cancellations import router as cancellations_router
@@ -28,7 +29,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.3.0",
+    version="0.4.0",
     description="Sports Board Punjab Padel booking and venue management API",
     lifespan=lifespan,
 )
@@ -48,6 +49,7 @@ app.include_router(bookings_router, prefix=settings.api_prefix)
 app.include_router(cancellations_router, prefix=settings.api_prefix)
 app.include_router(payments_router, prefix=settings.api_prefix)
 app.include_router(notifications_router, prefix=settings.api_prefix)
+app.include_router(admin_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)
