@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
 from app.api.bookings import router as bookings_router
+from app.api.cancellations import router as cancellations_router
 from app.api.policies import router as policies_router
 from app.api.routes import router
 from app.core.config import settings
@@ -42,6 +43,7 @@ app.include_router(router, prefix=settings.api_prefix)
 app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(policies_router, prefix=settings.api_prefix)
 app.include_router(bookings_router, prefix=settings.api_prefix)
+app.include_router(cancellations_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)
