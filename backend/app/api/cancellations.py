@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import current_user
+from app.core.slot_locks import slot_locks
 from app.db.session import get_db
 from app.models.domain import Booking, BookingStatus, Notification, User
 
@@ -33,30 +34,8 @@ async def cancel_booking(
     booking.status = BookingStatus.cancelled
     booking.cancelled_at = datetime.now(timezone.utc)
     booking.cancellation_reason = payload.reason.strip() if payload.reason else None
-    db.add(
-        Notification(
-            user_id=user.id,
-            kind="booking_cancelled",
-            title="Booking cancelled",
-            body=f"Booking {booking.booking_code} has been cancelled.",
-            payload={
-                "booking_id": str(booking.id),
-                "booking_code": booking.booking_code,
-                "refund_required": previous_status == BookingStatus.confirmed,
-            },
-        )
-    )
+    db.add(Notification(user_id=user.id, kind="booking_cancelled", title="Booking cancelled", body=f"Booking {booking.booking_code} has been cancelled.", payload={"booking_id": str(booking.id), "booking_code": booking.booking_code, "refund_required": previous_status == BookingStatus.confirmed}))
     await db.commit()
+    await slot_locks.release_booking(booking.id)
 
-    return {
-        "id": str(booking.id),
-        "booking_code": booking.booking_code,
-        "status": booking.status.value,
-        "slots_released": True,
-        "refund_required": previous_status == BookingStatus.confirmed,
-        "refund_status": (
-            "awaiting_payment_provider"
-            if previous_status == BookingStatus.confirmed
-            else None
-        ),
-    }
+    return {"id": str(booking.id), "booking_code": booking.booking_code, "status": booking.status.value, "slots_released": True, "refund_required": previous_status == BookingStatus.confirmed, "refund_status": "awaiting_payment_provider" if previous_status == BookingStatus.confirmed else None}
