@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 60 * 24 * 7
     service_fee: int = 100
+    slot_hold_minutes: int = 10
 
     model_config = SettingsConfigDict(
         env_file=".env",
