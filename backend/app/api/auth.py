@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,18 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     identifier: str
     password: str
+
+
+async def authenticate(identifier: str, password: str, db: AsyncSession) -> User:
+    normalized = identifier.strip()
+    user = await db.scalar(
+        select(User).where(
+            or_(User.email == normalized.lower(), User.phone == normalized)
+        )
+    )
+    if not user or not verify_password(password, user.password_hash):
+        raise HTTPException(401, "Invalid login credentials")
+    return user
 
 
 @router.post("/register")
@@ -46,18 +59,46 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    return {"access_token": create_access_token(user.id, user.role.value), "token_type": "bearer", "user": {"id": str(user.id), "full_name": user.full_name, "email": user.email, "phone": user.phone}}
+    return {
+        "access_token": create_access_token(user.id, user.role.value),
+        "token_type": "bearer",
+        "user": {
+            "id": str(user.id),
+            "full_name": user.full_name,
+            "email": user.email,
+            "phone": user.phone,
+        },
+    }
 
 
 @router.post("/login")
 async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> dict:
-    identifier = payload.identifier.strip()
-    user = await db.scalar(select(User).where(or_(User.email == identifier.lower(), User.phone == identifier)))
-    if not user or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(401, "Invalid login credentials")
-    return {"access_token": create_access_token(user.id, user.role.value), "token_type": "bearer", "user": {"id": str(user.id), "full_name": user.full_name, "role": user.role.value}}
+    user = await authenticate(payload.identifier, payload.password, db)
+    return {
+        "access_token": create_access_token(user.id, user.role.value),
+        "token_type": "bearer",
+        "user": {"id": str(user.id), "full_name": user.full_name, "role": user.role.value},
+    }
+
+
+@router.post("/token")
+async def token(
+    form: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    user = await authenticate(form.username, form.password, db)
+    return {
+        "access_token": create_access_token(user.id, user.role.value),
+        "token_type": "bearer",
+    }
 
 
 @router.get("/me")
 async def me(user: User = Depends(current_user)) -> dict:
-    return {"id": str(user.id), "full_name": user.full_name, "email": user.email, "phone": user.phone, "role": user.role.value}
+    return {
+        "id": str(user.id),
+        "full_name": user.full_name,
+        "email": user.email,
+        "phone": user.phone,
+        "role": user.role.value,
+    }
