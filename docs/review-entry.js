@@ -6,7 +6,8 @@
     const courtType=document.querySelector('#select .courtOption.selected p')?.textContent?.trim()||'Championship Court';
     const data={venue:'Nishtar Park Sports Complex',date:'Saturday, 22 Aug 2026',court,courtType,slots:slots.length?slots:['7:00 PM – 8:00 PM']};
     localStorage.setItem('sbpPadelReview',JSON.stringify(data));
-    window.location.assign('review-booking.html?v=20260823-review2');
+    if(window.SBPDeepRoute)window.SBPDeepRoute('review-booking.html?v=20260823-review2');
+    else window.location.assign('review-booking.html?v=20260823-review2');
   }
   function wire(){
     const btn=document.querySelector('#time .bookingBottom .primary, #time button.primary.full[data-nav="confirm"]');
