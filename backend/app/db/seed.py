@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.models.domain import Court, PolicyVersion, PricingRule, User, UserRole, Venue
+from app.models.operations import UserVenueAssignment, VenueAssignmentRole
 
 
 async def seed_reference_data(session: AsyncSession) -> None:
@@ -34,57 +35,31 @@ async def seed_reference_data(session: AsyncSession) -> None:
         session.add_all(courts)
         await session.flush()
         for court in courts:
-            for start_hour, end_hour, rate in [
-                (6, 17, Decimal("1800.00")),
-                (17, 19, Decimal("2000.00")),
-                (19, 21, Decimal("2200.00")),
-                (21, 23, Decimal("2000.00")),
-            ]:
-                session.add(
-                    PricingRule(
-                        venue_id=venue.id,
-                        court_id=court.id,
-                        start_time=time(start_hour, 0),
-                        end_time=time(end_hour, 0),
-                        hourly_rate=rate,
-                        priority=100,
-                    )
-                )
+            for start_hour, end_hour, rate in [(6, 17, Decimal("1800.00")), (17, 19, Decimal("2000.00")), (19, 21, Decimal("2200.00")), (21, 23, Decimal("2000.00"))]:
+                session.add(PricingRule(venue_id=venue.id, court_id=court.id, start_time=time(start_hour, 0), end_time=time(end_hour, 0), hourly_rate=rate, priority=100))
+    else:
+        venue = await session.scalar(select(Venue).where(Venue.name == "Nishtar Park Sports Complex"))
 
     if not await session.scalar(select(PolicyVersion.id).limit(1)):
-        session.add(
-            PolicyVersion(
-                version="2026-draft-1",
-                title="SBP Padel Booking, Cancellation & Refund Policy",
-                body=(
-                    "Prototype policy for system development. A booking is confirmed only after successful payment. "
-                    "Players should arrive before their booked session. Cancellation, refund and rescheduling eligibility "
-                    "will be governed by the final Sports Board Punjab approved policy. Venue-side closure may result in "
-                    "rescheduling, wallet credit or refund according to the approved rules."
-                ),
-                effective_from=datetime.now(timezone.utc),
-                is_active=True,
-            )
-        )
+        session.add(PolicyVersion(version="2026-draft-1", title="SBP Padel Booking, Cancellation & Refund Policy", body="Prototype policy for system development. A booking is confirmed only after successful payment. Players should arrive before their booked session. Cancellation, refund and rescheduling eligibility will be governed by the final Sports Board Punjab approved policy. Venue-side closure may result in rescheduling, wallet credit or refund according to the approved rules.", effective_from=datetime.now(timezone.utc), is_active=True))
 
-    if not await session.scalar(select(User.id).where(User.email == "player@sbppadel.local")):
-        session.add(
-            User(
-                full_name="Demo Player",
-                email="player@sbppadel.local",
-                password_hash=hash_password("PadelDemo2026!"),
-                role=UserRole.player,
-            )
-        )
+    async def ensure_user(email: str, name: str, password: str, role: UserRole) -> User:
+        user = await session.scalar(select(User).where(User.email == email))
+        if not user:
+            user = User(full_name=name, email=email, password_hash=hash_password(password), role=role)
+            session.add(user)
+            await session.flush()
+        return user
 
-    if not await session.scalar(select(User.id).where(User.email == "admin@sbppadel.local")):
-        session.add(
-            User(
-                full_name="SBP Padel Administrator",
-                email="admin@sbppadel.local",
-                password_hash=hash_password("PadelAdmin2026!"),
-                role=UserRole.admin,
-            )
-        )
+    await ensure_user("player@sbppadel.local", "Demo Player", "PadelDemo2026!", UserRole.player)
+    await ensure_user("admin@sbppadel.local", "SBP Padel Administrator", "PadelAdmin2026!", UserRole.admin)
+    manager = await ensure_user("manager@sbppadel.local", "Nishtar Park Venue Manager", "PadelManager2026!", UserRole.venue_manager)
+    operator = await ensure_user("operator@sbppadel.local", "Nishtar Park Venue Operator", "PadelOperator2026!", UserRole.venue_operator)
+
+    if venue:
+        for user, role in [(manager, VenueAssignmentRole.manager), (operator, VenueAssignmentRole.operator)]:
+            exists = await session.scalar(select(UserVenueAssignment.id).where(UserVenueAssignment.user_id == user.id, UserVenueAssignment.venue_id == venue.id))
+            if not exists:
+                session.add(UserVenueAssignment(user_id=user.id, venue_id=venue.id, role=role, is_active=True))
 
     await session.commit()
