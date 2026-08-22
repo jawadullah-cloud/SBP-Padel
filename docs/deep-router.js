@@ -24,9 +24,10 @@
 
   function clean(url){try{const u=new URL(url,location.href);return u.pathname.split('/').pop()+u.search}catch{return url}}
   function isIndex(url){const c=clean(url);return c==='index.html'||c.startsWith('index.html?')||c===''||c.startsWith('?')}
+  function isBookingsLegacy(url){const c=clean(url);return c==='bookings.html'||c.startsWith('bookings.html?')}
   function openMain(url){
-    let target='home';
-    try{const u=new URL(url,location.href);target=u.searchParams.get('open')||'home'}catch{}
+    let target=isBookingsLegacy(url)?'bookings':'home';
+    try{const u=new URL(url,location.href);target=u.searchParams.get('open')||target}catch{}
     close(false);
     setTimeout(()=>{
       const button=document.querySelector(`[data-nav="${CSS.escape(target)}"]`);
@@ -40,10 +41,10 @@
       const u=new URL(url,location.href);
       if(u.origin!==location.origin){location.href=url;return}
     }
-    if(isIndex(url)){openMain(url);return}
+    if(isIndex(url)||isBookingsLegacy(url)){openMain(url);return}
     const c=clean(url); const page=c.split('?')[0];
     if(!localPages.has(page)){location.href=url;return}
-    if(push){if(!stack.length&&current)stack.push(current);stack.push(c)}
+    if(push)stack.push(c);
     current=c;
     layer.classList.remove('backing');
     layer.classList.add(back?'backing':'swapping');
@@ -52,9 +53,9 @@
   }
   function back(){
     if(stack.length>1){stack.pop();const prev=stack[stack.length-1];route(prev,false,true);return}
-    close(true);
+    close(false);
   }
-  function close(toBookings=true){
+  function close(toBookings=false){
     layer.classList.add('leaving');
     layer.classList.remove('on');
     setTimeout(()=>{layer.classList.remove('leaving','swapping','backing');frame.src='about:blank';stack=[];current='';if(toBookings)document.querySelector('[data-nav="bookings"]')?.click()},280);
@@ -87,7 +88,7 @@
       e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();back();return;
     }
     const c=clean(target),page=c.split('?')[0];
-    if(isIndex(target)||localPages.has(page)){
+    if(isIndex(target)||isBookingsLegacy(target)||localPages.has(page)){
       e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
       route(target,true,false);
     }
