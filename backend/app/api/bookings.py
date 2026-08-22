@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import current_user
+from app.core.slot_locks import slot_locks
 from app.db.session import get_db
 from app.models.domain import Booking, BookingSlot, BookingStatus, Court, CourtStatus, PolicyVersion, PricingRule, User, Venue
 from app.models.operations import VenueBlock
@@ -106,14 +107,23 @@ async def create_booking(payload: CreateBookingRequest, user: User = Depends(cur
     if not policy:
         raise HTTPException(409, "The selected booking policy is no longer active")
     venue, court, slots, court_fee = await quote_payload(payload, db)
+    lock = await slot_locks.acquire(court.id, payload.booking_date, [slot["start_time"] for slot in slots])
+    if not lock.acquired:
+        raise HTTPException(409, "One or more selected slots are being reserved by another player")
     service_fee = Decimal(str(settings.service_fee))
     booking = Booking(booking_code=f"PDL-{datetime.now(timezone.utc).strftime('%y%m%d%H%M%S%f')[-10:]}", user_id=user.id, venue_id=venue.id, court_id=court.id, booking_date=payload.booking_date, status=BookingStatus.pending_payment, court_fee=court_fee, service_fee=service_fee, total_amount=court_fee + service_fee, policy_version_id=policy.id, policy_accepted_at=datetime.now(timezone.utc))
-    db.add(booking)
-    await db.flush()
-    for slot in slots:
-        db.add(BookingSlot(booking_id=booking.id, court_id=court.id, booking_date=payload.booking_date, start_time=slot["start_time"], end_time=slot["end_time"], rate_snapshot=slot["rate"]))
-    await db.commit()
-    return {"id": str(booking.id), "booking_code": booking.booking_code, "status": booking.status.value, "amount_due": f"{booking.total_amount:.2f}", "currency": booking.currency, "hold_minutes": settings.slot_hold_minutes}
+    try:
+        db.add(booking)
+        await db.flush()
+        for slot in slots:
+            db.add(BookingSlot(booking_id=booking.id, court_id=court.id, booking_date=payload.booking_date, start_time=slot["start_time"], end_time=slot["end_time"], rate_snapshot=slot["rate"]))
+        await db.commit()
+        await slot_locks.bind_booking(booking.id, lock)
+    except Exception:
+        await db.rollback()
+        await slot_locks.release_result(lock)
+        raise
+    return {"id": str(booking.id), "booking_code": booking.booking_code, "status": booking.status.value, "amount_due": f"{booking.total_amount:.2f}", "currency": booking.currency, "hold_minutes": settings.slot_hold_minutes, "atomic_lock": lock.redis_used}
 
 
 @router.get("/me")
