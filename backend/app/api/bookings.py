@@ -1,0 +1,180 @@
+from datetime import date, datetime, time, timezone
+from decimal import Decimal
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.core.security import current_user
+from app.db.session import get_db
+from app.models.domain import (
+    Booking,
+    BookingSlot,
+    BookingStatus,
+    Court,
+    CourtStatus,
+    PolicyVersion,
+    PricingRule,
+    User,
+    Venue,
+)
+
+router = APIRouter(prefix="/bookings", tags=["bookings"])
+ACTIVE_BLOCKING_STATUSES = {
+    BookingStatus.pending_payment,
+    BookingStatus.confirmed,
+    BookingStatus.completed,
+    BookingStatus.rescheduled,
+}
+
+
+class SlotRequest(BaseModel):
+    start_time: time
+
+
+class QuoteRequest(BaseModel):
+    venue_id: UUID
+    court_id: UUID
+    booking_date: date
+    slots: list[SlotRequest] = Field(min_length=1, max_length=8)
+
+
+class CreateBookingRequest(QuoteRequest):
+    policy_version_id: UUID
+    policy_accepted: bool
+
+
+def resolve_rate(rules: list[PricingRule], court: Court, slot_date: date, start_time: time) -> Decimal | None:
+    candidates = []
+    weekday = slot_date.weekday()
+    for rule in rules:
+        if not rule.is_active:
+            continue
+        if rule.court_id and rule.court_id != court.id:
+            continue
+        if rule.court_type and rule.court_type != court.court_type:
+            continue
+        if rule.valid_from and slot_date < rule.valid_from:
+            continue
+        if rule.valid_to and slot_date > rule.valid_to:
+            continue
+        if rule.weekdays and weekday not in rule.weekdays:
+            continue
+        if not (rule.start_time <= start_time < rule.end_time):
+            continue
+        candidates.append(rule)
+    if not candidates:
+        return None
+    candidates.sort(key=lambda r: (r.priority, 1 if r.court_id else 0), reverse=True)
+    return candidates[0].hourly_rate
+
+
+async def quote_payload(payload: QuoteRequest, db: AsyncSession) -> tuple[Venue, Court, list[dict], Decimal]:
+    venue = await db.get(Venue, payload.venue_id)
+    court = await db.get(Court, payload.court_id)
+    if not venue or not venue.is_active or not court or court.venue_id != venue.id:
+        raise HTTPException(404, "Venue or court not found")
+    if court.status != CourtStatus.active:
+        raise HTTPException(409, "Court is not currently bookable")
+
+    requested = sorted({s.start_time.replace(second=0, microsecond=0) for s in payload.slots})
+    rules = (await db.scalars(select(PricingRule).where(and_(PricingRule.venue_id == venue.id, PricingRule.is_active.is_(True))))).all()
+
+    blocking = (await db.execute(
+        select(BookingSlot.start_time)
+        .join(Booking, Booking.id == BookingSlot.booking_id)
+        .where(
+            BookingSlot.court_id == court.id,
+            BookingSlot.booking_date == payload.booking_date,
+            Booking.status.in_(ACTIVE_BLOCKING_STATUSES),
+            BookingSlot.start_time.in_(requested),
+        )
+    )).scalars().all()
+    if blocking:
+        raise HTTPException(409, "One or more selected slots are no longer available")
+
+    details = []
+    total = Decimal("0")
+    for start in requested:
+        if start < venue.opening_time or start >= venue.closing_time:
+            raise HTTPException(400, f"Slot {start.isoformat(timespec='minutes')} is outside venue hours")
+        rate = resolve_rate(rules, court, payload.booking_date, start)
+        if rate is None:
+            raise HTTPException(409, f"No active price is configured for {start.isoformat(timespec='minutes')}")
+        end = time((start.hour + 1) % 24, start.minute)
+        details.append({"start_time": start, "end_time": end, "rate": rate})
+        total += rate
+    return venue, court, details, total
+
+
+@router.post("/quote")
+async def quote(payload: QuoteRequest, db: AsyncSession = Depends(get_db)) -> dict:
+    venue, court, slots, court_fee = await quote_payload(payload, db)
+    service_fee = Decimal(str(settings.service_fee))
+    return {
+        "venue": {"id": str(venue.id), "name": venue.name},
+        "court": {"id": str(court.id), "name": court.name, "court_type": court.court_type},
+        "date": payload.booking_date.isoformat(),
+        "slots": [{"start_time": s["start_time"].isoformat(timespec="minutes"), "end_time": s["end_time"].isoformat(timespec="minutes"), "rate": f'{s["rate"]:.2f}', "currency": "PKR"} for s in slots],
+        "court_fee": f"{court_fee:.2f}",
+        "service_fee": f"{service_fee:.2f}",
+        "total": f"{court_fee + service_fee:.2f}",
+        "currency": "PKR",
+    }
+
+
+@router.post("")
+async def create_booking(payload: CreateBookingRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> dict:
+    if not payload.policy_accepted:
+        raise HTTPException(400, "Booking policy must be accepted")
+    policy = await db.get(PolicyVersion, payload.policy_version_id)
+    if not policy or not policy.is_active or policy.effective_from > datetime.now(timezone.utc):
+        raise HTTPException(409, "The selected booking policy is no longer active")
+
+    venue, court, slots, court_fee = await quote_payload(payload, db)
+    service_fee = Decimal(str(settings.service_fee))
+    code = f"PDL-{datetime.now(timezone.utc).strftime('%y%m%d%H%M%S%f')[-10:]}"
+    booking = Booking(
+        booking_code=code,
+        user_id=user.id,
+        venue_id=venue.id,
+        court_id=court.id,
+        booking_date=payload.booking_date,
+        status=BookingStatus.pending_payment,
+        court_fee=court_fee,
+        service_fee=service_fee,
+        total_amount=court_fee + service_fee,
+        policy_version_id=policy.id,
+        policy_accepted_at=datetime.now(timezone.utc),
+    )
+    db.add(booking)
+    await db.flush()
+    for slot in slots:
+        db.add(BookingSlot(
+            booking_id=booking.id,
+            court_id=court.id,
+            booking_date=payload.booking_date,
+            start_time=slot["start_time"],
+            end_time=slot["end_time"],
+            rate_snapshot=slot["rate"],
+        ))
+    await db.commit()
+    return {"id": str(booking.id), "booking_code": booking.booking_code, "status": booking.status.value, "amount_due": f"{booking.total_amount:.2f}", "currency": booking.currency}
+
+
+@router.get("/me")
+async def my_bookings(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> list[dict]:
+    rows = (await db.scalars(select(Booking).where(Booking.user_id == user.id).order_by(Booking.booking_date.desc(), Booking.created_at.desc()))).all()
+    return [{"id": str(b.id), "booking_code": b.booking_code, "date": b.booking_date.isoformat(), "status": b.status.value, "court_id": str(b.court_id), "venue_id": str(b.venue_id), "total": f"{b.total_amount:.2f}", "currency": b.currency} for b in rows]
+
+
+@router.get("/{booking_id}")
+async def booking_detail(booking_id: UUID, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> dict:
+    booking = await db.get(Booking, booking_id)
+    if not booking or booking.user_id != user.id:
+        raise HTTPException(404, "Booking not found")
+    slots = (await db.scalars(select(BookingSlot).where(BookingSlot.booking_id == booking.id).order_by(BookingSlot.start_time))).all()
+    return {"id": str(booking.id), "booking_code": booking.booking_code, "date": booking.booking_date.isoformat(), "status": booking.status.value, "venue_id": str(booking.venue_id), "court_id": str(booking.court_id), "slots": [{"start_time": s.start_time.isoformat(timespec="minutes"), "end_time": s.end_time.isoformat(timespec="minutes"), "rate": f"{s.rate_snapshot:.2f}"} for s in slots], "court_fee": f"{booking.court_fee:.2f}", "service_fee": f"{booking.service_fee:.2f}", "total": f"{booking.total_amount:.2f}", "currency": booking.currency, "policy_accepted_at": booking.policy_accepted_at.isoformat() if booking.policy_accepted_at else None}
