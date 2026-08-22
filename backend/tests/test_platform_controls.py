@@ -18,7 +18,7 @@ def admin_headers(client: TestClient) -> dict[str, str]:
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
-def test_finance_reconciliation_and_audit_log() -> None:
+def test_finance_reconciliation_audit_and_reports() -> None:
     with TestClient(app) as client:
         headers = admin_headers(client)
         summary = client.get(
@@ -44,11 +44,19 @@ def test_finance_reconciliation_and_audit_log() -> None:
         assert batches.status_code == 200
         assert any(row["id"] == batch.json()["id"] for row in batches.json())
 
+        reports = client.get(
+            "/api/v1/admin/reports/venue-performance",
+            params={"from_date": "2026-08-01", "to_date": "2026-12-31"},
+            headers=headers,
+        )
+        assert reports.status_code == 200
+        assert any(row["venue_name"] == "Nishtar Park Sports Complex" for row in reports.json())
+
         audit = client.get("/api/v1/admin/audit", headers=headers)
         assert audit.status_code == 200
-        assert any(
-            row["action"] == "finance.reconciliation.generated" for row in audit.json()
-        )
+        actions = {row["action"] for row in audit.json()}
+        assert "finance.reconciliation.generated" in actions
+        assert any(action.startswith("post.admin.finance.reconciliation-batches") for action in actions)
 
 
 def test_booking_creation_reports_lock_mode() -> None:
