@@ -1,0 +1,17 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+
+const API=process.env.NEXT_PUBLIC_API_URL||'http://127.0.0.1:8000/api/v1';
+type Summary={from_date:string;to_date:string;provider:string;currency:string;payment_count:number;paid_amount:string;refund_count:number;refunded_amount:string;net_amount:string;pending_refunds:number};
+type Batch={id:string;from_date:string;to_date:string;provider:string;currency:string;paid_amount:string;refunded_amount:string;net_amount:string;payment_count:number;refund_count:number;generated_at:string};
+
+export default function FinancePage(){
+ const [token,setToken]=useState('');const [fromDate,setFromDate]=useState('2026-08-01');const [toDate,setToDate]=useState('2026-08-31');const [summary,setSummary]=useState<Summary|null>(null);const [batches,setBatches]=useState<Batch[]>([]);const [error,setError]=useState('');
+ const auth=useMemo(()=>({Authorization:`Bearer ${token}`}),[token]);
+ async function api(path:string,options:RequestInit={}){const r=await fetch(`${API}${path}`,{...options,headers:{'Content-Type':'application/json',...auth}});if(!r.ok)throw new Error((await r.json()).detail||'Request failed');return r.json()}
+ async function load(){setError('');try{setSummary(await api(`/admin/finance/summary?from_date=${fromDate}&to_date=${toDate}`));setBatches(await api('/admin/finance/reconciliation-batches'))}catch(e){setError(e instanceof Error?e.message:'Unable to load finance data')}}
+ async function generate(){try{await api(`/admin/finance/reconciliation-batches?from_date=${fromDate}&to_date=${toDate}`,{method:'POST'});await load()}catch(e){setError(e instanceof Error?e.message:'Unable to generate reconciliation')}}
+ useEffect(()=>{const t=localStorage.getItem('sbp_padel_hq_token')||'';setToken(t)},[]);useEffect(()=>{if(token)load()},[token]);
+ return <main className="main"><header className="top"><div><h1>Finance & Reconciliation</h1><p>Payment settlement, refunds and net collections.</p></div><a className="btn" href="/hq">BACK TO HQ</a></header>{error&&<div className="error">{error}</div>}<section className="card bookingFilters"><input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)}/><input type="date" value={toDate} onChange={e=>setToDate(e.target.value)}/><button className="btn" onClick={load}>REFRESH</button><button className="btn" onClick={generate}>GENERATE RECONCILIATION</button></section>{summary&&<section className="grid section"><div className="card metric"><b>{summary.currency} {summary.paid_amount}</b><span>Paid amount</span></div><div className="card metric"><b>{summary.currency} {summary.refunded_amount}</b><span>Completed refunds</span></div><div className="card metric"><b>{summary.currency} {summary.net_amount}</b><span>Net collections</span></div><div className="card metric"><b>{summary.pending_refunds}</b><span>Pending refunds</span></div></section>}<section className="section"><div className="sectionHead"><h2>Reconciliation batches</h2></div><div className="table"><table><thead><tr><th>PERIOD</th><th>PROVIDER</th><th>PAID</th><th>REFUNDED</th><th>NET</th><th>GENERATED</th></tr></thead><tbody>{batches.map(b=><tr key={b.id}><td>{b.from_date} → {b.to_date}</td><td>{b.provider}</td><td>{b.currency} {b.paid_amount}</td><td>{b.currency} {b.refunded_amount}</td><td><b>{b.currency} {b.net_amount}</b></td><td>{new Date(b.generated_at).toLocaleString()}</td></tr>)}</tbody></table></div></section></main>
+}
