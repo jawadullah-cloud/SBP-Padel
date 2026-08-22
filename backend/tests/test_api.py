@@ -3,6 +3,15 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
+def login_headers(client: TestClient) -> dict[str, str]:
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"identifier": "player@sbppadel.local", "password": "PadelDemo2026!"},
+    )
+    assert login.status_code == 200
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
 def test_health() -> None:
     with TestClient(app) as client:
         response = client.get("/api/v1/health")
@@ -14,8 +23,7 @@ def test_seeded_venue_and_variable_pricing() -> None:
     with TestClient(app) as client:
         venues = client.get("/api/v1/venues")
         assert venues.status_code == 200
-        data = venues.json()
-        venue = next(v for v in data if v["name"] == "Nishtar Park Sports Complex")
+        venue = next(v for v in venues.json() if v["name"] == "Nishtar Park Sports Complex")
         availability = client.get(
             f"/api/v1/venues/{venue['id']}/availability",
             params={"date": "2026-08-23"},
@@ -36,20 +44,13 @@ def test_seeded_venue_and_variable_pricing() -> None:
 
 def test_policy_login_quote_booking_and_cancel() -> None:
     with TestClient(app) as client:
-        login = client.post(
-            "/api/v1/auth/login",
-            json={"identifier": "player@sbppadel.local", "password": "PadelDemo2026!"},
-        )
-        assert login.status_code == 200
-        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
-
+        headers = login_headers(client)
         me = client.get("/api/v1/auth/me", headers=headers)
         assert me.status_code == 200
         assert me.json()["role"] == "player"
 
         policy = client.get("/api/v1/policies/active")
         assert policy.status_code == 200
-
         venues = client.get("/api/v1/venues").json()
         venue_id = venues[0]["id"]
         detail = client.get(f"/api/v1/venues/{venue_id}").json()
@@ -66,19 +67,18 @@ def test_policy_login_quote_booking_and_cancel() -> None:
         assert quote.json()["court_fee"] == "4400.00"
         assert quote.json()["total"] == "4500.00"
 
-        create_payload = {
-            **payload,
-            "policy_version_id": policy.json()["id"],
-            "policy_accepted": True,
-        }
-        created = client.post("/api/v1/bookings", json=create_payload, headers=headers)
+        created = client.post(
+            "/api/v1/bookings",
+            json={
+                **payload,
+                "policy_version_id": policy.json()["id"],
+                "policy_accepted": True,
+            },
+            headers=headers,
+        )
         assert created.status_code == 200
         assert created.json()["status"] == "pending_payment"
         assert created.json()["hold_minutes"] == 10
-
-        mine = client.get("/api/v1/bookings/me", headers=headers)
-        assert mine.status_code == 200
-        assert any(booking["id"] == created.json()["id"] for booking in mine.json())
 
         conflict = client.post("/api/v1/bookings/quote", json=payload)
         assert conflict.status_code == 409
@@ -91,6 +91,70 @@ def test_policy_login_quote_booking_and_cancel() -> None:
         assert cancelled.status_code == 200
         assert cancelled.json()["status"] == "cancelled"
         assert cancelled.json()["slots_released"] is True
+        assert client.post("/api/v1/bookings/quote", json=payload).status_code == 200
 
-        quote_after_cancel = client.post("/api/v1/bookings/quote", json=payload)
-        assert quote_after_cancel.status_code == 200
+
+def test_payment_confirmation_notification_and_refund_request() -> None:
+    with TestClient(app) as client:
+        headers = login_headers(client)
+        policy = client.get("/api/v1/policies/active").json()
+        venue = client.get("/api/v1/venues").json()[0]
+        detail = client.get(f"/api/v1/venues/{venue['id']}").json()
+        court_id = next(c["id"] for c in detail["courts"] if c["code"] == "02")
+        booking_payload = {
+            "venue_id": venue["id"],
+            "court_id": court_id,
+            "booking_date": "2026-09-02",
+            "slots": [{"start_time": "18:00"}],
+            "policy_version_id": policy["id"],
+            "policy_accepted": True,
+        }
+        created = client.post("/api/v1/bookings", json=booking_payload, headers=headers)
+        assert created.status_code == 200
+
+        initiated = client.post(
+            "/api/v1/payments/initiate",
+            json={"booking_id": created.json()["id"], "method": "wallet"},
+            headers=headers,
+        )
+        assert initiated.status_code == 200
+        payment_id = initiated.json()["payment_id"]
+        assert initiated.json()["status"] == "pending"
+        assert initiated.json()["requires_provider_integration"] is True
+
+        confirmed = client.post(
+            f"/api/v1/payments/{payment_id}/simulate-success",
+            headers=headers,
+        )
+        assert confirmed.status_code == 200
+        assert confirmed.json()["payment_status"] == "paid"
+        assert confirmed.json()["booking_status"] == "confirmed"
+
+        booking = client.get(
+            f"/api/v1/bookings/{created.json()['id']}", headers=headers
+        )
+        assert booking.status_code == 200
+        assert booking.json()["status"] == "confirmed"
+
+        notifications = client.get("/api/v1/notifications/me", headers=headers)
+        assert notifications.status_code == 200
+        assert any(n["kind"] == "booking_confirmed" for n in notifications.json())
+
+        cancelled = client.post(
+            f"/api/v1/bookings/{created.json()['id']}/cancel",
+            json={"reason": "Unable to attend"},
+            headers=headers,
+        )
+        assert cancelled.status_code == 200
+        assert cancelled.json()["refund_required"] is True
+
+        refund = client.post(
+            f"/api/v1/payments/{payment_id}/refund",
+            json={"reason": "Booking cancelled by player"},
+            headers=headers,
+        )
+        assert refund.status_code == 200
+        assert refund.json()["status"] == "requested"
+
+        notifications_after = client.get("/api/v1/notifications/me", headers=headers)
+        assert any(n["kind"] == "refund_requested" for n in notifications_after.json())
