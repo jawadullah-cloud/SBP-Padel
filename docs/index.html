@@ -1,179 +1,19 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>SBP Padel UI Lab</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css" />
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SBP Padel</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="styles.css">
 </head>
-<body data-theme="dark">
-  <main class="stage">
-    <section class="phone-shell">
-      <div class="statusbar">
-        <span>9:41</span>
-        <div class="status-icons">● ● ▰</div>
-      </div>
-
-      <div class="app" id="app">
-        <header class="topbar">
-          <button class="brand-mark" data-nav="home" aria-label="Home">
-            <span class="brand-dot"></span>
-            <span>SBP PADEL</span>
-          </button>
-          <button class="icon-btn" id="themeToggle" aria-label="Toggle theme">
-            <span class="theme-icon">☾</span>
-          </button>
-        </header>
-
-        <section class="screen active" id="home">
-          <div class="hero">
-            <div class="hero-grid"></div>
-            <div class="hero-content">
-              <p class="eyebrow">SPORTS BOARD PUNJAB</p>
-              <h1>Own the<br><span>next point.</span></h1>
-              <p class="hero-copy">Premium padel courts, effortless booking, one tap away.</p>
-              <button class="primary-cta" data-nav="venue">
-                Book a court <span>→</span>
-              </button>
-            </div>
-          </div>
-
-          <section class="section">
-            <div class="section-head">
-              <div>
-                <p class="kicker">AVAILABLE NOW</p>
-                <h2>Nishtar Park</h2>
-              </div>
-              <button class="text-btn" data-nav="venue">View</button>
-            </div>
-
-            <article class="venue-card" data-nav="venue">
-              <div class="court-art">
-                <div class="court-lines"></div>
-                <span class="court-badge">4 COURTS</span>
-              </div>
-              <div class="venue-info">
-                <div>
-                  <h3>Nishtar Park Sports Complex</h3>
-                  <p>Lahore · Floodlit courts</p>
-                </div>
-                <span class="arrow-chip">↗</span>
-              </div>
-            </article>
-          </section>
-
-          <section class="section compact">
-            <p class="kicker">NEXT AVAILABLE</p>
-            <div class="availability-row">
-              <div>
-                <span class="time">7:00</span><span class="ampm"> PM</span>
-                <p>Today · Court 02</p>
-              </div>
-              <button class="slot-pill" data-nav="booking">Book</button>
-            </div>
-          </section>
-        </section>
-
-        <section class="screen" id="venue">
-          <div class="venue-hero">
-            <button class="back-btn" data-nav="home">←</button>
-            <div class="venue-hero-art">
-              <div class="court-perspective"></div>
-            </div>
-          </div>
-
-          <section class="section venue-detail">
-            <p class="eyebrow">NISHTAR PARK SPORTS COMPLEX</p>
-            <h1 class="display-sm">Padel at<br>Nishtar Park.</h1>
-            <p class="muted">Four professional courts with evening lighting, player facilities and secure on-site parking.</p>
-
-            <div class="metric-grid">
-              <div class="metric"><strong>4</strong><span>Courts</span></div>
-              <div class="metric"><strong>06:00</strong><span>Opens</span></div>
-              <div class="metric"><strong>23:00</strong><span>Closes</span></div>
-            </div>
-
-            <div class="feature-row">
-              <span>Floodlights</span>
-              <span>Parking</span>
-              <span>Changing rooms</span>
-            </div>
-
-            <button class="primary-cta full" data-nav="booking">
-              Check availability <span>→</span>
-            </button>
-          </section>
-        </section>
-
-        <section class="screen" id="booking">
-          <section class="section booking-section">
-            <button class="back-btn inline" data-nav="venue">←</button>
-            <p class="eyebrow">BOOK A COURT</p>
-            <h1 class="display-sm">Choose your<br>time.</h1>
-
-            <div class="date-strip" id="dateStrip">
-              <button class="date-chip"><span>FRI</span><strong>21</strong></button>
-              <button class="date-chip selected"><span>SAT</span><strong>22</strong></button>
-              <button class="date-chip"><span>SUN</span><strong>23</strong></button>
-              <button class="date-chip"><span>MON</span><strong>24</strong></button>
-            </div>
-
-            <div class="booking-card">
-              <div class="booking-card-head">
-                <div>
-                  <p class="kicker">COURT 02</p>
-                  <h3>Evening session</h3>
-                </div>
-                <span class="price">PKR 2,500</span>
-              </div>
-
-              <div class="slots" id="slots">
-                <button class="time-slot">6:00 PM</button>
-                <button class="time-slot selected">7:00 PM</button>
-                <button class="time-slot">8:00 PM</button>
-                <button class="time-slot disabled" disabled>9:00 PM</button>
-              </div>
-            </div>
-
-            <div class="summary-card">
-              <div>
-                <p class="kicker">YOUR SESSION</p>
-                <h3 id="summaryTime">7:00 PM · Court 02</h3>
-                <p>60 minutes · Saturday 22 Aug</p>
-              </div>
-              <span class="summary-price">PKR 2,500</span>
-            </div>
-
-            <button class="primary-cta full" id="continueBtn">
-              Continue <span>→</span>
-            </button>
-          </section>
-        </section>
-
-        <nav class="bottom-nav">
-          <button class="nav-item active" data-nav="home"><span>⌂</span><small>Home</small></button>
-          <button class="nav-item" data-nav="venue"><span>⌕</span><small>Courts</small></button>
-          <button class="nav-item" data-nav="booking"><span>◫</span><small>Bookings</small></button>
-          <button class="nav-item"><span>○</span><small>Profile</small></button>
-        </nav>
-      </div>
-    </section>
-
-    <aside class="notes">
-      <p class="eyebrow">SBP PADEL / UI LAB</p>
-      <h2>Free interactive design workflow</h2>
-      <p>This browser prototype is our visual source of truth. Refine it first, then port the approved components and screens to Kotlin + Jetpack Compose.</p>
-      <div class="note-grid">
-        <div><strong>Theme</strong><span>Dark + Light</span></div>
-        <div><strong>UI</strong><span>Responsive mobile</span></div>
-        <div><strong>Motion</strong><span>CSS transitions</span></div>
-        <div><strong>Cost</strong><span>Free</span></div>
-      </div>
-    </aside>
-  </main>
-  <script src="app.js"></script>
-</body>
-</html>
+<body data-theme="dark"><main class="stage"><section class="phone-shell"><div class="statusbar"><span>9:41</span><span>● ● ▰</span></div><div class="app">
+<header class="topbar"><button class="brand" data-nav="home"><i></i><span>SBP <b>PADEL</b></span></button><button class="icon-btn" id="themeToggle">☾</button></header>
+<section class="screen active" id="home">
+<div class="hero photo"><div class="shade"></div><div class="hero-copy"><p class="eyebrow">SPORTS BOARD PUNJAB</p><h1>Find your<br><em>court.</em></h1><p>Discover and book SBP padel courts across Punjab.</p><button class="cta" data-nav="venues">Explore venues <b>→</b></button></div></div>
+<div class="section"><div class="section-head"><div><p class="eyebrow">PLAY ACROSS PUNJAB</p><h2>Venues</h2></div><button class="link" data-nav="venues">View all</button></div>
+<article class="venue-card" data-nav="nishtar"><div class="venue-photo"><span class="live">OPEN VENUE</span></div><div class="venue-body"><div><h3>Nishtar Park Sports Complex</h3><p>Lahore · 5 padel courts</p></div><span class="round">↗</span></div></article>
+<div class="coming"><span>＋</span><div><b>More venues across Punjab</b><p>New SBP padel facilities will appear here as they become available.</p></div></div></div>
+</section>
+<section class="screen" id="venues"><div class="page-head"><p class="eyebrow">SBP PADEL NETWORK</p><h1>Find a venue.</h1><p>Explore Sports Board Punjab padel facilities.</p></div><div class="search">⌕ <span>Search by city or venue</span></div><div class="chips"><button class="chip selected">All</button><button class="chip">Lahore</button><button class="chip">Near me</button></div><div class="section no-top"><article class="venue-card large" data-nav="nishtar"><div class="venue-photo"><span class="live">AVAILABLE</span></div><div class="venue-body"><div><h3>Nishtar Park Sports Complex</h3><p>Lahore · 1 Championship + 4 Training</p></div><span class="round">→</span></div></article><div class="future"><p class="eyebrow">GROWING NETWORK</p><h3>More courts. More cities.</h3><p>SBP Padel is designed to bring future venues across Punjab into one booking experience.</p></div></div></section>
+<section class="screen" id="nishtar"><div class="detail-photo"><button class="back" data-nav="venues">←</button><span class="photo-tag">NISHTAR PARK · LAHORE</span></div><div class="section detail"><p class="eyebrow">SBP PADEL VENUE</p><h1>Nishtar Park<br>Sports Complex</h1><p class="muted">The first venue in the SBP Padel network, with five floodlit courts and player facilities.</p><div class="stats"><div><strong>5</strong><span>Total courts</span></div><div><strong>1</strong><span>Championship</span></div><div><strong>4</strong><span>Training</span></div></div><h3 class="subhead">Facilities</h3><div class="amenities"><span>☀ Floodlights</span><span>Ⓟ Parking</span><span>☕ Cafeteria</span><span>▤ Spectator seating</span></div><div class="court-choice"><div><p class="eyebrow">CHOOSE YOUR PLAY</p><h3>Championship Court</h3><p>1 court</p></div><button data-nav="booking">Book →</button></div><div class="court-choice"><div><h3>Training Courts</h3><p>4 courts</p></div><button data-nav="booking">Book →</button></div></div></section>
+<section class="screen" id="booking"><div class="section booking"><button class="back inline" data-nav="nishtar">←</button><p class="eyebrow">NISHTAR PARK · LAHORE</p><h1>Choose your<br>session.</h1><div class="dates"><button><small>FRI</small><b>21</b></button><button class="selected"><small>SAT</small><b>22</b></button><button><small>SUN</small><b>23</b></button><button><small>MON</small><b>24</b></button></div><div class="booking-card"><div class="booking-title"><div><p class="eyebrow">CHAMPIONSHIP COURT</p><h3>Available times</h3></div><span>60 min</span></div><div class="slots"><button>6:00 PM</button><button class="selected">7:00 PM</button><button>8:00 PM</button><button>9:00 PM</button></div></div><button class="cta full" id="continueBtn">Continue <b>→</b></button></div></section>
+<nav class="bottom-nav"><button class="nav active" data-nav="home"><span>⌂</span><small>Home</small></button><button class="nav" data-nav="venues"><span>⌖</span><small>Venues</small></button><button class="nav" data-nav="booking"><span>◫</span><small>Bookings</small></button><button class="nav"><span>○</span><small>Profile</small></button></nav>
+</div></section><aside class="notes"><p class="eyebrow">SBP PADEL / PRODUCT DIRECTION</p><h2>One platform.<br>Every SBP court.</h2><p>The home stays Punjab-wide. Venues are discovered separately, and each facility gets its own identity, courts and booking inventory.</p><div class="flow"><span>Home</span><i>→</i><span>Venues</span><i>→</i><span>Venue</span><i>→</i><span>Book</span></div></aside></main><script src="app.js"></script></body></html>
