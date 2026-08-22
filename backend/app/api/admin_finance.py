@@ -2,7 +2,7 @@ from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,8 @@ admin_user = require_roles(UserRole.admin)
 
 
 def bounds(from_date: date, to_date: date) -> tuple[datetime, datetime]:
+    if to_date < from_date:
+        raise HTTPException(400, "to_date cannot be before from_date")
     return (
         datetime.combine(from_date, time.min, tzinfo=timezone.utc),
         datetime.combine(to_date, time.max, tzinfo=timezone.utc),
@@ -36,23 +38,31 @@ async def finance_summary(
     if provider:
         payment_filters.append(Payment.provider == provider)
     paid_stmt = select(func.count(Payment.id), func.coalesce(func.sum(Payment.amount), 0)).where(
-        *payment_filters, Payment.status.in_([PaymentStatus.paid, PaymentStatus.refunded, PaymentStatus.partially_refunded])
+        *payment_filters,
+        Payment.status.in_([PaymentStatus.paid, PaymentStatus.refunded, PaymentStatus.partially_refunded]),
     )
     payment_count, paid_amount = (await db.execute(paid_stmt)).one()
 
-    refund_stmt = select(func.count(Refund.id), func.coalesce(func.sum(Refund.amount), 0)).where(
+    refund_filters = [
         Refund.created_at >= start,
         Refund.created_at <= end,
         Refund.status == RefundStatus.completed,
+    ]
+    pending_filters = [
+        Refund.created_at >= start,
+        Refund.created_at <= end,
+        Refund.status.in_([RefundStatus.requested, RefundStatus.processing]),
+    ]
+    refund_stmt = select(func.count(Refund.id), func.coalesce(func.sum(Refund.amount), 0)).join(
+        Payment, Payment.id == Refund.payment_id
     )
-    refund_count, refunded_amount = (await db.execute(refund_stmt)).one()
-    pending_refunds = await db.scalar(
-        select(func.count(Refund.id)).where(
-            Refund.created_at >= start,
-            Refund.created_at <= end,
-            Refund.status.in_([RefundStatus.requested, RefundStatus.processing]),
-        )
-    ) or 0
+    pending_stmt = select(func.count(Refund.id)).join(Payment, Payment.id == Refund.payment_id)
+    if provider:
+        refund_filters.append(Payment.provider == provider)
+        pending_filters.append(Payment.provider == provider)
+    refund_count, refunded_amount = (await db.execute(refund_stmt.where(*refund_filters))).one()
+    pending_refunds = await db.scalar(pending_stmt.where(*pending_filters)) or 0
+
     paid = Decimal(paid_amount or 0)
     refunded = Decimal(refunded_amount or 0)
     return {
@@ -73,19 +83,16 @@ async def finance_summary(
 async def finance_transactions(
     from_date: date,
     to_date: date,
+    provider: str | None = None,
     limit: int = Query(default=500, ge=1, le=2000),
     _: User = Depends(admin_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
     start, end = bounds(from_date, to_date)
-    rows = (
-        await db.scalars(
-            select(Payment)
-            .where(Payment.created_at >= start, Payment.created_at <= end)
-            .order_by(Payment.created_at.desc())
-            .limit(limit)
-        )
-    ).all()
+    stmt = select(Payment).where(Payment.created_at >= start, Payment.created_at <= end)
+    if provider:
+        stmt = stmt.where(Payment.provider == provider)
+    rows = (await db.scalars(stmt.order_by(Payment.created_at.desc()).limit(limit))).all()
     return [
         {
             "id": str(p.id),
@@ -126,7 +133,15 @@ async def create_reconciliation_batch(
     )
     db.add(row)
     await db.flush()
-    await write_audit(db, actor, "finance.reconciliation.generated", "reconciliation_batch", row.id, f"Generated reconciliation {from_date} to {to_date}", payload=summary)
+    await write_audit(
+        db,
+        actor,
+        "finance.reconciliation.generated",
+        "reconciliation_batch",
+        row.id,
+        f"Generated reconciliation {from_date} to {to_date}",
+        payload=summary,
+    )
     await db.commit()
     await db.refresh(row)
     return {"id": str(row.id), **summary}
@@ -136,13 +151,26 @@ async def create_reconciliation_batch(
 async def list_reconciliation_batches(
     _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)
 ) -> list[dict]:
-    rows = (await db.scalars(select(ReconciliationBatch).order_by(ReconciliationBatch.generated_at.desc()).limit(200))).all()
+    rows = (
+        await db.scalars(
+            select(ReconciliationBatch)
+            .order_by(ReconciliationBatch.generated_at.desc())
+            .limit(200)
+        )
+    ).all()
     return [
         {
-            "id": str(r.id), "from_date": r.period_from.isoformat(), "to_date": r.period_to.isoformat(),
-            "provider": r.provider, "currency": r.currency, "paid_amount": f"{r.paid_amount:.2f}",
-            "refunded_amount": f"{r.refunded_amount:.2f}", "net_amount": f"{r.net_amount:.2f}",
-            "payment_count": r.payment_count, "refund_count": r.refund_count, "generated_at": r.generated_at.isoformat(),
+            "id": str(r.id),
+            "from_date": r.period_from.isoformat(),
+            "to_date": r.period_to.isoformat(),
+            "provider": r.provider,
+            "currency": r.currency,
+            "paid_amount": f"{r.paid_amount:.2f}",
+            "refunded_amount": f"{r.refunded_amount:.2f}",
+            "net_amount": f"{r.net_amount:.2f}",
+            "payment_count": r.payment_count,
+            "refund_count": r.refund_count,
+            "generated_at": r.generated_at.isoformat(),
         }
         for r in rows
     ]
@@ -167,10 +195,16 @@ async def audit_log(
     rows = (await db.scalars(stmt)).all()
     return [
         {
-            "id": str(r.id), "actor_user_id": str(r.actor_user_id) if r.actor_user_id else None,
-            "actor_role": r.actor_role, "action": r.action, "entity_type": r.entity_type,
-            "entity_id": r.entity_id, "venue_id": str(r.venue_id) if r.venue_id else None,
-            "summary": r.summary, "payload": r.payload, "created_at": r.created_at.isoformat(),
+            "id": str(r.id),
+            "actor_user_id": str(r.actor_user_id) if r.actor_user_id else None,
+            "actor_role": r.actor_role,
+            "action": r.action,
+            "entity_type": r.entity_type,
+            "entity_id": r.entity_id,
+            "venue_id": str(r.venue_id) if r.venue_id else None,
+            "summary": r.summary,
+            "payload": r.payload,
+            "created_at": r.created_at.isoformat(),
         }
         for r in rows
     ]
