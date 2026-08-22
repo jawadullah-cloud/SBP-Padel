@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 class RegisterRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=150)
-    email: EmailStr | None = None
+    email: str | None = Field(default=None, max_length=254)
     phone: str | None = Field(default=None, min_length=7, max_length=30)
     password: str = Field(min_length=8, max_length=128)
 
@@ -26,6 +26,8 @@ class LoginRequest(BaseModel):
 async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> dict:
     if not payload.email and not payload.phone:
         raise HTTPException(400, "Email or phone is required")
+    if payload.email and "@" not in payload.email:
+        raise HTTPException(400, "Invalid email address")
     clauses = []
     if payload.email:
         clauses.append(User.email == payload.email.lower())
