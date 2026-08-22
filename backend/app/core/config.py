@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     environment: str = "development"
     api_prefix: str = "/api/v1"
     database_url: str = "sqlite+aiosqlite:///./sbp_padel.db"
+    redis_url: str | None = None
+    redis_required: bool = False
     timezone: str = "Asia/Karachi"
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
     jwt_secret: str = "change-this-in-production"
