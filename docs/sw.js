@@ -1,5 +1,5 @@
-const BUILD='20260823-pricing1';
-const INJECT_TAG=`<script src="native-transitions.js?v=${BUILD}"></script><script src="saved-players-bridge.js?v=${BUILD}"></script><script src="slot-pricing.js?v=${BUILD}"></script><script src="review-pricing.js?v=${BUILD}"></script>`;
+const BUILD='20260823-recover1';
+const INJECT_TAG=`<script src="native-transitions.js?v=${BUILD}"></script><script src="saved-players-bridge.js?v=${BUILD}"></script>`;
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 self.addEventListener('fetch',event=>{
