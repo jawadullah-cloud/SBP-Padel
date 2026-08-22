@@ -7,7 +7,15 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.models.domain import BookingSlot, Court, CourtStatus, PricingRule, Venue
+from app.models.domain import (
+    Booking,
+    BookingSlot,
+    BookingStatus,
+    Court,
+    CourtStatus,
+    PricingRule,
+    Venue,
+)
 
 router = APIRouter()
 
@@ -133,13 +141,22 @@ async def venue_availability(
             )
         )
     ).all()
-    booked = (
-        await db.scalars(
-            select(BookingSlot).where(
-                and_(BookingSlot.booking_date == target_date, BookingSlot.court_id.in_([c.id for c in courts]))
+
+    if courts:
+        booked_stmt = (
+            select(BookingSlot)
+            .join(Booking, Booking.id == BookingSlot.booking_id)
+            .where(
+                and_(
+                    BookingSlot.booking_date == target_date,
+                    BookingSlot.court_id.in_([c.id for c in courts]),
+                    Booking.status.in_([BookingStatus.confirmed, BookingStatus.completed]),
+                )
             )
         )
-    ).all() if courts else []
+        booked = (await db.scalars(booked_stmt)).all()
+    else:
+        booked = []
     booked_keys = {(b.court_id, b.start_time.hour) for b in booked}
 
     first_hour = venue.opening_time.hour
