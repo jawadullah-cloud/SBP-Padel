@@ -179,9 +179,6 @@ class Booking(TimestampMixin, Base):
 
 class BookingSlot(TimestampMixin, Base):
     __tablename__ = "booking_slots"
-    __table_args__ = (
-        UniqueConstraint("court_id", "booking_date", "start_time", name="uq_booked_court_slot"),
-    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     booking_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bookings.id", ondelete="CASCADE"), nullable=False, index=True)
