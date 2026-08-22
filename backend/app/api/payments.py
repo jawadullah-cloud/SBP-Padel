@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import current_user
+from app.core.slot_locks import slot_locks
 from app.db.session import get_db
 from app.models.domain import (
     Booking,
@@ -58,6 +59,7 @@ async def initiate_payment(
     if _hold_expired(booking):
         booking.status = BookingStatus.expired
         await db.commit()
+        await slot_locks.release_booking(booking.id)
         raise HTTPException(409, "Booking hold has expired. Please select the slots again.")
 
     existing = await db.scalar(
@@ -137,28 +139,17 @@ async def simulate_success(
         booking.status = BookingStatus.expired
         payment.status = PaymentStatus.failed
         await db.commit()
+        await slot_locks.release_booking(booking.id)
         raise HTTPException(409, "Booking hold expired before payment confirmation")
 
     payment.status = PaymentStatus.paid
     payment.provider = "development-simulator"
     payment.provider_metadata = {"simulated": True, "confirmed_at": datetime.now(timezone.utc).isoformat()}
     booking.status = BookingStatus.confirmed
-    db.add(
-        Notification(
-            user_id=user.id,
-            kind="booking_confirmed",
-            title="Booking confirmed",
-            body=f"Your booking {booking.booking_code} has been confirmed.",
-            payload={"booking_id": str(booking.id), "booking_code": booking.booking_code},
-        )
-    )
+    db.add(Notification(user_id=user.id, kind="booking_confirmed", title="Booking confirmed", body=f"Your booking {booking.booking_code} has been confirmed.", payload={"booking_id": str(booking.id), "booking_code": booking.booking_code}))
     await db.commit()
-    return {
-        "payment_status": payment.status.value,
-        "booking_status": booking.status.value,
-        "booking_id": str(booking.id),
-        "booking_code": booking.booking_code,
-    }
+    await slot_locks.release_booking(booking.id)
+    return {"payment_status": payment.status.value, "booking_status": booking.status.value, "booking_id": str(booking.id), "booking_code": booking.booking_code}
 
 
 @router.post("/{payment_id}/simulate-failure", include_in_schema=False)
@@ -178,6 +169,7 @@ async def simulate_failure(
     payment.status = PaymentStatus.failed
     booking.status = BookingStatus.payment_failed
     await db.commit()
+    await slot_locks.release_booking(booking.id)
     return {"payment_status": payment.status.value, "booking_status": booking.status.value}
 
 
@@ -206,32 +198,10 @@ async def request_refund(
     if existing:
         refund = existing
     else:
-        refund = Refund(
-            payment_id=payment.id,
-            booking_id=booking.id,
-            amount=payment.amount,
-            currency=payment.currency,
-            status=RefundStatus.requested,
-            reason=payload.reason,
-        )
+        refund = Refund(payment_id=payment.id, booking_id=booking.id, amount=payment.amount, currency=payment.currency, status=RefundStatus.requested, reason=payload.reason)
         db.add(refund)
-        db.add(
-            Notification(
-                user_id=user.id,
-                kind="refund_requested",
-                title="Refund requested",
-                body=f"Refund processing has started for booking {booking.booking_code}.",
-                payload={"booking_id": str(booking.id), "refund_id": str(refund.id)},
-            )
-        )
+        db.add(Notification(user_id=user.id, kind="refund_requested", title="Refund requested", body=f"Refund processing has started for booking {booking.booking_code}.", payload={"booking_id": str(booking.id), "refund_id": str(refund.id)}))
         await db.commit()
         await db.refresh(refund)
 
-    return {
-        "refund_id": str(refund.id),
-        "booking_id": str(booking.id),
-        "payment_id": str(payment.id),
-        "status": refund.status.value,
-        "amount": f"{refund.amount:.2f}",
-        "currency": refund.currency,
-    }
+    return {"refund_id": str(refund.id), "booking_id": str(booking.id), "payment_id": str(payment.id), "status": refund.status.value, "amount": f"{refund.amount:.2f}", "currency": refund.currency}
