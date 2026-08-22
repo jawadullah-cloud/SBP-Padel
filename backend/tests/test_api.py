@@ -24,18 +24,24 @@ def test_seeded_venue_and_variable_pricing() -> None:
         courts = availability.json()["courts"]
         assert len(courts) == 5
         championship = next(c for c in courts if c["court_code"] == "01")
-        rates = {slot["start_time"]: slot["hourly_rate"] for slot in championship["slots"] if slot["hourly_rate"] is not None}
+        rates = {
+            slot["start_time"]: slot["hourly_rate"]
+            for slot in championship["slots"]
+            if slot["hourly_rate"] is not None
+        }
         assert rates["17:00"] == "2000.00"
         assert rates["19:00"] == "2200.00"
         assert rates["21:00"] == "2000.00"
 
 
-def test_policy_login_quote_and_booking() -> None:
+def test_policy_login_quote_booking_and_cancel() -> None:
     with TestClient(app) as client:
-        login = client.post("/api/v1/auth/login", json={"identifier": "player@sbppadel.local", "password": "PadelDemo2026!"})
+        login = client.post(
+            "/api/v1/auth/login",
+            json={"identifier": "player@sbppadel.local", "password": "PadelDemo2026!"},
+        )
         assert login.status_code == 200
-        token = login.json()["access_token"]
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
         me = client.get("/api/v1/auth/me", headers=headers)
         assert me.status_code == 200
@@ -54,19 +60,37 @@ def test_policy_login_quote_and_booking() -> None:
             "booking_date": "2026-09-01",
             "slots": [{"start_time": "19:00"}, {"start_time": "20:00"}],
         }
+
         quote = client.post("/api/v1/bookings/quote", json=payload)
         assert quote.status_code == 200
         assert quote.json()["court_fee"] == "4400.00"
         assert quote.json()["total"] == "4500.00"
 
-        create_payload = {**payload, "policy_version_id": policy.json()["id"], "policy_accepted": True}
+        create_payload = {
+            **payload,
+            "policy_version_id": policy.json()["id"],
+            "policy_accepted": True,
+        }
         created = client.post("/api/v1/bookings", json=create_payload, headers=headers)
         assert created.status_code == 200
         assert created.json()["status"] == "pending_payment"
+        assert created.json()["hold_minutes"] == 10
 
         mine = client.get("/api/v1/bookings/me", headers=headers)
         assert mine.status_code == 200
-        assert any(b["id"] == created.json()["id"] for b in mine.json())
+        assert any(booking["id"] == created.json()["id"] for booking in mine.json())
 
         conflict = client.post("/api/v1/bookings/quote", json=payload)
         assert conflict.status_code == 409
+
+        cancelled = client.post(
+            f"/api/v1/bookings/{created.json()['id']}/cancel",
+            json={"reason": "Changed plans"},
+            headers=headers,
+        )
+        assert cancelled.status_code == 200
+        assert cancelled.json()["status"] == "cancelled"
+        assert cancelled.json()["slots_released"] is True
+
+        quote_after_cancel = client.post("/api/v1/bookings/quote", json=payload)
+        assert quote_after_cancel.status_code == 200
