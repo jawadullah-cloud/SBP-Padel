@@ -9,6 +9,7 @@ The backend currently includes:
 - async FastAPI application
 - PostgreSQL-ready SQLAlchemy domain model
 - local SQLite development fallback
+- Alembic migration baseline
 - Nishtar Park reference seed with five courts
 - variable hourly pricing rules
 - venue discovery/details APIs
@@ -24,8 +25,24 @@ The backend currently includes:
 - confirmed-booking transition after successful payment
 - refund-request records
 - in-app notification records and read/read-all APIs
+- central administrator RBAC
+- venue manager/operator assignments scoped by venue
+- front-desk booking search and check-in
+- venue/court closure and maintenance controls
+- court Active / Maintenance / Closed controls
+- central venue and court creation APIs
+- staff account and venue-assignment administration
+- central pricing-rule management
+- policy publishing and version history
+- province-wide booking and refund oversight
+- central dashboard metrics
 
 The approved player UI remains in `../docs/` and is not modified by backend work on `backend-v1-dev`.
+
+The Next.js staff portal is in `../admin/`:
+
+- `/` — venue operations / front desk
+- `/hq` — central SBP Padel headquarters administration
 
 ## Local start
 
@@ -62,19 +79,30 @@ For availability, copy the venue ID from `/api/v1/venues`, then call:
 
 The simulator is intentionally hidden from the production OpenAPI schema and is disabled outside `ENVIRONMENT=development`. A real payment gateway will replace only the provider adapter/callback step, not the booking domain.
 
+## Database migrations
+
+Development can still use automatic table creation for convenience. Production deployment must use Alembic.
+
+From `backend/`:
+
+```powershell
+alembic upgrade head
+```
+
+The first migration creates the complete current domain, including booking, payment, policy, notification and venue-operations tables. Future schema changes should be added as new migrations rather than modifying the initial revision after deployment.
+
 ## Production database
 
-Development defaults to SQLite to keep initial local testing simple. Production is designed for PostgreSQL. Copy `.env.example` to `.env` and set `DATABASE_URL` to a PostgreSQL `postgresql+asyncpg://...` connection string.
+Development defaults to SQLite to keep local testing simple. Production is designed for PostgreSQL. Copy `.env.example` to `.env` and set `DATABASE_URL` to a PostgreSQL `postgresql+asyncpg://...` connection string.
 
-Before production deployment, automatic `create_all()` will be replaced by Alembic migrations and `ENVIRONMENT` will be set to a non-development value.
+For production, set `ENVIRONMENT` to a non-development value, use a strong `JWT_SECRET`, and run Alembic before starting the API.
 
 ## Next backend milestone
 
-1. Alembic migration baseline.
-2. Redis-backed atomic slot locks and expiry worker.
-3. Administrator/venue-operator RBAC dependencies.
-4. Venue, court and pricing management APIs.
-5. Closure/maintenance blocks.
-6. Booking search and operational actions.
-7. Payment-provider adapter implementation after SBP selects the gateway.
-8. Reconciliation/refund administration APIs.
+1. Redis-backed atomic slot locks and expiry worker.
+2. Real payment-provider adapter once SBP selects the gateway.
+3. Payment callback/webhook verification and idempotency.
+4. Venue/court editing and image/media management.
+5. More detailed finance/reconciliation reports and exports.
+6. Audit logging for administrative changes.
+7. Notification delivery adapters for push/SMS/email.
