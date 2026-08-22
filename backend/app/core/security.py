@@ -13,7 +13,7 @@ from app.db.session import get_db
 from app.models.domain import User, UserRole
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_prefix}/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_prefix}/auth/token")
 
 
 def hash_password(password: str) -> str:
