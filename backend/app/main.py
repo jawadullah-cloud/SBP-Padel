@@ -9,6 +9,7 @@ from app.api.bookings import router as bookings_router
 from app.api.cancellations import router as cancellations_router
 from app.api.notifications import router as notifications_router
 from app.api.operations import router as operations_router
+from app.api.operations_courts import router as operations_courts_router
 from app.api.payments import router as payments_router
 from app.api.policies import router as policies_router
 from app.api.routes import router
@@ -29,21 +30,8 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(
-    title=settings.app_name,
-    version="0.5.0",
-    description="Sports Board Punjab Padel booking and venue management API",
-    lifespan=lifespan,
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+app = FastAPI(title=settings.app_name, version="0.5.1", description="Sports Board Punjab Padel booking and venue management API", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(router, prefix=settings.api_prefix)
 app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(policies_router, prefix=settings.api_prefix)
@@ -53,6 +41,7 @@ app.include_router(payments_router, prefix=settings.api_prefix)
 app.include_router(notifications_router, prefix=settings.api_prefix)
 app.include_router(admin_router, prefix=settings.api_prefix)
 app.include_router(operations_router, prefix=settings.api_prefix)
+app.include_router(operations_courts_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)
