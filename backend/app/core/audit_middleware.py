@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import Request
 from jose import JWTError, jwt
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -19,25 +21,23 @@ class AdministrationAuditMiddleware(BaseHTTPMiddleware):
         if not (path.startswith(f"{settings.api_prefix}/admin") or path.startswith(f"{settings.api_prefix}/operations")):
             return response
 
-        actor = None
         auth = request.headers.get("authorization", "")
         if auth.lower().startswith("bearer "):
             try:
                 payload = jwt.decode(auth.split(" ", 1)[1], settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-                user_id = payload.get("sub")
-                if user_id:
-                    async with SessionLocal() as session:
-                        actor = await session.get(User, user_id)
-                        await write_audit(
-                            session,
-                            actor,
-                            f"{request.method.lower()}.{path.removeprefix(settings.api_prefix).strip('/').replace('/', '.')}",
-                            "api_operation",
-                            None,
-                            f"{request.method} {path} returned {response.status_code}",
-                            payload={"path": path, "method": request.method, "status_code": response.status_code},
-                        )
-                        await session.commit()
+                user_id = UUID(payload.get("sub", ""))
+                async with SessionLocal() as session:
+                    actor = await session.get(User, user_id)
+                    await write_audit(
+                        session,
+                        actor,
+                        f"{request.method.lower()}.{path.removeprefix(settings.api_prefix).strip('/').replace('/', '.')}",
+                        "api_operation",
+                        None,
+                        f"{request.method} {path} returned {response.status_code}",
+                        payload={"path": path, "method": request.method, "status_code": response.status_code},
+                    )
+                    await session.commit()
             except (JWTError, ValueError, TypeError):
                 pass
             except Exception:
