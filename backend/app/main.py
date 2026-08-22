@@ -15,6 +15,7 @@ from app.api.operations_courts import router as operations_courts_router
 from app.api.payments import router as payments_router
 from app.api.policies import router as policies_router
 from app.api.routes import router
+from app.core.audit_middleware import AdministrationAuditMiddleware
 from app.core.config import settings
 from app.core.slot_locks import slot_locks
 from app.db.seed import seed_reference_data
@@ -41,6 +42,7 @@ app = FastAPI(
     description="Sports Board Punjab Padel booking and venue management API",
     lifespan=lifespan,
 )
+app.add_middleware(AdministrationAuditMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
