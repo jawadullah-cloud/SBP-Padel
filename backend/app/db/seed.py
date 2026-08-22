@@ -40,28 +40,51 @@ async def seed_reference_data(session: AsyncSession) -> None:
                 (19, 21, Decimal("2200.00")),
                 (21, 23, Decimal("2000.00")),
             ]:
-                session.add(PricingRule(venue_id=venue.id, court_id=court.id, start_time=time(start_hour, 0), end_time=time(end_hour, 0), hourly_rate=rate, priority=100))
+                session.add(
+                    PricingRule(
+                        venue_id=venue.id,
+                        court_id=court.id,
+                        start_time=time(start_hour, 0),
+                        end_time=time(end_hour, 0),
+                        hourly_rate=rate,
+                        priority=100,
+                    )
+                )
 
     if not await session.scalar(select(PolicyVersion.id).limit(1)):
-        session.add(PolicyVersion(
-            version="2026-draft-1",
-            title="SBP Padel Booking, Cancellation & Refund Policy",
-            body=(
-                "Prototype policy for system development. A booking is confirmed only after successful payment. "
-                "Players should arrive before their booked session. Cancellation, refund and rescheduling eligibility "
-                "will be governed by the final Sports Board Punjab approved policy. Venue-side closure may result in "
-                "rescheduling, wallet credit or refund according to the approved rules."
-            ),
-            effective_from=datetime.now(timezone.utc),
-            is_active=True,
-        ))
+        session.add(
+            PolicyVersion(
+                version="2026-draft-1",
+                title="SBP Padel Booking, Cancellation & Refund Policy",
+                body=(
+                    "Prototype policy for system development. A booking is confirmed only after successful payment. "
+                    "Players should arrive before their booked session. Cancellation, refund and rescheduling eligibility "
+                    "will be governed by the final Sports Board Punjab approved policy. Venue-side closure may result in "
+                    "rescheduling, wallet credit or refund according to the approved rules."
+                ),
+                effective_from=datetime.now(timezone.utc),
+                is_active=True,
+            )
+        )
 
     if not await session.scalar(select(User.id).where(User.email == "player@sbppadel.local")):
-        session.add(User(
-            full_name="Demo Player",
-            email="player@sbppadel.local",
-            password_hash=hash_password("PadelDemo2026!"),
-            role=UserRole.player,
-        ))
+        session.add(
+            User(
+                full_name="Demo Player",
+                email="player@sbppadel.local",
+                password_hash=hash_password("PadelDemo2026!"),
+                role=UserRole.player,
+            )
+        )
+
+    if not await session.scalar(select(User.id).where(User.email == "admin@sbppadel.local")):
+        session.add(
+            User(
+                full_name="SBP Padel Administrator",
+                email="admin@sbppadel.local",
+                password_hash=hash_password("PadelAdmin2026!"),
+                role=UserRole.admin,
+            )
+        )
 
     await session.commit()
