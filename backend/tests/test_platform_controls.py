@@ -1,5 +1,11 @@
+from datetime import date, time
+from uuid import uuid4
+
+import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import settings
+from app.core.slot_locks import slot_locks
 from app.main import app
 
 
@@ -70,4 +76,22 @@ def test_booking_creation_reports_lock_mode() -> None:
         )
         assert response.status_code == 200
         assert response.json()["hold_minutes"] == 10
-        assert response.json()["atomic_lock"] is False
+        assert isinstance(response.json()["atomic_lock"], bool)
+
+
+@pytest.mark.asyncio
+async def test_redis_atomic_lock_if_configured() -> None:
+    if not settings.redis_url:
+        pytest.skip("Redis is not configured")
+    court_id = uuid4()
+    day = date(2030, 1, 1)
+    starts = [time(19, 0), time(20, 0)]
+    first = await slot_locks.acquire(court_id, day, starts)
+    assert first.acquired is True
+    assert first.redis_used is True
+    second = await slot_locks.acquire(court_id, day, starts)
+    assert second.acquired is False
+    await slot_locks.release_result(first)
+    third = await slot_locks.acquire(court_id, day, starts)
+    assert third.acquired is True
+    await slot_locks.release_result(third)
