@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.admin import router as admin_router
+from app.api.admin_finance import router as admin_finance_router
 from app.api.admin_hq import router as admin_hq_router
 from app.api.auth import router as auth_router
 from app.api.bookings import router as bookings_router
@@ -15,9 +16,11 @@ from app.api.payments import router as payments_router
 from app.api.policies import router as policies_router
 from app.api.routes import router
 from app.core.config import settings
+from app.core.slot_locks import slot_locks
 from app.db.seed import seed_reference_data
 from app.db.session import SessionLocal, engine
 from app.models import operations as operations_models  # noqa: F401
+from app.models import platform as platform_models  # noqa: F401
 from app.models.domain import Base
 
 
@@ -29,11 +32,12 @@ async def lifespan(app: FastAPI):
         async with SessionLocal() as session:
             await seed_reference_data(session)
     yield
+    await slot_locks.close()
 
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.6.0",
+    version="0.7.0",
     description="Sports Board Punjab Padel booking and venue management API",
     lifespan=lifespan,
 )
@@ -53,6 +57,7 @@ app.include_router(payments_router, prefix=settings.api_prefix)
 app.include_router(notifications_router, prefix=settings.api_prefix)
 app.include_router(admin_router, prefix=settings.api_prefix)
 app.include_router(admin_hq_router, prefix=settings.api_prefix)
+app.include_router(admin_finance_router, prefix=settings.api_prefix)
 app.include_router(operations_router, prefix=settings.api_prefix)
 app.include_router(operations_courts_router, prefix=settings.api_prefix)
 
