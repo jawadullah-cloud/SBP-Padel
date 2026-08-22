@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./sbp_padel.db"
     timezone: str = "Asia/Karachi"
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    jwt_secret: str = "change-this-in-production"
+    jwt_algorithm: str = "HS256"
+    access_token_minutes: int = 60 * 24 * 7
+    service_fee: int = 100
 
     model_config = SettingsConfigDict(
         env_file=".env",
