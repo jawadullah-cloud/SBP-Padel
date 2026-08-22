@@ -1,0 +1,1 @@
+(function(){function route(e){const target=e.target.closest('[data-nav="bookings"]');if(!target)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();location.href='bookings.html'}document.addEventListener('click',route,true)})();
