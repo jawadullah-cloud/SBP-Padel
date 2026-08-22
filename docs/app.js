@@ -10,6 +10,7 @@ function mountReferenceScreens(){
 mountReferenceScreens();
 const screens=[...document.querySelectorAll('.screen')],navs=[...document.querySelectorAll('.nav')],bottomNav=document.querySelector('nav');
 function go(id){screens.forEach(s=>s.classList.toggle('active',s.id===id));const navMap={select:'venues',time:'venues',confirm:'bookings',pass:'bookings',nishtar:'venues'};navs.forEach(n=>n.classList.toggle('active',n.dataset.nav===(navMap[id]||id)));bottomNav.classList.toggle('flowHidden',['nishtar','select','time','confirm','pass'].includes(id));document.querySelector('.screen.active')?.scrollTo({top:0,behavior:'smooth'})}
+window.SBPNavigate=go;
 document.querySelectorAll('[data-nav]').forEach(el=>el.addEventListener('click',()=>go(el.dataset.nav)));
 // Theme ownership is intentionally centralized in Profile > Appearance (profile-modules.js).
 // The header control is upgraded to Notifications by that module, so app.js no longer binds a competing theme handler.
