@@ -117,8 +117,8 @@ async def create_booking(payload: CreateBookingRequest, user: User = Depends(cur
         await db.flush()
         for slot in slots:
             db.add(BookingSlot(booking_id=booking.id, court_id=court.id, booking_date=payload.booking_date, start_time=slot["start_time"], end_time=slot["end_time"], rate_snapshot=slot["rate"]))
-        await db.commit()
         await slot_locks.bind_booking(booking.id, lock)
+        await db.commit()
     except Exception:
         await db.rollback()
         await slot_locks.release_result(lock)
