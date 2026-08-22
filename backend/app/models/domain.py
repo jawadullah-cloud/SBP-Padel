@@ -1,0 +1,234 @@
+from __future__ import annotations
+
+import enum
+import uuid
+from datetime import date, datetime, time, timezone
+from decimal import Decimal
+
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    JSON,
+    Numeric,
+    String,
+    Text,
+    Time,
+    UniqueConstraint,
+    Uuid,
+)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class UserRole(str, enum.Enum):
+    player = "player"
+    admin = "admin"
+    venue_manager = "venue_manager"
+    venue_operator = "venue_operator"
+
+
+class CourtStatus(str, enum.Enum):
+    active = "active"
+    maintenance = "maintenance"
+    closed = "closed"
+
+
+class BookingStatus(str, enum.Enum):
+    draft = "draft"
+    pending_payment = "pending_payment"
+    confirmed = "confirmed"
+    completed = "completed"
+    cancelled = "cancelled"
+    expired = "expired"
+    payment_failed = "payment_failed"
+    venue_cancelled = "venue_cancelled"
+    rescheduled = "rescheduled"
+
+
+class PaymentStatus(str, enum.Enum):
+    pending = "pending"
+    paid = "paid"
+    failed = "failed"
+    refunded = "refunded"
+    partially_refunded = "partially_refunded"
+
+
+class RefundStatus(str, enum.Enum):
+    requested = "requested"
+    processing = "processing"
+    completed = "completed"
+    rejected = "rejected"
+
+
+class TimestampMixin:
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class User(TimestampMixin, Base):
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    full_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(30), unique=True)
+    email: Mapped[str | None] = mapped_column(String(254), unique=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.player, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class Venue(TimestampMixin, Base):
+    __tablename__ = "venues"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(180), nullable=False)
+    city: Mapped[str] = mapped_column(String(100), nullable=False)
+    address: Mapped[str] = mapped_column(String(300), nullable=False)
+    latitude: Mapped[Decimal] = mapped_column(Numeric(10, 7), nullable=False)
+    longitude: Mapped[Decimal] = mapped_column(Numeric(10, 7), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), default="Asia/Karachi", nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    amenities: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    opening_time: Mapped[time] = mapped_column(Time, default=time(6, 0), nullable=False)
+    closing_time: Mapped[time] = mapped_column(Time, default=time(23, 0), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    courts: Mapped[list[Court]] = relationship(back_populates="venue", cascade="all, delete-orphan")
+
+
+class Court(TimestampMixin, Base):
+    __tablename__ = "courts"
+    __table_args__ = (UniqueConstraint("venue_id", "code", name="uq_court_venue_code"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    venue_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("venues.id", ondelete="CASCADE"), nullable=False)
+    code: Mapped[str] = mapped_column(String(40), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    court_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    capacity: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    is_indoor: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    status: Mapped[CourtStatus] = mapped_column(Enum(CourtStatus), default=CourtStatus.active, nullable=False)
+
+    venue: Mapped[Venue] = relationship(back_populates="courts")
+
+
+class PricingRule(TimestampMixin, Base):
+    __tablename__ = "pricing_rules"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    venue_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("venues.id"), nullable=False, index=True)
+    court_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("courts.id"), index=True)
+    court_type: Mapped[str | None] = mapped_column(String(80))
+    valid_from: Mapped[date | None] = mapped_column(Date)
+    valid_to: Mapped[date | None] = mapped_column(Date)
+    weekdays: Mapped[list[int]] = mapped_column(JSON, default=list, nullable=False)
+    start_time: Mapped[time] = mapped_column(Time, nullable=False)
+    end_time: Mapped[time] = mapped_column(Time, nullable=False)
+    hourly_rate: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="PKR", nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class PolicyVersion(TimestampMixin, Base):
+    __tablename__ = "policy_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    version: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    effective_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class Booking(TimestampMixin, Base):
+    __tablename__ = "bookings"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    booking_code: Mapped[str] = mapped_column(String(40), unique=True, nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    venue_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("venues.id"), nullable=False, index=True)
+    court_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("courts.id"), nullable=False, index=True)
+    booking_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    status: Mapped[BookingStatus] = mapped_column(Enum(BookingStatus), default=BookingStatus.draft, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="PKR", nullable=False)
+    court_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"), nullable=False)
+    service_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"), nullable=False)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"), nullable=False)
+    policy_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("policy_versions.id"))
+    policy_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancellation_reason: Mapped[str | None] = mapped_column(Text)
+
+    slots: Mapped[list[BookingSlot]] = relationship(back_populates="booking", cascade="all, delete-orphan")
+
+
+class BookingSlot(TimestampMixin, Base):
+    __tablename__ = "booking_slots"
+    __table_args__ = (
+        UniqueConstraint("court_id", "booking_date", "start_time", name="uq_booked_court_slot"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    booking_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bookings.id", ondelete="CASCADE"), nullable=False, index=True)
+    court_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("courts.id"), nullable=False, index=True)
+    booking_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    start_time: Mapped[time] = mapped_column(Time, nullable=False)
+    end_time: Mapped[time] = mapped_column(Time, nullable=False)
+    rate_snapshot: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="PKR", nullable=False)
+
+    booking: Mapped[Booking] = relationship(back_populates="slots")
+
+
+class Payment(TimestampMixin, Base):
+    __tablename__ = "payments"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    booking_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bookings.id"), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(80), default="prototype", nullable=False)
+    provider_reference: Mapped[str | None] = mapped_column(String(150), index=True)
+    method: Mapped[str | None] = mapped_column(String(80))
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="PKR", nullable=False)
+    status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus), default=PaymentStatus.pending, nullable=False)
+    provider_metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class Refund(TimestampMixin, Base):
+    __tablename__ = "refunds"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    payment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("payments.id"), nullable=False, index=True)
+    booking_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bookings.id"), nullable=False, index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="PKR", nullable=False)
+    status: Mapped[RefundStatus] = mapped_column(Enum(RefundStatus), default=RefundStatus.requested, nullable=False)
+    provider_reference: Mapped[str | None] = mapped_column(String(150))
+    reason: Mapped[str | None] = mapped_column(Text)
+
+
+class Notification(TimestampMixin, Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(80), nullable=False)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
