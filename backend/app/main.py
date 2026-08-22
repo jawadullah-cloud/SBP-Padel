@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.admin import router as admin_router
 from app.api.admin_finance import router as admin_finance_router
 from app.api.admin_hq import router as admin_hq_router
+from app.api.admin_reports import router as admin_reports_router
 from app.api.auth import router as auth_router
 from app.api.bookings import router as bookings_router
 from app.api.cancellations import router as cancellations_router
@@ -60,6 +61,7 @@ app.include_router(notifications_router, prefix=settings.api_prefix)
 app.include_router(admin_router, prefix=settings.api_prefix)
 app.include_router(admin_hq_router, prefix=settings.api_prefix)
 app.include_router(admin_finance_router, prefix=settings.api_prefix)
+app.include_router(admin_reports_router, prefix=settings.api_prefix)
 app.include_router(operations_router, prefix=settings.api_prefix)
 app.include_router(operations_courts_router, prefix=settings.api_prefix)
 
