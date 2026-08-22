@@ -8,6 +8,7 @@ from app.api.auth import router as auth_router
 from app.api.bookings import router as bookings_router
 from app.api.cancellations import router as cancellations_router
 from app.api.notifications import router as notifications_router
+from app.api.operations import router as operations_router
 from app.api.payments import router as payments_router
 from app.api.policies import router as policies_router
 from app.api.routes import router
@@ -15,6 +16,7 @@ from app.core.config import settings
 from app.db.seed import seed_reference_data
 from app.db.session import SessionLocal, engine
 from app.models.domain import Base
+from app.models import operations as operations_models  # noqa: F401
 
 
 @asynccontextmanager
@@ -29,7 +31,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.4.0",
+    version="0.5.0",
     description="Sports Board Punjab Padel booking and venue management API",
     lifespan=lifespan,
 )
@@ -50,12 +52,9 @@ app.include_router(cancellations_router, prefix=settings.api_prefix)
 app.include_router(payments_router, prefix=settings.api_prefix)
 app.include_router(notifications_router, prefix=settings.api_prefix)
 app.include_router(admin_router, prefix=settings.api_prefix)
+app.include_router(operations_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)
 async def root() -> dict:
-    return {
-        "service": settings.app_name,
-        "api": settings.api_prefix,
-        "docs": "/docs",
-    }
+    return {"service": settings.app_name, "api": settings.api_prefix, "docs": "/docs"}
