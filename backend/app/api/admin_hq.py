@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,7 +51,7 @@ class CourtCreateRequest(BaseModel):
 
 class StaffCreateRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=150)
-    email: EmailStr
+    email: str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=8, max_length=128)
     role: UserRole
 
@@ -159,7 +159,9 @@ async def create_staff(
 ) -> dict:
     if payload.role not in {UserRole.admin, UserRole.venue_manager, UserRole.venue_operator}:
         raise HTTPException(400, "Staff role is required")
-    email = payload.email.lower()
+    email = payload.email.strip().lower()
+    if "@" not in email or email.startswith("@") or email.endswith("@"):
+        raise HTTPException(400, "Invalid email address")
     if await db.scalar(select(User.id).where(User.email == email)):
         raise HTTPException(409, "Email is already in use")
     user = User(
