@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.domain import User
+from app.models.domain import User, UserRole
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_prefix}/auth/login")
@@ -46,3 +47,14 @@ async def current_user(
     if not user or not user.is_active:
         raise credentials_error
     return user
+
+
+def require_roles(*roles: UserRole) -> Callable:
+    allowed = set(roles)
+
+    async def dependency(user: User = Depends(current_user)) -> User:
+        if user.role not in allowed:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return user
+
+    return dependency
