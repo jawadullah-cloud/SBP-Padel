@@ -36,7 +36,7 @@ await page.route('http://127.0.0.1:8000/api/v1/**', async route => {
   else if (path === '/bookings/quote') body = { venue: { id: venue.id, name: venue.name }, court: { id: 'court-4', name: 'Court 04', court_type: 'Training' }, slots: [{ start_time: '17:00', end_time: '18:00', rate: 2100 }], court_fee: 2100, service_fee: 100, total: 2200 };
   else if (path === '/notifications/me' && req.method() === 'GET') body = notifications;
   else if (path === '/notifications/me/read-all') { notifications = notifications.map(n => ({ ...n, read: true })); body = { updated: notifications.length }; }
-  else if (path === '/notifications/notification-1/read') { notifications = notifications.map(n => ({ ...n, read: true })); body = { id: 'notification-1', read: true }; }
+  else if (path.startsWith('/notifications/') && path.endsWith('/read')) { const id=path.split('/')[2]; notifications = notifications.map(n => n.id===id ? ({ ...n, read: true }) : n); body = { id, read: true }; }
   else if (path === '/bookings/me') body = [];
   else if (path === '/auth/me') body = { id: 'user-1', full_name: 'Runtime QA' };
   else body = {};
@@ -50,6 +50,10 @@ await page.addInitScript(() => {
 
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const active = async id => page.locator(`#${id}`).evaluate(el => el.classList.contains('active'));
+const navVisible = async () => page.locator('nav').evaluate(el => {
+  const s=getComputedStyle(el); const r=el.getBoundingClientRect();
+  return s.opacity !== '0' && s.pointerEvents !== 'none' && r.height > 0 && r.bottom > 0;
+});
 
 try {
   await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
@@ -62,11 +66,23 @@ try {
   await notificationsButton.click();
   assert(await active('notifications'), 'Notifications did not open on first click.');
   await page.waitForSelector('#notifications .ntCard');
-  const notificationText = await page.locator('#notifications').innerText();
+  let notificationText = await page.locator('#notifications').innerText();
   assert(notificationText.includes('PDL-RUNTIME-QA'), 'Live API notification was not rendered.');
   assert(!notificationText.includes('Your Championship Court booking at Nishtar Park is confirmed for 7:00 PM.'), 'Prototype notification leaked into live notifications.');
-  await page.locator('#notifications .ntCard').click();
-  assert((await page.locator('#notifications .ntCard').getAttribute('class'))?.includes('unread') === false, 'Notification did not mark read from the API.');
+  await page.locator('#notifications .ntCard').first().click();
+  await page.locator('#notifications .ntBack').click();
+
+  notifications.unshift({
+    id:'notification-2', kind:'booking_confirmed', title:'Booking confirmed',
+    body:'Your booking PDL-NEW-BOOKING has been confirmed.', read:false,
+    created_at:new Date().toISOString()
+  });
+  await page.evaluate(async()=>{await window.SBPRefreshNotifications?.()});
+  await notificationsButton.click();
+  await page.waitForFunction(()=>document.querySelector('#notifications')?.innerText.includes('PDL-NEW-BOOKING'));
+  notificationText = await page.locator('#notifications').innerText();
+  assert(notificationText.includes('PDL-NEW-BOOKING'), 'A newly created live notification did not appear after refresh.');
+  assert(!notificationText.includes('Your Championship Court booking at Nishtar Park is confirmed for 7:00 PM.'), 'Prototype notification returned after live refresh.');
   await page.locator('#notifications .ntBack').click();
   await page.locator('nav [data-nav="home"]').click();
 
@@ -75,9 +91,11 @@ try {
 
   await page.locator('#venues .venueLarge').click();
   assert(await active('nishtar'), 'Venue card did not navigate on first click.');
+  assert(await navVisible(), 'Bottom navigation is hidden on the venue booking journey.');
 
   await page.locator('#nishtar [data-nav="select"]').click();
   assert(await active('select'), 'Venue → booking selection did not navigate on first click.');
+  assert(await navVisible(), 'Bottom navigation is hidden on court/date selection.');
 
   await page.waitForSelector('#select .dateRail button[data-date]');
   const quickVisible = await page.locator('#select .dateRail button[data-date]:visible').count();
@@ -99,6 +117,7 @@ try {
 
   await page.locator('#select .bookingBottom .primary').click();
   assert(await active('time'), 'Booking Continue did not navigate to time selection on first click.');
+  assert(await navVisible(), 'Bottom navigation is hidden on time selection.');
 
   await page.waitForSelector('#time .slotRow');
   const unavailable = page.locator('#time .slotRow.booked').first();
