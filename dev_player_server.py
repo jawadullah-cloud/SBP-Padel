@@ -10,6 +10,7 @@ HOST = "127.0.0.1"
 PORT = 5173
 
 COMMON_SCRIPTS = [
+    "theme-bridge.js",
     "dev-runtime.js",
     "native-transitions.js",
     "navigation-fix.js",
