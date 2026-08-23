@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, or_, select
@@ -16,6 +17,14 @@ router = APIRouter()
 
 def money(value: Decimal | None) -> str | None:
     return None if value is None else f"{value:.2f}"
+
+
+def venue_now(venue: Venue) -> datetime:
+    try:
+        tz = ZoneInfo(venue.timezone or "UTC")
+    except ZoneInfoNotFoundError:
+        tz = timezone.utc
+    return datetime.now(tz)
 
 
 def resolve_rate(rules: list[PricingRule], court: Court, slot_date: date, start_hour: int) -> Decimal | None:
@@ -69,6 +78,9 @@ async def venue_availability(venue_id: UUID, target_date: date = Query(alias="da
     venue = await db.get(Venue, venue_id)
     if not venue or not venue.is_active:
         raise HTTPException(status_code=404, detail="Venue not found")
+    local_now = venue_now(venue)
+    if target_date < local_now.date():
+        raise HTTPException(status_code=400, detail="Past dates cannot be booked")
     courts = (await db.scalars(select(Court).where(and_(Court.venue_id == venue.id, Court.status == CourtStatus.active)).order_by(Court.code))).all()
     rules = (await db.scalars(select(PricingRule).where(and_(PricingRule.venue_id == venue.id, PricingRule.is_active.is_(True))))).all()
     blocks = (await db.scalars(select(VenueBlock).where(VenueBlock.venue_id == venue.id, VenueBlock.block_date == target_date, VenueBlock.is_active.is_(True)))).all()
@@ -88,6 +100,10 @@ async def venue_availability(venue_id: UUID, target_date: date = Query(alias="da
             end_time = (datetime.combine(target_date, start_time) + timedelta(hours=1)).time()
             rate = resolve_rate(rules, court, target_date, hour)
             block = next((b for b in blocks if (b.court_id is None or b.court_id == court.id) and b.start_time < end_time and b.end_time > start_time), None)
-            slots.append({"start_time": start_time.isoformat(timespec="minutes"), "end_time": end_time.isoformat(timespec="minutes"), "available": (court.id, hour) not in booked_keys and rate is not None and block is None, "hourly_rate": money(rate), "currency": "PKR", "unavailable_reason": block.reason if block else None})
+            elapsed = target_date == local_now.date() and datetime.combine(target_date, start_time, tzinfo=local_now.tzinfo) <= local_now
+            booked_slot = (court.id, hour) in booked_keys
+            available = not booked_slot and rate is not None and block is None and not elapsed
+            reason = block.reason if block else "Time has passed" if elapsed else "Booked" if booked_slot else "Price unavailable" if rate is None else None
+            slots.append({"start_time": start_time.isoformat(timespec="minutes"), "end_time": end_time.isoformat(timespec="minutes"), "available": available, "hourly_rate": money(rate), "currency": "PKR", "unavailable_reason": reason})
         result.append({"court_id": str(court.id), "court_code": court.code, "court_name": court.name, "court_type": court.court_type, "slots": slots})
     return {"venue_id": str(venue.id), "venue_name": venue.name, "date": target_date.isoformat(), "timezone": venue.timezone, "courts": result}
