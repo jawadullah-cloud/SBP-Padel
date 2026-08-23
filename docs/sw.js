@@ -1,4 +1,4 @@
-const BUILD='20260824-account-live1';
+const BUILD='20260824-account-live2';
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 
