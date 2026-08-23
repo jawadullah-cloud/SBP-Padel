@@ -11,7 +11,10 @@ class Settings(BaseSettings):
     redis_url: str | None = None
     redis_required: bool = False
     timezone: str = "Asia/Karachi"
-    cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    cors_origins: str = (
+        "http://localhost:3000,http://localhost:5173,"
+        "http://127.0.0.1:3000,http://127.0.0.1:5173"
+    )
     jwt_secret: str = "change-this-in-production"
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 60 * 24 * 7
