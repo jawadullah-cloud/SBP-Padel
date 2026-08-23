@@ -1,4 +1,4 @@
-const BUILD='20260824-live4';
+const BUILD='20260824-live5';
 const BASE_INJECT=`<script src="native-transitions.js?v=${BUILD}"></script><script src="saved-players-bridge.js?v=${BUILD}"></script>`;
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
@@ -15,8 +15,12 @@ self.addEventListener('fetch',event=>{
       let inject=BASE_INJECT;
       if(!html.includes('player-live.js'))inject+=`<script src="player-live.js?v=${BUILD}"></script>`;
       if(url.pathname.endsWith('/booking-detail.html'))inject+=`<script src="player-booking-refund.js?v=${BUILD}"></script>`;
+      if(url.pathname.endsWith('/payment-success.html'))inject+=`<script src="player-success.js?v=${BUILD}"></script>`;
       if(!html.includes('native-transitions.js'))html=html.replace('</body>',inject+'</body>');
-      else if(inject.includes('player-live.js')||inject.includes('player-booking-refund.js'))html=html.replace('</body>',inject.replace(BASE_INJECT,'')+'</body>');
+      else {
+        const extras=inject.replace(BASE_INJECT,'');
+        if(extras)html=html.replace('</body>',extras+'</body>');
+      }
       const headers=new Headers(res.headers);headers.delete('content-length');headers.set('x-sbp-build',BUILD);
       return new Response(html,{status:res.status,statusText:res.statusText,headers});
     }catch(err){return fetch(req)}
