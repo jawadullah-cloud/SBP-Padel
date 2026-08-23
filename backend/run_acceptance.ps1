@@ -2,25 +2,34 @@ $ErrorActionPreference = 'Stop'
 
 Write-Host "SBP Padel platform acceptance test" -ForegroundColor Cyan
 
-Write-Host "1/5 Pytest business logic suite..." -ForegroundColor Yellow
+Write-Host "1/6 Pytest business logic suite..." -ForegroundColor Yellow
 pytest -q
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "2/5 Critical Python correctness checks..." -ForegroundColor Yellow
+Write-Host "2/6 Critical Python correctness checks..." -ForegroundColor Yellow
 ruff check app tests
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "3/5 Alembic migration head check..." -ForegroundColor Yellow
+Write-Host "3/6 Alembic migration head check..." -ForegroundColor Yellow
 alembic heads
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "4/5 FastAPI import/startup smoke check..." -ForegroundColor Yellow
+Write-Host "4/6 FastAPI import/startup smoke check..." -ForegroundColor Yellow
 python -c "from app.main import app; assert app.title == 'SBP Padel API'; print('FastAPI import OK')"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "5/5 Player frontend integration checks..." -ForegroundColor Yellow
+Write-Host "5/6 Cache-free player dev server check..." -ForegroundColor Yellow
+python -m py_compile ..\dev_player_server.py
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$devServer = Get-Content ..\dev_player_server.py -Raw
+if ($devServer -notmatch 'Cache-Control') { Write-Error 'Player dev server must explicitly disable browser caching.' }
+if ($devServer -notmatch 'NOOP_SERVICE_WORKER') { Write-Error 'Player dev server must neutralize service workers locally.' }
+if ($devServer -notmatch 'player-account-live\.js') { Write-Error 'Player dev server must inject the live account module.' }
+Write-Host "Cache-free development runtime OK" -ForegroundColor Green
+
+Write-Host "6/6 Player frontend integration checks..." -ForegroundColor Yellow
 if (Get-Command node -ErrorAction SilentlyContinue) {
-  @('player-live.js','player-booking-refund.js','navigation-fix.js','review-entry.js','booking-router-bridge.js','player-account-live.js','sw.js') | ForEach-Object {
+  @('dev-runtime.js','player-live.js','player-booking-refund.js','navigation-fix.js','review-entry.js','booking-router-bridge.js','player-account-live.js','sw.js') | ForEach-Object {
     node --check (Join-Path '..\docs' $_)
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   }
