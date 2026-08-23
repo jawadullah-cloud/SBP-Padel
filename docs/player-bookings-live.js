@@ -3,6 +3,16 @@
   if(window.__SBPPlayerBookingsLive)return;
   window.__SBPPlayerBookingsLive=true;
 
+  // My Bookings has one runtime owner. Load its presentation here as well so
+  // retiring the legacy bookings-entry.js cannot remove the module stylesheet.
+  if(!document.querySelector('link[data-sbp-bookings-style]')){
+    const css=document.createElement('link');
+    css.rel='stylesheet';
+    css.href='bookings-module.css?v=20260824-single-owner2';
+    css.dataset.sbpBookingsStyle='1';
+    document.head.appendChild(css);
+  }
+
   const root=document.getElementById('bookings');
   if(!root)return;
   const API=(localStorage.getItem('sbpPadelApiBase')||'http://127.0.0.1:8000/api/v1').replace(/\/$/,'');
