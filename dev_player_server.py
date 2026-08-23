@@ -24,6 +24,7 @@ PAGE_SCRIPTS = {
         "profile-modules.js",
         "notifications-live.js",
         "booking-date-more.js",
+        "player-bookings-live.js",
         "discovery-tools.js",
         "bookings-search.js",
         "visual-live.js",
@@ -34,7 +35,7 @@ PAGE_SCRIPTS = {
     "payment-success.html": ["booking-router-bridge.js"],
     "payment-history.html": ["player-account-live.js"],
     "auth-preview.html": ["player-live.js"],
-    "booking-detail.html": ["player-live.js", "player-booking-refund.js"],
+    "booking-detail.html": ["player-booking-detail-live.js"],
 }
 
 NOOP_SERVICE_WORKER = """\
