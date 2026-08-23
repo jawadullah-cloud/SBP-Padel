@@ -44,3 +44,11 @@ def test_player_can_lookup_payment_by_own_booking() -> None:
         assert lookup.status_code == 200
         assert lookup.json()["id"] == initiated.json()["payment_id"]
         assert lookup.json()["booking_id"] == created.json()["id"]
+
+        history = client.get("/api/v1/payments/me", headers=headers)
+        assert history.status_code == 200
+        entry = next(row for row in history.json() if row["id"] == initiated.json()["payment_id"])
+        assert entry["booking_id"] == created.json()["id"]
+        assert entry["booking_code"] == created.json()["booking_code"]
+        assert entry["method"] == "wallet"
+        assert entry["refund"] is None
