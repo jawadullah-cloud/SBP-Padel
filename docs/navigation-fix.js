@@ -2,7 +2,27 @@
   if(window.__sbpNavigationFix)return;
   window.__sbpNavigationFix=true;
 
+  function resetTransientBookingState(){
+    const proceed=document.querySelector('#time .bookingBottom .primary');
+    if(proceed){
+      proceed.disabled=false;
+      proceed.removeAttribute('aria-disabled');
+      if(/CHECKING AVAILABILITY|CHECKING|LOADING/i.test(proceed.textContent||''))proceed.innerHTML='CONTINUE <span>→</span>';
+    }
+    document.querySelectorAll('button').forEach(btn=>{
+      if(/RESERVING COURT|PROCESSING/i.test(btn.textContent||'')){
+        btn.disabled=false;
+        if(btn.id==='toPayment')btn.textContent='CONTINUE TO PAYMENT →';
+        if(btn.id==='payButton'){
+          const span=btn.querySelector('span');
+          if(span)span.textContent='PAY & CONFIRM';
+        }
+      }
+    });
+  }
+
   function openMainScreen(screen){
+    resetTransientBookingState();
     if(window.SBPNavigate){window.SBPNavigate(screen);return true}
     const target=document.querySelector(`[data-nav="${screen}"]`);
     if(target){target.click();return true}
@@ -13,6 +33,10 @@
     if(window.SBPDeepRoute){window.SBPDeepRoute(url);return true}
     return false;
   }
+
+  window.addEventListener('pageshow',resetTransientBookingState);
+  window.addEventListener('focus',resetTransientBookingState);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)resetTransientBookingState()});
 
   window.addEventListener('message',e=>{
     if(e.origin!==location.origin)return;
@@ -58,4 +82,6 @@
       btn.setAttribute('data-success-bookings','1');
     }
   }
+
+  resetTransientBookingState();
 })();
