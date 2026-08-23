@@ -86,12 +86,19 @@
     badge.textContent=unread>99?'99+':String(unread);
     bell.setAttribute('aria-label',unread?`Notifications, ${unread} unread`:'Notifications, all read');
   }
+  async function refreshNotifications(){
+    if(!token()||document.hidden)return;
+    const screen=document.getElementById('notifications');
+    if(screen?.classList.contains('active'))await loadNotifications();
+    else await refreshNotificationDot();
+  }
+  window.SBPRefreshNotifications=refreshNotifications;
 
   async function loadPaymentHistory(){
     if(!location.pathname.endsWith('payment-history.html')||!token())return;
     let rows;try{rows=await api('/payments/me')}catch{return}
     const list=document.getElementById('list'),empty=document.getElementById('empty');if(!list)return;
-    const payments=rows.filter(r=>r.payment_status==='succeeded');
+    const payments=rows.filter(r=>['paid','succeeded'].includes(String(r.payment_status||'').toLowerCase()));
     const refunds=rows.filter(r=>r.refund);
     const paid=payments.reduce((a,r)=>a+Number(r.amount||0),0);
     const refunded=refunds.reduce((a,r)=>a+Number(r.refund?.amount||0),0);
@@ -122,6 +129,10 @@
     if(label==='Notifications')setTimeout(loadNotifications,30);
   },true);
   window.addEventListener('pageshow',()=>{if(document.getElementById('notifications')?.classList.contains('active'))loadNotifications();refreshNotificationDot()});
+  window.addEventListener('focus',()=>refreshNotifications());
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshNotifications()});
+  window.addEventListener('storage',e=>{if(e.key==='sbpPadelBookingSessionV2'||e.key==='sbpPadelBookingId')refreshNotifications()});
+  setInterval(refreshNotifications,10000);
   setTimeout(refreshNotificationDot,50);
   loadPaymentHistory();
 })();
