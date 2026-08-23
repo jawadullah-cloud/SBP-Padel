@@ -1,5 +1,5 @@
-const BUILD='20260824-nav4';
-const BASE_INJECT=`<script src="native-transitions.js?v=${BUILD}"></script><script src="saved-players-bridge.js?v=${BUILD}"></script><script src="navigation-fix.js?v=${BUILD}"></script>`;
+const BUILD='20260824-stable-checkout1';
+const BASE_INJECT=`<script src="native-transitions.js?v=${BUILD}"></script><script src="saved-players-bridge.js?v=${BUILD}"></script><script src="navigation-fix.js?v=${BUILD}"></script><script src="flow-recovery.js?v=${BUILD}"></script>`;
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 self.addEventListener('fetch',event=>{
@@ -19,15 +19,20 @@ self.addEventListener('fetch',event=>{
       if(url.pathname.endsWith('/payment-success.html'))inject+=`<script src="player-success.js?v=${BUILD}"></script>`;
       if(!html.includes('native-transitions.js'))html=html.replace('</body>',inject+'</body>');
       else {
-        let extras=inject.replace(`<script src="native-transitions.js?v=${BUILD}"></script>`,'').replace(`<script src="saved-players-bridge.js?v=${BUILD}"></script>`,'');
-        if(html.includes('navigation-fix.js'))extras=extras.replace(`<script src="navigation-fix.js?v=${BUILD}"></script>`,'');
-        if(html.includes('review-disabled-state.js'))extras=extras.replace(`<script src="review-disabled-state.js?v=${BUILD}"></script>`,'');
-        if(html.includes('player-booking-refund.js'))extras=extras.replace(`<script src="player-booking-refund.js?v=${BUILD}"></script>`,'');
-        if(html.includes('player-success.js'))extras=extras.replace(`<script src="player-success.js?v=${BUILD}"></script>`,'');
+        let extras=inject
+          .replace(`<script src="native-transitions.js?v=${BUILD}"></script>`,'')
+          .replace(`<script src="saved-players-bridge.js?v=${BUILD}"></script>`,'');
+        ['navigation-fix.js','flow-recovery.js','review-disabled-state.js','player-booking-refund.js','player-success.js'].forEach(name=>{
+          if(html.includes(name))extras=extras.replace(`<script src="${name}?v=${BUILD}"></script>`,'');
+        });
         if(extras)html=html.replace('</body>',extras+'</body>');
       }
-      const headers=new Headers(res.headers);headers.delete('content-length');headers.set('x-sbp-build',BUILD);
+      const headers=new Headers(res.headers);
+      headers.delete('content-length');
+      headers.set('x-sbp-build',BUILD);
       return new Response(html,{status:res.status,statusText:res.statusText,headers});
-    }catch(err){return fetch(req)}
+    }catch(err){
+      return fetch(req);
+    }
   })());
 });
