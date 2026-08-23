@@ -22,6 +22,7 @@ COMMON_SCRIPTS = [
 PAGE_SCRIPTS = {
     "index.html": [
         "booking-router-bridge.js",
+        "player-profile-live.js",
         "profile-modules.js",
         "notifications-live.js",
         "booking-date-more.js",
@@ -34,7 +35,8 @@ PAGE_SCRIPTS = {
     "review-booking.html": ["booking-router-bridge.js"],
     "payment.html": ["booking-router-bridge.js"],
     "payment-success.html": ["booking-router-bridge.js"],
-    "payment-history.html": ["player-account-live.js"],
+    "payment-history.html": ["player-payment-history-live.js"],
+    "wallet.html": ["player-wallet-live.js"],
     "auth-preview.html": ["player-live.js"],
     "booking-detail.html": ["player-booking-detail-live.js"],
 }
