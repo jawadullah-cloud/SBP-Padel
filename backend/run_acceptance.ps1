@@ -20,7 +20,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "5/5 Player frontend integration checks..." -ForegroundColor Yellow
 if (Get-Command node -ErrorAction SilentlyContinue) {
-  @('player-live.js','player-booking-refund.js','navigation-fix.js','review-entry.js','booking-router-bridge.js','sw.js') | ForEach-Object {
+  @('player-live.js','player-booking-refund.js','navigation-fix.js','review-entry.js','booking-router-bridge.js','player-account-live.js','sw.js') | ForEach-Object {
     node --check (Join-Path '..\docs' $_)
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   }
@@ -31,12 +31,13 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
   }
   if ($sw -notmatch 'review-entry\.js') { Write-Error 'Booking flow v2 regression: service worker must inject the single booking flow owner.' }
   if ($sw -notmatch 'booking-router-bridge\.js') { Write-Error 'Booking flow v2 regression: checkout must use the deep-router bridge.' }
+  if ($sw -notmatch 'player-account-live\.js') { Write-Error 'Player account regression: live account activity module is not loaded.' }
 
   $flow = Get-Content (Join-Path '..\docs' 'review-entry.js') -Raw
   if ($flow -notmatch 'sbpPadelBookingSessionV2') { Write-Error 'Booking flow v2 regression: persistent session state is missing.' }
   if ($flow -notmatch 'data-sbp-step') { Write-Error 'Booking flow v2 regression: clickable booking steps are missing.' }
   if ($flow -notmatch 'Final availability validation happens immediately before creating the booking') { Write-Error 'Booking flow v2 regression: payment-time booking creation guard is missing.' }
-  Write-Host "Booking flow v2 architecture guards OK" -ForegroundColor Green
+  Write-Host "Booking flow v2 and account activity guards OK" -ForegroundColor Green
 } else {
   Write-Host "Node.js not found; frontend syntax checks skipped." -ForegroundColor DarkYellow
 }
