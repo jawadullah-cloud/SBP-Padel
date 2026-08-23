@@ -55,7 +55,9 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
   if ($flow -notmatch 'SBPRefreshNotifications') { Write-Error 'Confirmed bookings must trigger a live notification refresh.' }
   if ($flow -notmatch "cache:'no-store'") { Write-Error 'Booking availability must bypass browser caches.' }
   if ($flow -notmatch 'SBPBookingFlowSync') { Write-Error 'Parent booking state must resync after checkout confirmation.' }
-  if ($flow -notmatch 'CHECKING AVAILABILITY') { Write-Error 'Time selection must perform a live availability refresh before opening.' }
+  if ($flow -notmatch 'availabilitySeq') { Write-Error 'Availability requests must be sequenced so stale responses cannot overwrite current state.' }
+  if ($flow -notmatch "goMain\('time',4\);showTimeLoading") { Write-Error 'Time screen must navigate immediately on the first Continue click before live refresh completes.' }
+  if ($flow -match 'One of your previously selected slots is no longer available') { Write-Error 'Post-confirmation slot reconciliation must not show the stale-selection toast.' }
 
   $profile = Get-Content (Join-Path '..\docs' 'profile-modules.js') -Raw
   if ($profile -match 'renderNotifications|installHeaderNotification|Championship Court booking at Nishtar Park is confirmed for 7:00 PM') { Write-Error 'Profile modules must never own or render notifications.' }
