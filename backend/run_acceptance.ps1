@@ -15,7 +15,7 @@ alembic heads
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "4/6 FastAPI import/startup smoke check..." -ForegroundColor Yellow
-python -c "from app.main import app; assert app.title == 'SBP Padel API'; print('FastAPI import OK')"
+python -c "from app.main import app; from app.api.routes import venue_timezone; assert app.title == 'SBP Padel API'; print('FastAPI import OK')"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "5/6 Cache-free player dev server check..." -ForegroundColor Yellow
@@ -24,14 +24,15 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $devServer = Get-Content ..\dev_player_server.py -Raw
 if ($devServer -notmatch 'Cache-Control') { Write-Error 'Player dev server must explicitly disable browser caching.' }
 if ($devServer -notmatch 'NOOP_SERVICE_WORKER') { Write-Error 'Player dev server must neutralize service workers locally.' }
-if ($devServer -notmatch 'player-account-live\.js') { Write-Error 'Player dev server must inject the live account module.' }
+if ($devServer -notmatch 'notifications-live\.js') { Write-Error 'Player dev server must inject the dedicated live notifications module.' }
+if ($devServer -notmatch 'booking-date-more\.js') { Write-Error 'Player dev server must inject the reliable MORE date module.' }
 if ($devServer -notmatch 'profile-modules\.js') { Write-Error 'Player dev server must load profile modules explicitly.' }
 if ($devServer -notmatch 'discovery-tools\.js') { Write-Error 'Player dev server must load facility discovery explicitly.' }
 Write-Host "Cache-free development runtime OK" -ForegroundColor Green
 
 Write-Host "6/6 Player frontend integration checks..." -ForegroundColor Yellow
 if (Get-Command node -ErrorAction SilentlyContinue) {
-  @('dev-runtime.js','player-live.js','player-booking-refund.js','navigation-fix.js','review-entry.js','booking-router-bridge.js','player-account-live.js','deep-router.js','native-transitions.js','player-stability.js','sw.js') | ForEach-Object {
+  @('dev-runtime.js','player-live.js','player-booking-refund.js','navigation-fix.js','review-entry.js','booking-router-bridge.js','player-account-live.js','notifications-live.js','booking-date-more.js','deep-router.js','native-transitions.js','player-stability.js','sw.js') | ForEach-Object {
     node --check (Join-Path '..\docs' $_)
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   }
@@ -42,7 +43,8 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
   }
   if ($sw -notmatch 'review-entry\.js') { Write-Error 'Booking flow v2 regression: service worker must inject the single booking flow owner.' }
   if ($sw -notmatch 'booking-router-bridge\.js') { Write-Error 'Booking flow v2 regression: checkout must use the deep-router bridge.' }
-  if ($sw -notmatch 'player-account-live\.js') { Write-Error 'Player account regression: live account activity module is not loaded.' }
+  if ($sw -notmatch 'notifications-live\.js') { Write-Error 'Notification regression: dedicated live notifications module is not loaded.' }
+  if ($sw -notmatch 'booking-date-more\.js') { Write-Error 'Booking date regression: reliable MORE date module is not loaded.' }
   if ($sw -notmatch 'profile-modules\.js') { Write-Error 'Player shell regression: profile modules must be loaded explicitly.' }
 
   $flow = Get-Content (Join-Path '..\docs' 'review-entry.js') -Raw
@@ -50,6 +52,10 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
   if ($flow -notmatch 'data-sbp-step') { Write-Error 'Booking flow v2 regression: clickable booking steps are missing.' }
   if ($flow -notmatch '/payments/initiate') { Write-Error 'Booking flow v2 regression: real payment initiation is missing.' }
   if ($flow -notmatch '/simulate-success') { Write-Error 'Development confirmation must execute the backend success path.' }
+
+  $notifications = Get-Content (Join-Path '..\docs' 'notifications-live.js') -Raw
+  if ($notifications -notmatch '/notifications/me') { Write-Error 'Notifications must load from the live API.' }
+  if ($notifications -match 'Championship Court booking at Nishtar Park is confirmed for 7:00 PM') { Write-Error 'Prototype notification content must not exist in the live notification owner.' }
 
   $router = Get-Content (Join-Path '..\docs' 'deep-router.js') -Raw
   if ($router -match "id==='payButton'\)return'payment-success\.html'") { Write-Error 'Deep router must never bypass the Pay & Confirm business action.' }
@@ -64,7 +70,10 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
   if ($visual -notmatch '\.screen:not\(\.active\).*pointer-events:none') { Write-Error 'Inactive player screens must not intercept taps.' }
   if ($visual -notmatch 'slotRow\.booked>div:first-child small\{display:none') { Write-Error 'Unavailable slot status must not be duplicated on both sides.' }
 
-  Write-Host "Booking flow v2, interaction ownership and account activity guards OK" -ForegroundColor Green
+  $routes = Get-Content (Join-Path 'app\api' 'routes.py') -Raw
+  if ($routes -notmatch 'timezone\(timedelta\(hours=5\)') { Write-Error 'Pakistan timezone must retain a Windows-safe UTC+5 fallback.' }
+
+  Write-Host "Booking flow, notifications, date selection and timezone guards OK" -ForegroundColor Green
 } else {
   Write-Host "Node.js not found; frontend syntax checks skipped." -ForegroundColor DarkYellow
 }
