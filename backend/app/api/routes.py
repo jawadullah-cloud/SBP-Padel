@@ -103,7 +103,7 @@ async def venue_availability(venue_id: UUID, target_date: date = Query(alias="da
             elapsed = target_date == local_now.date() and datetime.combine(target_date, start_time, tzinfo=local_now.tzinfo) <= local_now
             booked_slot = (court.id, hour) in booked_keys
             available = not booked_slot and rate is not None and block is None and not elapsed
-            reason = block.reason if block else "Time has passed" if elapsed else "Booked" if booked_slot else "Price unavailable" if rate is None else None
+            reason = block.reason if block else "Unavailable" if elapsed else "Booked" if booked_slot else "Price unavailable" if rate is None else None
             slots.append({"start_time": start_time.isoformat(timespec="minutes"), "end_time": end_time.isoformat(timespec="minutes"), "available": available, "hourly_rate": money(rate), "currency": "PKR", "unavailable_reason": reason})
         result.append({"court_id": str(court.id), "court_code": court.code, "court_name": court.name, "court_type": court.court_type, "slots": slots})
     return {"venue_id": str(venue.id), "venue_name": venue.name, "date": target_date.isoformat(), "timezone": venue.timezone, "courts": result}
