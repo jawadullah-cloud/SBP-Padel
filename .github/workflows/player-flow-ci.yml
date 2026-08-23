@@ -8,6 +8,7 @@ on:
       - 'dev_player_server.py'
       - 'qa/player_runtime_browser.mjs'
       - 'qa/player_booking_lifecycle_browser.mjs'
+      - 'qa/player_account_browser.mjs'
       - '.github/workflows/player-flow-ci.yml'
   pull_request:
     paths:
@@ -15,6 +16,7 @@ on:
       - 'dev_player_server.py'
       - 'qa/player_runtime_browser.mjs'
       - 'qa/player_booking_lifecycle_browser.mjs'
+      - 'qa/player_account_browser.mjs'
       - '.github/workflows/player-flow-ci.yml'
 
 jobs:
@@ -35,10 +37,13 @@ jobs:
           node --check docs/bookings-entry.js
           node --check docs/player-bookings-live.js
           node --check docs/player-booking-detail-live.js
+          node --check docs/player-profile-live.js
+          node --check docs/player-payment-history-live.js
+          node --check docs/player-wallet-live.js
+          node --check docs/profile-modules.js
           node --check docs/booking-router-bridge.js
           node --check docs/navigation-fix.js
           node --check docs/deep-route-smooth.js
-          node --check docs/player-account-live.js
           node --check docs/notifications-live.js
           node --check docs/booking-date-more.js
           node --check docs/deep-router.js
@@ -46,6 +51,7 @@ jobs:
           node --check docs/player-stability.js
           node --check qa/player_runtime_browser.mjs
           node --check qa/player_booking_lifecycle_browser.mjs
+          node --check qa/player_account_browser.mjs
           node --check docs/sw.js
 
       - name: Booking flow architecture guards
@@ -89,27 +95,31 @@ jobs:
           grep -q "page!=='booking-detail.html'" docs/deep-route-smooth.js
           grep -q "frame.addEventListener('load'" docs/deep-route-smooth.js
 
-      - name: Live notification and bookings ownership guards
+      - name: Live player ownership guards
         shell: bash
         run: |
           grep -q "'/notifications/me'" docs/notifications-live.js
           grep -q 'notifications-live.js' docs/sw.js
           grep -q 'notifications-live.js' dev_player_server.py
-          grep -q 'booking-date-more.js' docs/sw.js
-          grep -q 'booking-date-more.js' dev_player_server.py
           grep -q '/bookings/me' docs/player-bookings-live.js
           grep -q 'player-bookings-live.js' docs/sw.js
-          grep -q 'player-bookings-live.js' dev_player_server.py
+          grep -q '/auth/me' docs/player-profile-live.js
+          grep -q 'player-profile-live.js' docs/sw.js
+          grep -q 'player-profile-live.js' dev_player_server.py
+          grep -q '/payments/me' docs/player-payment-history-live.js
+          grep -q 'player-payment-history-live.js' docs/sw.js
+          grep -q 'player-wallet-live.js' docs/sw.js
+          grep -q 'player-wallet-live.js' dev_player_server.py
+          ! grep -q 'player-account-live.js' docs/sw.js
+          ! grep -q 'player-account-live.js' dev_player_server.py
+          ! grep -q 'Adeel Raza' docs/player-profile-live.js
+          ! grep -q 'Sara Khan\|Hamza Ali\|Mariam Shah' docs/profile-modules.js
+          ! grep -q 'PKR 2,450\|Wallet top-up' docs/wallet.html
+          ! grep -q 'PDL-002381' docs/payment-history.html
           grep -q '/reschedule' docs/player-booking-detail-live.js
           grep -q '/cancel' docs/player-booking-detail-live.js
           grep -q '/refund' docs/player-booking-detail-live.js
-          grep -q 'player-booking-detail-live.js' docs/sw.js
-          grep -q 'player-booking-detail-live.js' dev_player_server.py
           ! grep -q 'player-booking-refund.js' docs/sw.js
-          ! awk '/"booking-detail.html": \[/,/^    \],/' dev_player_server.py | grep -q 'player-live.js'
-          ! awk '/if\(page===.index.html.\)/,/^      }/' docs/sw.js | grep -q 'player-account-live.js'
-          ! awk '/"index.html": \[/,/^    \],/' dev_player_server.py | grep -q 'player-account-live.js'
-          grep -q "'/payments/me'" docs/player-account-live.js
 
       - name: Dev runtime provenance guards
         shell: bash
@@ -136,3 +146,4 @@ jobs:
           done
           node qa/player_runtime_browser.mjs
           node qa/player_booking_lifecycle_browser.mjs
+          node qa/player_account_browser.mjs
