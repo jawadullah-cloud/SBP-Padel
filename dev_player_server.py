@@ -21,6 +21,8 @@ PAGE_SCRIPTS = {
         "booking-router-bridge.js",
         "profile-modules.js",
         "player-account-live.js",
+        "discovery-tools.js",
+        "bookings-search.js",
         "visual-live.js",
         "player-stability.js",
     ],
