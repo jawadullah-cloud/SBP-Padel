@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import current_user
 from app.db.session import get_db
-from app.models.domain import Booking, BookingSlot, BookingStatus, Court, User, UserRole, Venue
+from app.models.domain import Booking, BookingSlot, BookingStatus, Court, Payment, User, UserRole, Venue
 from app.models.operations import BookingCheckIn, BlockType, UserVenueAssignment, VenueAssignmentRole, VenueBlock
 
 router = APIRouter(prefix="/operations", tags=["venue operations"])
@@ -77,13 +77,21 @@ async def operational_bookings(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
     await ensure_venue_access(user, venue_id, db)
-    stmt = select(Booking).where(Booking.venue_id == venue_id)
+    stmt = select(Booking).join(User, User.id == Booking.user_id).where(Booking.venue_id == venue_id)
     if booking_date:
         stmt = stmt.where(Booking.booking_date == booking_date)
     if status:
         stmt = stmt.where(Booking.status == status)
     if q:
-        stmt = stmt.where(Booking.booking_code.ilike(f"%{q.strip()}%"))
+        needle = f"%{q.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Booking.booking_code.ilike(needle),
+                User.full_name.ilike(needle),
+                User.email.ilike(needle),
+                User.phone.ilike(needle),
+            )
+        )
     bookings = (await db.scalars(stmt.order_by(Booking.booking_date.desc(), Booking.created_at.desc()).limit(200))).all()
     result = []
     for booking in bookings:
@@ -93,15 +101,32 @@ async def operational_bookings(
             )
         ).all()
         checkin = await db.scalar(select(BookingCheckIn).where(BookingCheckIn.booking_id == booking.id))
+        player = await db.get(User, booking.user_id)
+        court = await db.get(Court, booking.court_id)
+        payment = await db.scalar(
+            select(Payment).where(Payment.booking_id == booking.id).order_by(Payment.created_at.desc())
+        )
         result.append({
             "id": str(booking.id),
             "booking_code": booking.booking_code,
             "date": booking.booking_date.isoformat(),
             "status": booking.status.value,
             "court_id": str(booking.court_id),
+            "court_code": court.code if court else None,
+            "court_name": court.name if court else "Court",
+            "court_type": court.court_type if court else None,
+            "player": {
+                "id": str(player.id) if player else None,
+                "full_name": player.full_name if player else "Unknown player",
+                "email": player.email if player else None,
+                "phone": player.phone if player else None,
+            },
             "slots": [f"{s.start_time.isoformat(timespec='minutes')}-{s.end_time.isoformat(timespec='minutes')}" for s in slots],
             "total": f"{booking.total_amount:.2f}",
             "currency": booking.currency,
+            "payment_status": payment.status.value if payment else None,
+            "payment_method": payment.method if payment else None,
+            "payment_reference": payment.provider_reference if payment else None,
             "checked_in": checkin is not None,
             "checked_in_at": checkin.checked_in_at.isoformat() if checkin else None,
         })
