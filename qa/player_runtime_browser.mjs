@@ -81,6 +81,7 @@ await page.addInitScript(() => {
   localStorage.setItem('sbpPadelAccessToken', 'qa-token');
   localStorage.setItem('sbpPadelUser', JSON.stringify({ id: 'user-1', full_name: 'Runtime QA' }));
   localStorage.setItem('sbpPadelBookingDatePicker', '2099-12-31');
+  localStorage.setItem('sbpPadelFavouriteNishtar', '0');
 });
 
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
@@ -105,6 +106,12 @@ try {
   let notificationText = await page.locator('#notifications').innerText();
   assert(notificationText.includes('PDL-RUNTIME-QA'), 'Live API notification was not rendered.');
   assert(!notificationText.includes('Your Championship Court booking at Nishtar Park is confirmed for 7:00 PM.'), 'Prototype notification leaked into live notifications.');
+  await page.locator('header .brand[data-nav="home"]').click();
+  assert(await active('home'), 'SBP Padel logo did not return Home from Notifications.');
+  assert(!(await active('notifications')), 'Notifications remained active after navigating Home from the header logo.');
+
+  await page.locator('nav [data-nav="profile"]').click();
+  await notificationsButton.click();
   await page.locator('#notifications .ntCard').first().click();
   await page.locator('#notifications .ntBack').click();
 
@@ -126,6 +133,22 @@ try {
   await page.locator('#venues .venueLarge').click();
   assert(await active('nishtar'), 'Venue card did not navigate on first click.');
   assert(await navVisible(), 'Bottom navigation is hidden on the venue booking journey.');
+
+  const heart = page.locator('#nishtar .heartBtn');
+  assert(await heart.textContent() === '♡', 'Venue heart did not start in the unfavourited state.');
+  await heart.click();
+  assert(await heart.textContent() === '♥', 'Venue heart did not toggle to favourite on first click.');
+  assert(await page.evaluate(() => localStorage.getItem('sbpPadelFavouriteNishtar')) === '1', 'Favourite venue state was not persisted.');
+  await page.locator('nav [data-nav="profile"]').click();
+  const favouriteButton = page.locator('#profile .menu button').filter({ hasText: 'Favourite Venues' });
+  await favouriteButton.click();
+  assert(await active('favouriteVenues'), 'Favourite Venues did not open.');
+  assert((await page.locator('#favouriteVenues').innerText()).includes('Nishtar Park Sports Complex'), 'Favourited venue did not appear in Favourite Venues.');
+  await page.locator('#favouriteVenues [data-pm-back]').click();
+  await page.locator('nav [data-nav="venues"]').click();
+  await page.locator('#venues .venueLarge').click();
+  assert(await heart.textContent() === '♥', 'Favourite heart did not remain persisted after navigation.');
+
   await page.locator('#nishtar [data-nav="select"]').click();
   assert(await active('select'), 'Venue → booking selection did not navigate on first click.');
   assert(await navVisible(), 'Bottom navigation is hidden on court/date selection.');
