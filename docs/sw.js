@@ -1,4 +1,4 @@
-const BUILD='20260824-live3';
+const BUILD='20260824-live4';
 const BASE_INJECT=`<script src="native-transitions.js?v=${BUILD}"></script><script src="saved-players-bridge.js?v=${BUILD}"></script>`;
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
@@ -14,8 +14,9 @@ self.addEventListener('fetch',event=>{
       let html=await res.text();
       let inject=BASE_INJECT;
       if(!html.includes('player-live.js'))inject+=`<script src="player-live.js?v=${BUILD}"></script>`;
+      if(url.pathname.endsWith('/booking-detail.html'))inject+=`<script src="player-booking-refund.js?v=${BUILD}"></script>`;
       if(!html.includes('native-transitions.js'))html=html.replace('</body>',inject+'</body>');
-      else if(inject.includes('player-live.js'))html=html.replace('</body>',`<script src="player-live.js?v=${BUILD}"></script></body>`);
+      else if(inject.includes('player-live.js')||inject.includes('player-booking-refund.js'))html=html.replace('</body>',inject.replace(BASE_INJECT,'')+'</body>');
       const headers=new Headers(res.headers);headers.delete('content-length');headers.set('x-sbp-build',BUILD);
       return new Response(html,{status:res.status,statusText:res.statusText,headers});
     }catch(err){return fetch(req)}
