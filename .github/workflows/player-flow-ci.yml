@@ -9,6 +9,7 @@ on:
       - 'qa/player_runtime_browser.mjs'
       - 'qa/player_booking_lifecycle_browser.mjs'
       - 'qa/player_account_browser.mjs'
+      - 'qa/player_theme_browser.mjs'
       - '.github/workflows/player-flow-ci.yml'
   pull_request:
     paths:
@@ -17,6 +18,7 @@ on:
       - 'qa/player_runtime_browser.mjs'
       - 'qa/player_booking_lifecycle_browser.mjs'
       - 'qa/player_account_browser.mjs'
+      - 'qa/player_theme_browser.mjs'
       - '.github/workflows/player-flow-ci.yml'
 
 jobs:
@@ -41,6 +43,7 @@ jobs:
           node --check docs/player-payment-history-live.js
           node --check docs/player-wallet-live.js
           node --check docs/profile-modules.js
+          node --check docs/theme-bridge.js
           node --check docs/booking-router-bridge.js
           node --check docs/navigation-fix.js
           node --check docs/deep-route-smooth.js
@@ -52,6 +55,7 @@ jobs:
           node --check qa/player_runtime_browser.mjs
           node --check qa/player_booking_lifecycle_browser.mjs
           node --check qa/player_account_browser.mjs
+          node --check qa/player_theme_browser.mjs
           node --check docs/sw.js
 
       - name: Booking flow architecture guards
@@ -124,6 +128,15 @@ jobs:
           grep -q '/refund' docs/player-booking-detail-live.js
           ! grep -q 'player-booking-refund.js' docs/sw.js
 
+      - name: Theme ownership guards
+        shell: bash
+        run: |
+          grep -q 'SBPToggleTheme' docs/theme-bridge.js
+          grep -q '#themeToggle' docs/theme-bridge.js
+          grep -q 'sbp-theme-change' docs/theme-bridge.js
+          grep -q 'SBPToggleTheme' docs/player-profile-live.js
+          grep -q 'html\[data-theme="light"\] body nav' docs/theme-bridge.js
+
       - name: Dev runtime provenance guards
         shell: bash
         run: |
@@ -150,3 +163,4 @@ jobs:
           node qa/player_runtime_browser.mjs
           node qa/player_booking_lifecycle_browser.mjs
           node qa/player_account_browser.mjs
+          node qa/player_theme_browser.mjs
