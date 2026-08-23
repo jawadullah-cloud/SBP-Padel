@@ -7,7 +7,8 @@
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money=v=>`PKR ${Number(v||0).toLocaleString(undefined,{maximumFractionDigits:0})}`;
   const method=m=>m==='card'?'Debit / Credit Card':m==='bank'?'Online Banking':m==='wallet'?'SBP Padel Wallet':(m||'Payment');
-  async function api(path){const h={'Content-Type':'application/json'};if(token())h.Authorization=`Bearer ${token()}`;const r=await fetch(`${API}${path}`,{headers:h,cache:'no-store'});let b=null;try{b=await r.json()}catch{}if(!r.ok)throw new Error(b?.detail||`Request failed (${r.status})`);return b}
+  const errorText=(body,status)=>{if(typeof body?.detail==='string')return body.detail;if(Array.isArray(body?.detail))return body.detail.map(x=>x?.msg||String(x)).join('; ');if(typeof body?.message==='string')return body.message;return `Request failed (${status})`};
+  async function api(path){const h={'Content-Type':'application/json'};if(token())h.Authorization=`Bearer ${token()}`;const r=await fetch(`${API}${path}`,{headers:h,cache:'no-store'});let b=null;try{b=await r.json()}catch{}if(!r.ok)throw new Error(errorText(b,r.status));if(!Array.isArray(b))throw new Error('Payment history returned an invalid response');return b}
   function deep(url){if(window.parent&&window.parent!==window&&typeof window.parent.SBPDeepRoute==='function'){window.parent.SBPDeepRoute(url);return}location.href=url}
   function showState(msg){const list=document.getElementById('list');if(list)list.innerHTML=`<div class="empty show">${esc(msg)}</div>`}
   function applyFilter(filter){let shown=0;document.querySelectorAll('#list .entry').forEach(e=>{const ok=filter==='all'||e.dataset.type===filter;e.hidden=!ok;if(ok)shown++});document.getElementById('empty')?.classList.toggle('show',shown===0)}
@@ -28,7 +29,7 @@
       const list=document.getElementById('list');if(list)list.innerHTML=entries.join('');
       document.querySelectorAll('[data-booking]').forEach(b=>b.onclick=()=>{localStorage.setItem('sbpPadelSelectedBookingId',b.dataset.booking);deep(`booking-detail.html?booking=${encodeURIComponent(b.dataset.booking)}`)});
       applyFilter(document.querySelector('[data-filter].on')?.dataset.filter||'all');
-    }catch(err){showState(`Could not load payment history: ${err.message}`)}
+    }catch(err){showState(`Could not load payment history: ${err.message||'Unknown error'}`)}
   }
   document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('on',x===b));applyFilter(b.dataset.filter)});
   const back=document.querySelector('.head .back');if(back)back.onclick=e=>{e.preventDefault();deep('index.html?open=profile')};
