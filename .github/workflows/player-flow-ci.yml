@@ -34,6 +34,8 @@ jobs:
           node --check docs/booking-router-bridge.js
           node --check docs/navigation-fix.js
           node --check docs/player-account-live.js
+          node --check docs/notifications-live.js
+          node --check docs/booking-date-more.js
           node --check docs/deep-router.js
           node --check docs/native-transitions.js
           node --check docs/player-stability.js
@@ -67,12 +69,17 @@ jobs:
           ! grep -q "id==='payButton')return'payment-success.html'" docs/deep-router.js
           ! grep -q "id==='toPayment')return'payment.html'" docs/deep-router.js
 
-      - name: Live account activity guards
+      - name: Live notification ownership guards
         shell: bash
         run: |
-          grep -q "'/notifications/me'" docs/player-account-live.js
+          grep -q "'/notifications/me'" docs/notifications-live.js
+          grep -q 'notifications-live.js' docs/sw.js
+          grep -q 'notifications-live.js' dev_player_server.py
+          grep -q 'booking-date-more.js' docs/sw.js
+          grep -q 'booking-date-more.js' dev_player_server.py
+          ! awk '/if\(page===.index.html.\)/,/^      }/' docs/sw.js | grep -q 'player-account-live.js'
+          ! awk '/"index.html": \[/,/^    \],/' dev_player_server.py | grep -q 'player-account-live.js'
           grep -q "'/payments/me'" docs/player-account-live.js
-          grep -q 'player-account-live.js' docs/sw.js
 
       - name: Dev runtime provenance guards
         shell: bash
