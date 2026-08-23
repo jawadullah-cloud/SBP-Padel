@@ -25,7 +25,7 @@ The user has manually accepted the player web runtime through the complete booki
 
 Do not reopen player work without a concrete reproduced regression.
 
-## Player runtime ownership
+### Player runtime ownership
 
 - `docs/review-entry.js` owns Venue → Date → Court → Time → Review → Payment → Confirmation.
 - `docs/notifications-live.js` owns Notifications.
@@ -40,58 +40,104 @@ Do not reopen player work without a concrete reproduced regression.
 
 Legacy `docs/player-account-live.js` must not be loaded by the effective runtime.
 
-## Accepted venue-operations milestone 1
+## Venue operations: manually accepted behavior
 
-The user manually accepted the first Next.js venue/front-desk console milestone.
+The user has manually accepted the current Next.js venue/front-desk console through the following areas:
 
-Accepted behavior:
-
-- real manager/operator login and venue assignment;
+- manager/operator login and venue assignment;
 - Court Schedule by date/court;
 - enriched Bookings with player/contact/court/payment/check-in context;
-- search by booking code, player name, email or phone;
+- booking search by code, player name, email or phone;
 - booking detail drawer and real Check In action;
-- Closures & Maintenance, including all-court and specific-court blocks;
-- manager/operator permission boundaries for closures;
-- Court Active/Maintenance/Closed controls.
+- Closures & Maintenance with all-court and specific-court blocks;
+- Court Active/Maintenance/Closed controls;
+- front-desk New Booking using live availability/pricing and real paid booking creation;
+- Payments & Refunds;
+- Bookable Hours & Pricing;
+- Reports;
+- venue-side player registration and duplicate protection.
 
 Do not redesign or remove these accepted workflows without a concrete regression.
 
-## Active milestone: venue/admin operations phase 2
+## Important operational decisions
 
-Implemented and awaiting manual review:
+### Bookable Hours & Pricing
 
-### Backend
+Pricing rules are also the booking schedule.
 
-`backend/app/api/operations_management.py` adds venue-scoped operational APIs:
+- A one-hour slot exists for booking only when an active pricing rule covers that court/date/weekday/hour.
+- Example: a rule 18:00–20:00 exposes 18:00–19:00 and 19:00–20:00.
+- Hours without an active pricing rule are hidden completely from availability.
+- A normally bookable priced slot that is already occupied remains visible as `Booked` / unavailable.
+- Elapsed, administratively blocked or unpriced hours are not shown in the booking picker.
 
-- `GET /operations/players/search` searches registered player accounts for staff booking;
-- `POST /operations/bookings/front-desk` creates a real confirmed booking for a registered player, checks the same live slot/pricing rules used by the player app, records a paid venue-front-desk payment, and sends a real booking-confirmed notification;
-- `GET/POST/DELETE /operations/pricing-rules` exposes venue pricing to staff, with mutations restricted to venue manager/admin;
-- `GET /operations/finance` returns venue-scoped payment/refund history and gross/refund/net totals;
-- `PATCH /operations/refunds/{refund_id}` allows venue manager/admin to move a refund to processing/completed/rejected and updates the player notification/payment state;
-- `GET /operations/reports/summary` returns venue booking, booked-hour, check-in, revenue/refund/net and estimated occupancy metrics.
+The availability behavior is enforced centrally by `backend/app/api/routes.py`, not only in the admin UI.
 
-`backend/app/main.py` mounts this operations-management router and API version is advanced to 0.9.0.
+### Booking sorting
+
+- General **Bookings** is an activity/history view and is ordered by `Booking.created_at DESC`, newest-created booking first.
+- **Court Schedule** remains chronological by actual session time within each court/date.
+
+### Front-desk booking completion
+
+After a successful staff-created booking, the console clears booking filters, reloads the full venue booking list, switches to **Bookings**, and opens the newly-created booking in the detail drawer.
+
+## Venue operations backend
+
+`backend/app/api/operations.py` owns venue bookings/check-in/blocks and general venue access.
+
+`backend/app/api/operations_management.py` owns:
+
+- `GET /operations/players/search`;
+- `POST /operations/bookings/front-desk`;
+- `GET/POST/DELETE /operations/pricing-rules`;
+- `GET /operations/finance`;
+- `PATCH /operations/refunds/{refund_id}`;
+- `GET /operations/reports/summary`.
+
+Venue-side player registration is implemented by the operations player endpoint and uses normal `UserRole.player` accounts with duplicate email/phone protection and a one-time temporary password for walk-in registration.
 
 `backend/tests/test_operations_management.py` covers the front-desk booking → finance/report → pricing permission → player cancel/refund → manager refund-processing lifecycle.
 
-### Admin console
+A separate player-registration regression test covers operator registration/search and duplicate protection.
 
-`admin/app/page.tsx` now adds these operational areas to the accepted console:
+## Venue admin console
 
-- **New Booking**: registered-player search, live date/court availability, multi-slot selection, live quote, cash/card-terminal/bank-transfer recording, policy acknowledgment, confirmed booking creation;
-- **Payments & Refunds**: date-range finance totals, real transactions, refund state, manager Process/Complete/Reject controls;
-- **Pricing**: current active rules, court/date/day/time/rate/priority rule creation for managers, view-only for operators, and deactivation;
-- **Reports**: date-range booking, court-hour, check-in, occupancy and gross/refund/net metrics.
+`admin/app/page.tsx` owns the main venue console.
 
-`admin/app/operations-v2.css` contains the presentation for these phase-2 workflows and is loaded by `admin/app/layout.tsx`.
+Current operational areas:
+
+- Court Schedule
+- Bookings
+- New Booking
+- Payments & Refunds
+- Bookable Hours & Pricing
+- Closures & Maintenance
+- Courts
+- Reports
+
+`admin/app/players/page.tsx` owns venue-side Player Management. The user has manually accepted the player registration function. The page has now been moved into the same venue-operations visual/session shell and is pending visual/manual review of that integration.
+
+`admin/app/operations-v2.css` contains phase-2 operational presentation.
+`admin/app/players-ui.css` contains Player Management shell/presentation.
+`admin/app/layout.tsx` loads both.
 
 ## Permissions retained
 
-- Venue operator: view venue data, search players, create front-desk bookings, check in players, view pricing, finance and reports.
+- Venue operator: view venue data, search/register players, create front-desk bookings, check in players, view pricing, finance and reports.
 - Venue manager/admin: all operator abilities plus closures, court-status changes, pricing mutations and refund processing.
-- Central admin/HQ endpoints under `/admin` remain separate and are not replaced by the venue operations APIs.
+- Central admin/HQ endpoints under `/admin` remain separate and are not replaced by venue operations APIs.
+
+## Current active work
+
+Finish venue-console completion/regression without reopening accepted player-web behavior.
+
+Immediate priorities:
+
+1. complete Player Management navigation integration into the main operations experience;
+2. run/inspect Admin Portal CI build for the latest admin changes;
+3. run backend operations regression after the latest availability/sorting/player-registration changes;
+4. inspect remaining venue-console UX gaps and only then move toward central/HQ administration or production deployment work.
 
 ## Verification discipline
 
@@ -103,14 +149,12 @@ Always distinguish:
 - automated CI actually green;
 - user's Windows runtime manually accepted.
 
-The first venue console milestone is manually accepted. Phase 2 above is implemented and test-covered but requires manual runtime review.
+Do not claim behavior is fixed merely because code exists in Git.
 
 ## Working style
 
 Work autonomously through investigation → implementation → runtime/CI QA → fixes → regression QA.
 
 Do not add speculative click interceptors, CSS patches or duplicate feature owners.
-
-Do not claim behavior is fixed merely because code exists in Git. State clearly what was code-reviewed, automatically tested, and manually verified.
 
 When manual review is required, provide only the minimal PowerShell pull/restart commands and the exact flow to inspect.
