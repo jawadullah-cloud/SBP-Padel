@@ -24,13 +24,23 @@ async def my_payment_history(
             .order_by(Payment.created_at.desc())
         )
     ).all()
+    payment_ids = [payment.id for payment, _booking in rows]
+    refunds_by_payment: dict[UUID, Refund] = {}
+    if payment_ids:
+        refunds = (
+            await db.scalars(
+                select(Refund)
+                .where(Refund.payment_id.in_(payment_ids))
+                .order_by(Refund.created_at.desc())
+            )
+        ).all()
+        # Rows are newest-first, so retain only the latest refund per payment.
+        for refund in refunds:
+            refunds_by_payment.setdefault(refund.payment_id, refund)
+
     result: list[dict] = []
     for payment, booking in rows:
-        refund = await db.scalar(
-            select(Refund)
-            .where(Refund.payment_id == payment.id)
-            .order_by(Refund.created_at.desc())
-        )
+        refund = refunds_by_payment.get(payment.id)
         result.append(
             {
                 "id": str(payment.id),
