@@ -20,7 +20,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "5/5 Player frontend integration syntax checks..." -ForegroundColor Yellow
 if (Get-Command node -ErrorAction SilentlyContinue) {
-  @('player-live.js','player-booking-refund.js','player-success.js','sw.js') | ForEach-Object {
+  @('player-live.js','player-booking-refund.js','player-success.js','navigation-fix.js','sw.js') | ForEach-Object {
     node --check (Join-Path '..\docs' $_)
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   }
