@@ -7,12 +7,14 @@ on:
       - 'docs/**'
       - 'dev_player_server.py'
       - 'qa/player_runtime_browser.mjs'
+      - 'qa/player_booking_lifecycle_browser.mjs'
       - '.github/workflows/player-flow-ci.yml'
   pull_request:
     paths:
       - 'docs/**'
       - 'dev_player_server.py'
       - 'qa/player_runtime_browser.mjs'
+      - 'qa/player_booking_lifecycle_browser.mjs'
       - '.github/workflows/player-flow-ci.yml'
 
 jobs:
@@ -31,6 +33,8 @@ jobs:
         run: |
           node --check docs/review-entry.js
           node --check docs/bookings-entry.js
+          node --check docs/player-bookings-live.js
+          node --check docs/player-booking-detail-live.js
           node --check docs/booking-router-bridge.js
           node --check docs/navigation-fix.js
           node --check docs/player-account-live.js
@@ -40,6 +44,7 @@ jobs:
           node --check docs/native-transitions.js
           node --check docs/player-stability.js
           node --check qa/player_runtime_browser.mjs
+          node --check qa/player_booking_lifecycle_browser.mjs
           node --check docs/sw.js
 
       - name: Booking flow architecture guards
@@ -69,7 +74,7 @@ jobs:
           ! grep -q "id==='payButton')return'payment-success.html'" docs/deep-router.js
           ! grep -q "id==='toPayment')return'payment.html'" docs/deep-router.js
 
-      - name: Live notification ownership guards
+      - name: Live notification and bookings ownership guards
         shell: bash
         run: |
           grep -q "'/notifications/me'" docs/notifications-live.js
@@ -77,6 +82,16 @@ jobs:
           grep -q 'notifications-live.js' dev_player_server.py
           grep -q 'booking-date-more.js' docs/sw.js
           grep -q 'booking-date-more.js' dev_player_server.py
+          grep -q '/bookings/me' docs/player-bookings-live.js
+          grep -q 'player-bookings-live.js' docs/sw.js
+          grep -q 'player-bookings-live.js' dev_player_server.py
+          grep -q '/reschedule' docs/player-booking-detail-live.js
+          grep -q '/cancel' docs/player-booking-detail-live.js
+          grep -q '/refund' docs/player-booking-detail-live.js
+          grep -q 'player-booking-detail-live.js' docs/sw.js
+          grep -q 'player-booking-detail-live.js' dev_player_server.py
+          ! grep -q 'player-booking-refund.js' docs/sw.js
+          ! awk '/"booking-detail.html": \[/,/^    \],/' dev_player_server.py | grep -q 'player-live.js'
           ! awk '/if\(page===.index.html.\)/,/^      }/' docs/sw.js | grep -q 'player-account-live.js'
           ! awk '/"index.html": \[/,/^    \],/' dev_player_server.py | grep -q 'player-account-live.js'
           grep -q "'/payments/me'" docs/player-account-live.js
@@ -105,3 +120,4 @@ jobs:
             sleep 1
           done
           node qa/player_runtime_browser.mjs
+          node qa/player_booking_lifecycle_browser.mjs
