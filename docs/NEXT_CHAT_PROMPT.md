@@ -19,11 +19,13 @@ Before discussing or changing anything:
 
 This is a continuation of an existing project, not a new project.
 
-## Accepted player runtime / booking lifecycle
+## Accepted player runtime / lifecycle / account review
 
-The user has manually accepted the major player booking/runtime fixes through the booking lifecycle review, including first-click behavior, date/court/time selection, live notifications, Pakistan timezone handling, My Bookings tabs/navigation, booking detail transitions, reschedule, pending-payment cancellation, confirmed cancellation/refund state, favourite-heart behavior, and the booking-detail push transition.
+The user has manually accepted the major player runtime and booking lifecycle fixes, including first-click behavior, date/court/time selection, live notifications, Pakistan timezone handling, My Bookings tabs/navigation, booking detail transitions, reschedule, pending-payment cancellation, confirmed cancellation/refund state, favourite-heart behavior and smooth booking-detail push transitions.
 
-Do not reopen these areas without a concrete reproduced regression.
+The user has also manually accepted the player account review through Wallet/Payment History/Profile, including live profile identity, payment history, truthful wallet state, saved players/favourites/help, semantic profile icons and account-backed profile-picture upload/removal.
+
+Do not reopen accepted areas without a concrete reproduced regression.
 
 ## Runtime ownership
 
@@ -31,26 +33,31 @@ Do not reopen these areas without a concrete reproduced regression.
 - `docs/notifications-live.js` owns Notifications.
 - `docs/player-bookings-live.js` owns My Bookings.
 - `docs/player-booking-detail-live.js` owns booking detail / reschedule / cancellation / refund state.
-- `docs/player-profile-live.js` owns live profile/auth/menu/logout behavior.
+- `docs/player-profile-live.js` owns live profile/auth/menu/logout/avatar behavior.
 - `docs/player-payment-history-live.js` owns Payment History.
 - `docs/player-wallet-live.js` owns Wallet presentation/activity.
-- `docs/profile-modules.js` owns only Saved Players, Favourite Venues and Help & Support sub-screens plus favourite persistence. It must not seed prototype people or own Appearance/Notifications/auth.
+- `docs/profile-modules.js` owns only Saved Players, Favourite Venues and Help & Support sub-screens plus favourite persistence.
+- `docs/theme-bridge.js` is the single shared player theme owner. It owns stored theme application, the global header theme toggle, Profile Appearance delegation and cross-document/deep-route theme state.
 
 Legacy `docs/player-account-live.js` must not be loaded by the effective runtime.
 
-## Active milestone: player account/product review
+## Account/backend notes
 
-Implemented but awaiting manual acceptance:
+- `/payments/me` must be registered before generic `/payments/{payment_id}` routes in `backend/app/main.py` so `me` is never parsed as a UUID.
+- Player avatars are account-backed through `UserProfile.avatar_data_url` and `/auth/me/avatar`. The frontend resizes/crops the image before sending it.
+- Wallet balance/top-up remains intentionally disabled until a real wallet ledger/funding workflow exists. Do not simulate a spendable balance.
 
-- profile identity/contact now hydrates from `/auth/me` instead of the hard-coded Adeel Raza prototype;
-- Sign Out clears player auth/session state and returns to `auth-preview.html`;
-- Appearance uses the shared theme bridge and persisted theme;
-- Payment History has a dedicated API-only owner using `/payments/me` and no hard-coded sample transactions;
-- Wallet no longer invents a PKR 2,450 balance or fake top-ups. Because the backend has no wallet ledger/funding workflow yet, the screen explicitly reports that spendable wallet balance/top-up is not enabled, while showing real payment/refund activity from `/payments/me`;
-- Saved Players no longer seeds Sara Khan / Hamza Ali / Mariam Shah. A new browser starts empty and local saved-player persistence remains functional;
-- Favourite Venues and Help & Support remain local preference/product modules;
-- `qa/player_account_browser.mjs` covers live profile identity, empty saved-player state, appearance switching, live payment/refund history, truthful wallet state and logout;
-- Player Flow CI now runs runtime QA, booking lifecycle QA and player account QA, and guards against legacy account ownership/prototype data returning.
+## Active milestone: full light/dark review and final player regression
+
+Current implementation work:
+
+- `docs/theme-bridge.js` now owns `#themeToggle`; the previously orphaned header moon/sun control switches theme on the first click and persists it.
+- Profile Appearance delegates to `SBPToggleTheme()` instead of maintaining a second theme implementation.
+- light-theme coverage was expanded for the player shell, stage, phone, navigation, dynamic profile modules, payment/refund surfaces, modals and inputs while retaining intentional photographic/court artwork.
+- `qa/player_theme_browser.mjs` was added. It verifies dark→light switching from the global header, stored theme persistence, Profile state agreement, and light/dark inheritance inside deep-routed Wallet/Payment History frames.
+- Player Flow CI now includes the dedicated player-theme browser QA and theme-ownership guards in addition to runtime, booking lifecycle and account QA.
+
+Manual light/dark review is still required before locking the player milestone. Inspect both themes across Home, Courts/Venue, booking flow, My Bookings/detail, Notifications, Profile modules, Wallet/Payment History and deep-routed pages. Only fix reproduced issues.
 
 ## Important verification status
 
@@ -62,13 +69,10 @@ Always distinguish:
 - automated CI actually green;
 - user's Windows runtime manually accepted.
 
-## Next work after account acceptance
+## After final player acceptance
 
-After the account/product review is accepted:
-
-1. full light/dark functional and visual review across the complete player app;
-2. final player regression and milestone lock;
-3. begin venue/admin operational product review and implementation.
+1. lock the player web runtime milestone;
+2. begin the venue/admin operational product review and implementation.
 
 ## Working style
 
