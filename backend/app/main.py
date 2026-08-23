@@ -16,6 +16,7 @@ from app.api.operations_courts import router as operations_courts_router
 from app.api.payments import router as payments_router
 from app.api.player_payments import router as player_payments_router
 from app.api.policies import router as policies_router
+from app.api.reschedules import router as reschedules_router
 from app.api.routes import router
 from app.core.audit_middleware import AdministrationAuditMiddleware
 from app.core.config import settings
@@ -57,6 +58,7 @@ app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(policies_router, prefix=settings.api_prefix)
 app.include_router(bookings_router, prefix=settings.api_prefix)
 app.include_router(cancellations_router, prefix=settings.api_prefix)
+app.include_router(reschedules_router, prefix=settings.api_prefix)
 app.include_router(payments_router, prefix=settings.api_prefix)
 app.include_router(player_payments_router, prefix=settings.api_prefix)
 app.include_router(notifications_router, prefix=settings.api_prefix)
