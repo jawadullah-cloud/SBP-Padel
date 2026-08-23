@@ -6,9 +6,9 @@
     const hero=document.querySelector('#home .heroText');if(!hero)return;
     const u=user(),name=(u.full_name||'Player').trim().split(/\s+/)[0]||'Player';
     const over=hero.querySelector('.overline'),title=hero.querySelector('h1'),copy=hero.querySelector('p:not(.overline)');
-    if(over)over.textContent=`${greeting()},`;
-    if(title)title.textContent=name;
-    if(copy)copy.textContent="Let's play some great padel today.";
+    if(over)over.textContent=`${greeting()}, ${name}`;
+    if(title)title.innerHTML='PLAY.<br><i>PADEL.</i>';
+    if(copy)copy.textContent='Book your court. Fast, easy and seamless.';
   }
   paint();window.addEventListener('pageshow',paint);document.addEventListener('visibilitychange',()=>{if(!document.hidden)paint()});setTimeout(paint,250);
 })();
