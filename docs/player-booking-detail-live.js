@@ -7,7 +7,7 @@
   const API=(localStorage.getItem('sbpPadelApiBase')||'http://127.0.0.1:8000/api/v1').replace(/\/$/,'');
   const token=()=>localStorage.getItem('sbpPadelAccessToken')||'';
   const bookingId=new URLSearchParams(location.search).get('booking')||localStorage.getItem('sbpPadelSelectedBookingId')||'';
-  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
   const money=v=>`PKR ${Number(v||0).toLocaleString(undefined,{maximumFractionDigits:0})}`;
   const fmtDate=iso=>new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short',year:'numeric'});
   const fmtTime=t=>{const [h,m]=String(t||'00:00').split(':').map(Number);return new Date(2000,0,1,h,m||0).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})};
@@ -44,6 +44,16 @@
     render();
   }
 
+  function configureCancelModal(){
+    const pending=booking?.status==='pending_payment';
+    const modal=document.getElementById('cancelModal');if(!modal)return;
+    const eyebrow=modal.querySelector('.modalHead small'),title=modal.querySelector('.modalHead h2'),copy=modal.querySelector('.warn'),confirm=modal.querySelector('#confirmCancel');
+    if(eyebrow)eyebrow.textContent=pending?'CANCEL BOOKING':'CANCEL BOOKING';
+    if(title)title.textContent=pending?'Release this booking?':'Are you sure?';
+    if(copy)copy.textContent=pending?'This booking is still awaiting payment. Cancelling it will immediately release the held court slot. No refund is required because no successful payment has been completed.':'Cancelling will release this court and request a refund for the successful payment linked to this booking.';
+    if(confirm)confirm.textContent=pending?'CANCEL & RELEASE SLOT':'CANCEL & REQUEST REFUND';
+  }
+
   function render(){
     localStorage.removeItem('sbpPadelCancelled');
     document.querySelector('.titleRow h2').textContent=venue?.name||'SBP Padel';
@@ -55,13 +65,19 @@
     set('method',methodLabel(payment?.method));set('modalMethod',methodLabel(payment?.method));set('transactionId',payment?.provider_reference||'—');set('modalTxn',payment?.provider_reference||'—');set('receiptRef',payment?.provider_reference||'—');set('modalReceipt',payment?.provider_reference||'—');set('modalBooking',booking.booking_code);
     const owner=(()=>{try{return JSON.parse(localStorage.getItem('sbpPadelUser')||'{}').full_name||'Player'}catch{return'Player'}})();const players=document.getElementById('players');if(players)players.innerHTML=`<div class="player"><div class="avatar">${esc(owner.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase())}</div><div><b>${esc(owner)}</b><small>Booking owner</small></div></div>`;
     const refundState=document.getElementById('refundState');if(refundState){if(refund){refundState.style.display='block';refundState.innerHTML=`<b>REFUND ${esc(statusLabel(refund.status))}</b><br>${money(refund.amount)} · ${esc(refund.reason||'Refund linked to this booking.')}`}else refundState.style.display='none'}
-    const tools=document.getElementById('tools');if(tools){const active=['confirmed','rescheduled'].includes(booking.status);tools.innerHTML=active?'<button class="primary" id="passBtn">VIEW PASS</button><button class="secondary" id="rescheduleBtn">RESCHEDULE</button><button class="secondary" id="receiptBtn">VIEW RECEIPT</button><button class="danger" id="cancelBtn">CANCEL BOOKING</button>':'<button class="primary" id="passBtn">VIEW PASS</button><button class="secondary" id="receiptBtn">VIEW RECEIPT</button>';wireTools()}
+    configureCancelModal();
+    const tools=document.getElementById('tools');if(tools){
+      if(['confirmed','rescheduled'].includes(booking.status))tools.innerHTML='<button class="primary" id="passBtn">VIEW PASS</button><button class="secondary" id="rescheduleBtn">RESCHEDULE</button><button class="secondary" id="receiptBtn">VIEW RECEIPT</button><button class="danger" id="cancelBtn">CANCEL BOOKING</button>';
+      else if(booking.status==='pending_payment')tools.innerHTML='<button class="secondary" id="receiptBtn">PAYMENT DETAILS</button><button class="danger" id="cancelBtn">CANCEL BOOKING</button>';
+      else tools.innerHTML='<button class="primary" id="passBtn">VIEW PASS</button><button class="secondary" id="receiptBtn">VIEW RECEIPT</button>';
+      wireTools();
+    }
   }
 
   function wireTools(){
     const pass=document.getElementById('passBtn');if(pass)pass.onclick=e=>{e.preventDefault();savePass();go('digital-pass.html')};
     const receipt=document.getElementById('receiptBtn');if(receipt)receipt.onclick=e=>{e.preventDefault();openModal('receiptModal')};
-    const cancel=document.getElementById('cancelBtn');if(cancel)cancel.onclick=e=>{e.preventDefault();openModal('cancelModal')};
+    const cancel=document.getElementById('cancelBtn');if(cancel)cancel.onclick=e=>{e.preventDefault();configureCancelModal();openModal('cancelModal')};
     const reschedule=document.getElementById('rescheduleBtn');if(reschedule)reschedule.onclick=e=>{e.preventDefault();openReschedule()};
   }
 
@@ -94,7 +110,7 @@
     const btn=document.getElementById('confirmReschedule');if(!btn||rescheduleBusy||!rescheduleSlots.length)return;rescheduleBusy=true;updateRescheduleAction();try{await api(`/bookings/${booking.id}/reschedule`,{method:'POST',body:JSON.stringify({booking_date:rescheduleDate,slots:rescheduleSlots.map(start_time=>({start_time}))})});closeModal('rescheduleModal');toast('Booking rescheduled.');await hydrate();notifyParents()}catch(err){toast(err.message,true)}finally{rescheduleBusy=false;updateRescheduleAction()}
   }
   async function confirmCancel(){
-    const btn=document.getElementById('confirmCancel');if(!btn)return;btn.disabled=true;btn.textContent='CANCELLING…';try{const cancelled=await api(`/bookings/${booking.id}/cancel`,{method:'POST',body:JSON.stringify({reason:'Cancelled by player'})});if(cancelled.refund_required&&payment?.id)await api(`/payments/${payment.id}/refund`,{method:'POST',body:JSON.stringify({reason:'Booking cancelled by player'})});closeModal('cancelModal');toast(cancelled.refund_required?'Booking cancelled. Refund requested.':'Booking cancelled.');await hydrate();notifyParents()}catch(err){toast(err.message,true);btn.disabled=false;btn.textContent='CANCEL & REQUEST REFUND'}
+    const btn=document.getElementById('confirmCancel');if(!btn)return;const pending=booking?.status==='pending_payment';btn.disabled=true;btn.textContent='CANCELLING…';try{const cancelled=await api(`/bookings/${booking.id}/cancel`,{method:'POST',body:JSON.stringify({reason:'Cancelled by player'})});if(cancelled.refund_required&&payment?.id)await api(`/payments/${payment.id}/refund`,{method:'POST',body:JSON.stringify({reason:'Booking cancelled by player'})});closeModal('cancelModal');toast(cancelled.refund_required?'Booking cancelled. Refund requested.':pending?'Booking cancelled. Held slot released.':'Booking cancelled.');await hydrate();notifyParents()}catch(err){toast(err.message,true);btn.disabled=false;btn.textContent=pending?'CANCEL & RELEASE SLOT':'CANCEL & REQUEST REFUND'}
   }
 
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=e=>{e.preventDefault();closeModal(b.dataset.close)});document.querySelectorAll('.modalBack').forEach(m=>m.onclick=e=>{if(e.target===m)closeModal(m.id)});
