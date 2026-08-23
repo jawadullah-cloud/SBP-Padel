@@ -1,4 +1,4 @@
-const BUILD='20260824-flow-v2';
+const BUILD='20260824-flow-v2b';
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 
@@ -15,19 +15,16 @@ self.addEventListener('fetch',event=>{
       const scripts=[];
       const add=name=>{if(!html.includes(name)&&!scripts.includes(name))scripts.push(name)};
 
-      // Navigation helpers remain presentation-only. Booking state/business flow is owned solely by review-entry.js.
       add('native-transitions.js');
       add('navigation-fix.js');
       add('review-entry.js');
 
       const page=url.pathname.split('/').pop()||'index.html';
+      if(page==='review-booking.html'||page==='payment.html')add('booking-router-bridge.js');
       if(page==='auth-preview.html')add('player-live.js');
       if(page==='booking-detail.html'){
         add('player-live.js');
         add('player-booking-refund.js');
-      }
-      if(page==='index.html'||page===''){
-        // index.html already loads player-live.js directly; do not add another copy.
       }
 
       if(scripts.length){
