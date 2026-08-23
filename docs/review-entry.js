@@ -65,15 +65,18 @@
     const venues=await api('/venues');if(!venues.length)throw new Error('No active venues are configured.');
     let venue=venues.find(v=>v.id===state.venueId)||venues[0];state.venueId=venue.id;state.venueName=venue.name;
     venueDetail=await api(`/venues/${venue.id}`);
-    if(!state.date)state.date=todayISO();
+    if(!state.date||state.date<todayISO())state.date=todayISO();
     availability=await api(`/venues/${venue.id}/availability?date=${encodeURIComponent(state.date)}`);
     const court=availability.courts.find(c=>c.court_id===state.courtId)||availability.courts[0]||null;
     if(court){state.courtId=court.court_id;state.courtName=court.court_name;state.courtType=court.court_type}
     save();
   }
+  function ensureDateStyle(){if(document.getElementById('sbpDatePickerStyle'))return;const s=document.createElement('style');s.id='sbpDatePickerStyle';s.textContent=`.dateRail .dateMore{min-width:54px;height:58px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--text);display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;cursor:pointer;overflow:hidden}.dateRail .dateMore small{font-size:7px;color:var(--muted);font-weight:700}.dateRail .dateMore b{font:900 18px var(--sport);line-height:1.1;color:var(--brand)}.dateRail .dateMore.selected{border-color:var(--brand);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brand) 30%,transparent)}.dateRail .dateMore input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}`;document.head.appendChild(s)}
   function dateButtons(){
-    const rail=document.querySelector('#select .dateRail');if(!rail)return;
-    const base=new Date();rail.innerHTML='';for(let i=0;i<7;i++){const d=new Date(base);d.setDate(base.getDate()+i);const iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;const b=document.createElement('button');b.dataset.date=iso;b.classList.toggle('selected',iso===state.date);b.innerHTML=`<small>${d.toLocaleDateString('en-US',{weekday:'short'}).toUpperCase()}</small><b>${d.getDate()}</b>`;rail.appendChild(b)}
+    const rail=document.querySelector('#select .dateRail');if(!rail)return;ensureDateStyle();
+    const base=new Date();rail.innerHTML='';let quickSelected=false;
+    for(let i=0;i<7;i++){const d=new Date(base);d.setDate(base.getDate()+i);const iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;const b=document.createElement('button');b.dataset.date=iso;b.classList.toggle('selected',iso===state.date);if(iso===state.date)quickSelected=true;b.innerHTML=`<small>${d.toLocaleDateString('en-US',{weekday:'short'}).toUpperCase()}</small><b>${d.getDate()}</b>`;rail.appendChild(b)}
+    const more=document.createElement('label');more.className=`dateMore ${quickSelected?'':'selected'}`;more.title='Choose any future date';more.innerHTML=`<small>${quickSelected?'MORE':'SELECTED'}</small><b>${quickSelected?'＋':new Date(`${state.date}T12:00:00`).getDate()}</b><input type="date" min="${todayISO()}" value="${state.date}">`;const input=more.querySelector('input');input.onchange=async()=>{if(!input.value||input.value<todayISO())return;state.date=input.value;invalidate(2);state.date=input.value;await refreshAvailability();dateButtons();renderCourts()};rail.appendChild(more);
   }
   function renderCourts(){
     const list=document.querySelector('#select .courtList');if(!list||!availability)return;
@@ -110,12 +113,11 @@
   async function mainPage(){
     installMainCapture();
     try{await bootstrapData();dateButtons();renderCourts();renderTimes();decorateSteps();const wanted=new URLSearchParams(location.search).get('flowStep');setTimeout(()=>focusSection(Number(wanted)||0),100)}catch(e){toast(e.message,true)}
-    // Player-live still hydrates non-booking modules. Re-apply our booking state once after it completes.
     window.addEventListener('load',()=>setTimeout(()=>{dateButtons();renderCourts();renderTimes();decorateSteps()},650),{once:true});
     window.addEventListener('pageshow',()=>{setTimeout(()=>{dateButtons();renderCourts();renderTimes();decorateSteps()},0)});
   }
 
-  function reviewStyle(){if(document.getElementById('flowV2ReviewStyle'))return;const s=document.createElement('style');s.id='flowV2ReviewStyle';s.textContent=`#livePolicy{display:block!important;cursor:default!important;padding:0!important;overflow:hidden!important;border:1px solid var(--line)!important;background:var(--surface)!important;border-radius:16px!important;color:#c2cec9!important}#livePolicy .lpHead{padding:12px 13px;border-bottom:1px solid var(--line);background:linear-gradient(135deg,#102319,#0c1919)}#livePolicy .lpHead b{color:var(--text);font-size:11px}#livePolicy .lpBody{padding:12px 13px;white-space:pre-wrap;line-height:1.55;font-size:9px}#livePolicy label{display:flex;align-items:flex-start;gap:10px;padding:12px 13px;border-top:1px solid var(--line);background:var(--surface2);color:var(--text);font-size:9px;line-height:1.45;cursor:pointer}#livePolicyAccept{appearance:none;width:20px;height:20px;min-width:20px;margin:0;border:1px solid #486159;border-radius:6px;background:var(--surface);position:relative}#livePolicyAccept:checked{background:var(--brand);border-color:var(--brand)}#livePolicyAccept:checked:after{content:'✓';position:absolute;inset:0;display:grid;place-items:center;color:#071006;font-size:12px;font-weight:900}#toPayment:disabled{background:#303a37!important;background-image:none!important;color:#77817d!important;border:1px solid #414b47!important;box-shadow:none!important;opacity:1!important;cursor:not-allowed!important;transform:none!important}`;document.head.appendChild(s)}
+  function reviewStyle(){if(document.getElementById('flowV2ReviewStyle'))return;const s=document.createElement('style');s.id='flowV2ReviewStyle';s.textContent=`#livePolicy{display:block!important;cursor:default!important;padding:0!important;overflow:hidden!important;border:1px solid var(--line)!important;background:var(--surface)!important;border-radius:16px!important;color:var(--text)!important}#livePolicy .lpHead{padding:12px 13px;border-bottom:1px solid var(--line);background:var(--surface2)}#livePolicy .lpHead b{color:var(--text);font-size:11px}#livePolicy .lpBody{padding:12px 13px;white-space:pre-wrap;line-height:1.55;font-size:9px;color:var(--muted)}#livePolicy label{display:flex;align-items:flex-start;gap:10px;padding:12px 13px;border-top:1px solid var(--line);background:var(--surface2);color:var(--text);font-size:9px;line-height:1.45;cursor:pointer}#livePolicyAccept{appearance:none;width:20px;height:20px;min-width:20px;margin:0;border:1px solid #486159;border-radius:6px;background:var(--surface);position:relative}#livePolicyAccept:checked{background:var(--brand);border-color:var(--brand)}#livePolicyAccept:checked:after{content:'✓';position:absolute;inset:0;display:grid;place-items:center;color:#071006;font-size:12px;font-weight:900}#toPayment:disabled{background:#cfd5d2!important;background-image:none!important;color:#7a8480!important;border:1px solid #bdc6c1!important;box-shadow:none!important;opacity:1!important;cursor:not-allowed!important;transform:none!important}`;document.head.appendChild(s)}
   async function reviewPage(){
     reviewStyle();decorateSteps();
     if(!state.quote){try{await ensureQuote()}catch(e){toast(e.message,true);setTimeout(()=>goMain('time',4),700);return}}
@@ -137,13 +139,15 @@
     document.querySelectorAll('.payCard').forEach(card=>{card.classList.toggle('selected',card.dataset.method===state.paymentMethod);card.onclick=()=>{document.querySelectorAll('.payCard').forEach(x=>x.classList.remove('selected'));card.classList.add('selected');state.paymentMethod=card.dataset.method;save()}});
     const back=document.querySelector('.head .back');if(back)back.onclick=e=>{e.preventDefault();goDeep('review-booking.html')};
     const btn=document.getElementById('payButton');if(!btn)return;btn.onclick=async e=>{e.preventDefault();if(btn.disabled)return;btn.disabled=true;const label=btn.querySelector('span');if(label)label.textContent='PROCESSING…';try{
-      // Final availability validation happens immediately before creating the booking.
       await ensureQuote();
       const created=await api('/bookings',{method:'POST',body:JSON.stringify({venue_id:state.venueId,court_id:state.courtId,booking_date:state.date,slots:state.slotStarts.map(start_time=>({start_time})),policy_version_id:state.policyId,policy_accepted:true})});
       state.bookingUuid=created.id;state.bookingCode=created.booking_code;state.status='booking_created';save();
       const init=await api('/payments/initiate',{method:'POST',body:JSON.stringify({booking_id:created.id,method:state.paymentMethod||'wallet'})});state.paymentUuid=init.payment_id;save();
-      const paid=await api(`/payments/${init.payment_id}/simulate-success`,{method:'POST'});state.paymentStatus=paid.payment_status;state.status='confirmed';save();goDeep('payment-success.html');
-    }catch(err){btn.disabled=false;if(label)label.textContent='PAY & CONFIRM';if(err.status===409||/available|booked|conflict/i.test(err.message)){state.slotStarts=[];state.quote=null;state.policyAccepted=false;state.status='selecting';save();toast('That slot has just become unavailable. Please choose another time.',true);setTimeout(()=>goMain('time',4),1000)}else toast(err.message,true)}};
+      const paid=await api(`/payments/${init.payment_id}/simulate-success`,{method:'POST'});state.paymentStatus=paid.payment_status;state.status='confirmed';save();
+      localStorage.setItem('sbpPadelNotificationsVersion',String(Date.now()));
+      try{window.parent?.SBPRefreshNotifications?.()}catch{}
+      goDeep('payment-success.html');
+    }catch(err){btn.disabled=false;if(label)label.textContent='PAY & CONFIRM';if(err.status===409||/available|booked|conflict|past|started/i.test(err.message)){state.slotStarts=[];state.quote=null;state.policyAccepted=false;state.status='selecting';save();toast(err.message||'That slot is no longer available.',true);setTimeout(()=>goMain('time',4),1000)}else toast(err.message,true)}};
   }
 
   function successPage(){
