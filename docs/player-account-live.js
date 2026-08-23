@@ -5,7 +5,7 @@
 
   const API=(localStorage.getItem('sbpPadelApiBase')||'http://127.0.0.1:8000/api/v1').replace(/\/$/,'');
   const token=()=>localStorage.getItem('sbpPadelAccessToken')||'';
-  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
   const money=v=>`PKR ${Number(v||0).toLocaleString(undefined,{maximumFractionDigits:0})}`;
   const methodLabel=m=>m==='card'?'Debit / Credit Card':m==='bank'?'Online Banking':m==='wallet'?'SBP Padel Wallet':(m||'Payment');
   async function api(path,opts={}){
@@ -45,6 +45,17 @@
       screen.innerHTML=`<div class="pmWrap"><div class="pmHead"><button class="pmBack" data-live-notification-back>←</button><div><small>ACTIVITY</small><h1>Notifications</h1></div></div><div class="pmNoticeHead"><p class="pmIntro">Booking updates, reminders and important SBP Padel announcements.</p><button data-mark-read>MARK ALL READ</button></div><div class="pmSectionTitle"><h2>Activity</h2><small>Loading…</small></div><div class="pmNoticeList"><div class="pmEmpty show">Loading notifications…</div></div></div>`;
     }
     return screen;
+  }
+  function hideNotifications(){
+    const screen=document.getElementById('notifications');
+    if(screen)screen.classList.remove('active');
+  }
+  function openMainScreen(id){
+    hideNotifications();
+    document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));
+    document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.nav===id));
+    document.querySelector('nav')?.classList.remove('flowHidden');
+    document.getElementById(id)?.scrollTo({top:0,behavior:'smooth'});
   }
   function showNotifications(){
     const screen=ensureNotificationShell();if(!screen)return;
@@ -101,10 +112,14 @@
   document.addEventListener('click',e=>{
     const bell=e.target.closest?.('header .topNotify');
     if(bell){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();showNotifications();return}
+    const back=e.target.closest?.('[data-live-notification-back]');
+    if(back){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openMainScreen('profile');return}
+    const notifications=document.getElementById('notifications');
+    const navTarget=e.target.closest?.('[data-nav]');
+    if(notifications?.classList.contains('active')&&navTarget&&['home','bookings','venues','profile'].includes(navTarget.dataset.nav))hideNotifications();
     const btn=e.target.closest?.('button');
     const label=btn?.querySelector?.('span')?.textContent?.trim();
     if(label==='Notifications')setTimeout(loadNotifications,30);
-    if(e.target.closest?.('[data-live-notification-back]')){e.preventDefault();window.SBPNavigate?window.SBPNavigate('profile'):deep('index.html?open=profile')}
   },true);
   window.addEventListener('pageshow',()=>{if(document.getElementById('notifications')?.classList.contains('active'))loadNotifications();refreshNotificationDot()});
   setTimeout(refreshNotificationDot,50);
