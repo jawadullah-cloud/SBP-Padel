@@ -108,11 +108,20 @@ async def venue_availability(venue_id: UUID, target_date: date = Query(alias="da
             start_time = datetime.min.time().replace(hour=hour)
             end_time = (datetime.combine(target_date, start_time) + timedelta(hours=1)).time()
             rate = resolve_rate(rules, court, target_date, hour)
+            if rate is None:
+                continue
             block = next((b for b in blocks if (b.court_id is None or b.court_id == court.id) and b.start_time < end_time and b.end_time > start_time), None)
             elapsed = target_date == local_now.date() and datetime.combine(target_date, start_time, tzinfo=local_now.tzinfo) <= local_now
+            if block or elapsed:
+                continue
             booked_slot = (court.id, hour) in booked_keys
-            available = not booked_slot and rate is not None and block is None and not elapsed
-            reason = block.reason if block else "Unavailable" if elapsed else "Booked" if booked_slot else "Price unavailable" if rate is None else None
-            slots.append({"start_time": start_time.isoformat(timespec="minutes"), "end_time": end_time.isoformat(timespec="minutes"), "available": available, "hourly_rate": money(rate), "currency": "PKR", "unavailable_reason": reason})
+            slots.append({
+                "start_time": start_time.isoformat(timespec="minutes"),
+                "end_time": end_time.isoformat(timespec="minutes"),
+                "available": not booked_slot,
+                "hourly_rate": money(rate),
+                "currency": "PKR",
+                "unavailable_reason": "Booked" if booked_slot else None,
+            })
         result.append({"court_id": str(court.id), "court_code": court.code, "court_name": court.name, "court_type": court.court_type, "slots": slots})
     return {"venue_id": str(venue.id), "venue_name": venue.name, "date": target_date.isoformat(), "timezone": venue.timezone, "courts": result}
