@@ -36,10 +36,11 @@ class CreateBookingRequest(QuoteRequest):
 
 
 def venue_now(venue: Venue) -> datetime:
+    name = venue.timezone or "Asia/Karachi"
     try:
-        tz = ZoneInfo(venue.timezone or "UTC")
+        tz = ZoneInfo(name)
     except ZoneInfoNotFoundError:
-        tz = timezone.utc
+        tz = timezone(timedelta(hours=5), name="PKT") if name == "Asia/Karachi" else timezone.utc
     return datetime.now(tz)
 
 
