@@ -17,6 +17,7 @@ let booking = {
 let payment = { id: 'payment-live-1', booking_id: booking.id, status: 'paid', method: 'wallet', provider: 'development-simulator', provider_reference: 'PAY-LIFECYCLE', amount: '2200.00', currency: 'PKR' };
 let refund = null;
 let notifications = [];
+let bookingListDelayMs = 0;
 
 const rateFor = start => start === '13:00' ? '2200.00' : '2100.00';
 const availability = date => ({
@@ -40,7 +41,7 @@ await page.route('http://127.0.0.1:8000/api/v1/**', async route => {
   else if (path === '/venues') body = [venue];
   else if (path === `/venues/${venue.id}`) body = { ...venue, address: 'Lahore', amenities: ['Parking'], courts };
   else if (path === `/venues/${venue.id}/availability`) body = availability(url.searchParams.get('date'));
-  else if (path === '/bookings/me') body = [{ id: booking.id, booking_code: booking.booking_code, date: booking.date, status: booking.status, court_id: booking.court_id, venue_id: booking.venue_id, total: booking.total, currency: booking.currency }];
+  else if (path === '/bookings/me') { if (bookingListDelayMs) await new Promise(r => setTimeout(r, bookingListDelayMs)); body = [{ id: booking.id, booking_code: booking.booking_code, date: booking.date, status: booking.status, court_id: booking.court_id, venue_id: booking.venue_id, total: booking.total, currency: booking.currency }]; }
   else if (path === `/bookings/${booking.id}` && req.method() === 'GET') body = booking;
   else if (path === `/payments/by-booking/${booking.id}`) body = payment;
   else if (path === '/payments/me') body = [{ ...payment, booking_code: booking.booking_code, booking_date: booking.date, payment_status: payment.status, created_at: new Date().toISOString(), refund }];
@@ -77,8 +78,23 @@ try {
   await page.waitForFunction(() => document.getElementById('bookings')?.innerText.includes('PDL-LIFECYCLE'));
   assert((await page.locator('#bookings').innerText()).includes('CONFIRMED'), 'My Bookings did not render live confirmed status.');
 
+  bookingListDelayMs = 180;
+  const tabRefresh = page.evaluate(() => window.SBPRefreshBookings());
+  await page.waitForTimeout(20);
+  await page.locator('#bookings [data-live-tab="past"]').click();
+  await tabRefresh;
+  assert(await page.locator('#bookings [data-live-tab="past"]').evaluate(el => el.classList.contains('on')), 'A background bookings refresh reset Past back to Upcoming.');
+  assert(await page.locator('#live-upcoming').evaluate(el => el.hidden), 'Upcoming list became visible again after selecting Past during refresh.');
+  await page.locator('#bookings [data-live-tab="upcoming"]').click();
+
+  const manageRefresh = page.evaluate(() => window.SBPRefreshBookings());
+  await page.waitForTimeout(20);
   await page.locator('#bookings [data-live-manage="booking-live-1"]').click();
   await page.waitForSelector('#sbpDeepLayer.on');
+  await manageRefresh;
+  bookingListDelayMs = 0;
+  assert(await page.locator('#sbpDeepLayer').evaluate(el => el.classList.contains('on')), 'A background bookings refresh cancelled the first Manage Booking navigation.');
+
   const frame = page.frameLocator('#sbpDeepFrame');
   await frame.locator('#id').waitFor();
   await frame.locator('#id').filter({ hasText: 'PDL-LIFECYCLE' }).waitFor();
