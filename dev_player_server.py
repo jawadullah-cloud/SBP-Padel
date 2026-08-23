@@ -4,8 +4,10 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 import mimetypes
+import subprocess
 
 ROOT = Path(__file__).resolve().parent / "docs"
+REPO_ROOT = ROOT.parent
 HOST = "127.0.0.1"
 PORT = 5173
 
@@ -40,12 +42,25 @@ self.addEventListener('activate',event=>event.waitUntil((async()=>{await self.re
 """
 
 
+def current_build_id() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short=10", "HEAD"],
+            cwd=REPO_ROOT,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return "unknown"
+
+
 class NoCacheHandler(SimpleHTTPRequestHandler):
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
         self.send_header("Pragma", "no-cache")
         self.send_header("Expires", "0")
         self.send_header("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
+        self.send_header("X-SBP-Padel-Build", current_build_id())
         super().end_headers()
 
     def do_GET(self) -> None:
@@ -82,6 +97,13 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
             if scripts:
                 injected = "".join(f'<script src="{name}?dev=1"></script>' for name in scripts)
                 html = html.replace("</body>", injected + "</body>")
+            build = current_build_id()
+            diagnostic = f'''<script>
+window.__SBP_DEV_BUILD__={build!r};
+document.documentElement.dataset.sbpBuild=window.__SBP_DEV_BUILD__;
+console.info('[SBP-Padel dev build]',window.__SBP_DEV_BUILD__,location.pathname);
+</script><div id="sbpDevBuild" aria-label="Development build {build}" style="position:fixed;right:6px;top:6px;z-index:2147483647;padding:3px 6px;border-radius:7px;background:#07120fe6;color:#b9f52a;border:1px solid #b9f52a55;font:700 8px ui-monospace,monospace;pointer-events:none">DEV {build}</div>'''
+            html = html.replace("</body>", diagnostic + "</body>")
             payload = html.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -104,10 +126,13 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
+    build = current_build_id()
     server = ThreadingHTTPServer((HOST, PORT), NoCacheHandler)
     print(f"SBP Padel cache-free player dev server: http://{HOST}:{PORT}")
+    print(f"Repository build: {build}")
     print("HTML/JS/CSS are always served with Cache-Control: no-store.")
     print("Legacy service workers are disabled and automatically removed in local development.")
+    print("A DEV <sha> badge is injected into every HTML page so the running checkout is visible.")
     print("Press Ctrl+C to stop.")
     try:
         server.serve_forever()
