@@ -28,6 +28,7 @@ Do not reopen player work without a concrete reproduced regression.
 ### Player runtime ownership
 
 - `docs/review-entry.js` owns Venue → Date → Court → Time → Review → Payment → Confirmation.
+- `docs/player-venues-live.js` owns live player venue discovery and venue-detail rendering from `GET /venues` and `GET /venues/{id}`. Do not reintroduce hard-coded venue cards as effective runtime ownership.
 - `docs/notifications-live.js` owns Notifications.
 - `docs/player-bookings-live.js` owns My Bookings.
 - `docs/player-booking-detail-live.js` owns booking detail / reschedule / cancellation / refund state.
@@ -39,6 +40,10 @@ Do not reopen player work without a concrete reproduced regression.
 - `docs/deep-route-smooth.js` owns preload/reveal transitions for booking detail and booking Review/Payment entry.
 
 Legacy `docs/player-account-live.js` must not be loaded by the effective runtime.
+
+### Player venue discovery decision
+
+Player venue discovery must be API-driven. `GET /venues` returns active venues and `GET /venues/{id}` provides the selected facility/courts. Selecting a venue must update `sbpPadelBookingSessionV2` before Date/Court/Time. Newly activated/provisioned venues should appear without editing player HTML for each facility.
 
 ## Venue operations: manually accepted behavior
 
@@ -55,7 +60,8 @@ The user has manually accepted the current Next.js venue/front-desk console thro
 - Payments & Refunds;
 - Bookable Hours & Pricing;
 - Reports;
-- venue-side player registration and duplicate protection.
+- venue-side player registration and duplicate protection;
+- Players integrated into the main sidebar.
 
 Do not redesign or remove these accepted workflows without a concrete regression.
 
@@ -95,32 +101,28 @@ After a successful staff-created booking, the console clears booking filters, re
 - `PATCH /operations/refunds/{refund_id}`;
 - `GET /operations/reports/summary`.
 
-Venue-side player registration is implemented by the operations player endpoint and uses normal `UserRole.player` accounts with duplicate email/phone protection and a one-time temporary password for walk-in registration.
+Venue-side player registration uses normal `UserRole.player` accounts with duplicate email/phone protection and a one-time temporary password for walk-in registration.
 
-`backend/tests/test_operations_management.py` covers the front-desk booking → finance/report → pricing permission → player cancel/refund → manager refund-processing lifecycle.
+## HQ / central administration
 
-A separate player-registration regression test covers operator registration/search and duplicate protection.
+HQ remains separate from venue operations.
 
-## Venue admin console
+Current provisioning flow is intentionally scalable:
 
-`admin/app/page.tsx` owns the main venue console.
+1. `admin/app/hq/provisioning/page.tsx` is the **Venue Directory**. It lists/searches all venues and exposes **Create New Venue**.
+2. Selecting a venue opens `admin/app/hq/provisioning/manage/page.tsx?venue=<id>`.
+3. The venue-management screen owns courts, Bookable Hours & Pricing, staff assignment, activation/deactivation and safe cleanup.
 
-Current operational areas:
+Do not revert HQ Provision Venue to a single dropdown as the primary management flow.
 
-- Court Schedule
-- Bookings
-- New Booking
-- Payments & Refunds
-- Bookable Hours & Pricing
-- Closures & Maintenance
-- Courts
-- Reports
+Safe cleanup rules:
 
-`admin/app/players/page.tsx` owns venue-side Player Management. The user has manually accepted the player registration function. The page has now been moved into the same venue-operations visual/session shell and is pending visual/manual review of that integration.
-
-`admin/app/operations-v2.css` contains phase-2 operational presentation.
-`admin/app/players-ui.css` contains Player Management shell/presentation.
-`admin/app/layout.tsx` loads both.
+- unused courts may be permanently deleted;
+- courts with booking history must be preserved and closed instead;
+- bookable-hours/pricing rules are disabled rather than hard-deleted;
+- venue staff assignments can be removed without deleting staff accounts;
+- venues can be activated/deactivated;
+- only an empty venue with no booking history, no courts and no active staff assignments can be permanently deleted.
 
 ## Permissions retained
 
@@ -128,20 +130,7 @@ Current operational areas:
 - Venue manager/admin: all operator abilities plus closures, court-status changes, pricing mutations and refund processing.
 - Central admin/HQ endpoints under `/admin` remain separate and are not replaced by venue operations APIs.
 
-## Current active work
-
-Finish venue-console completion/regression without reopening accepted player-web behavior.
-
-Immediate priorities:
-
-1. complete Player Management navigation integration into the main operations experience;
-2. run/inspect Admin Portal CI build for the latest admin changes;
-3. run backend operations regression after the latest availability/sorting/player-registration changes;
-4. inspect remaining venue-console UX gaps and only then move toward central/HQ administration or production deployment work.
-
 ## Verification discipline
-
-The connected chat environment can edit/read GitHub but cannot clone GitHub into its container because outbound GitHub DNS is blocked. New QA can therefore be committed before its Actions results are visible through the connector.
 
 Always distinguish:
 
