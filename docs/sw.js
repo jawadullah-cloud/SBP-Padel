@@ -1,4 +1,4 @@
-const BUILD='20260824-stable-player3';
+const BUILD='20260824-notifications-v2';
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 
@@ -23,7 +23,8 @@ self.addEventListener('fetch',event=>{
       if(['index.html','review-booking.html','payment.html','payment-success.html'].includes(page))add('booking-router-bridge.js');
       if(page==='index.html'){
         add('profile-modules.js');
-        add('player-account-live.js');
+        add('notifications-live.js');
+        add('booking-date-more.js');
         add('discovery-tools.js');
         add('bookings-search.js');
         add('visual-live.js');
