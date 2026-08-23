@@ -19,15 +19,13 @@ Before discussing or changing anything:
 
 This is a continuation of an existing project, not a new project.
 
-## Accepted player runtime / lifecycle / account review
+## Locked player web milestone
 
-The user has manually accepted the major player runtime and booking lifecycle fixes, including first-click behavior, date/court/time selection, live notifications, Pakistan timezone handling, My Bookings tabs/navigation, booking detail transitions, reschedule, pending-payment cancellation, confirmed cancellation/refund state, favourite-heart behavior and smooth booking-detail push transitions.
+The user has manually accepted the player web runtime through the complete booking lifecycle, notifications, My Bookings/detail, reschedule/cancel/refund, account/profile/avatar, Wallet/Payment History, favourites, light/dark theme and smooth deep-route transitions including booking Review/Payment.
 
-The user has also manually accepted the player account review through Wallet/Payment History/Profile, including live profile identity, payment history, truthful wallet state, saved players/favourites/help, semantic profile icons and account-backed profile-picture upload/removal.
+Do not reopen player work without a concrete reproduced regression.
 
-Do not reopen accepted areas without a concrete reproduced regression.
-
-## Runtime ownership
+## Player runtime ownership
 
 - `docs/review-entry.js` owns Venue → Date → Court → Time → Review → Payment → Confirmation.
 - `docs/notifications-live.js` owns Notifications.
@@ -37,29 +35,37 @@ Do not reopen accepted areas without a concrete reproduced regression.
 - `docs/player-payment-history-live.js` owns Payment History.
 - `docs/player-wallet-live.js` owns Wallet presentation/activity.
 - `docs/profile-modules.js` owns only Saved Players, Favourite Venues and Help & Support sub-screens plus favourite persistence.
-- `docs/theme-bridge.js` is the single shared player theme owner. It owns stored theme application, the global header theme toggle, Profile Appearance delegation and cross-document/deep-route theme state.
+- `docs/theme-bridge.js` owns player theme state.
+- `docs/deep-route-smooth.js` owns preload/reveal transitions for booking detail and booking Review/Payment entry.
 
 Legacy `docs/player-account-live.js` must not be loaded by the effective runtime.
 
-## Account/backend notes
+## Backend notes retained from player milestone
 
-- `/payments/me` must be registered before generic `/payments/{payment_id}` routes in `backend/app/main.py` so `me` is never parsed as a UUID.
-- Player avatars are account-backed through `UserProfile.avatar_data_url` and `/auth/me/avatar`. The frontend resizes/crops the image before sending it.
-- Wallet balance/top-up remains intentionally disabled until a real wallet ledger/funding workflow exists. Do not simulate a spendable balance.
+- `/payments/me` must be registered before generic `/payments/{payment_id}` routes in `backend/app/main.py`.
+- Player avatars are account-backed through `UserProfile.avatar_data_url` and `/auth/me/avatar`.
+- Wallet balance/top-up remains intentionally disabled until a real wallet ledger/funding workflow exists.
 
-## Active milestone: full light/dark review and final player regression
+## Active milestone: venue/admin operational product
 
-Current implementation work:
+The existing Next.js admin portal under `admin/` is now being upgraded from a thin operations prototype into the venue/front-desk product.
 
-- `docs/theme-bridge.js` now owns `#themeToggle`; the previously orphaned header moon/sun control switches theme on the first click and persists it.
-- Profile Appearance delegates to `SBPToggleTheme()` instead of maintaining a second theme implementation.
-- light-theme coverage was expanded for the player shell, stage, phone, navigation, dynamic profile modules, payment/refund surfaces, modals and inputs while retaining intentional photographic/court artwork.
-- `qa/player_theme_browser.mjs` was added. It verifies dark→light switching from the global header, stored theme persistence, Profile state agreement, and light/dark inheritance inside deep-routed Wallet/Payment History frames.
-- Player Flow CI now includes the dedicated player-theme browser QA and theme-ownership guards in addition to runtime, booking lifecycle and account QA.
+Implemented for the first venue-operations review:
 
-Manual light/dark review is still required before locking the player milestone. Inspect both themes across Home, Courts/Venue, booking flow, My Bookings/detail, Notifications, Profile modules, Wallet/Payment History and deep-routed pages. Only fix reproduced issues.
+- `backend/app/api/operations.py` booking feed now returns live player identity/contact, court name/code/type, payment status/method/reference, booking total and check-in state.
+- operations booking search now matches booking code, player name, email or phone.
+- `admin/app/page.tsx` is now organized around Court Schedule, Bookings, Closures & Maintenance and Courts.
+- Court Schedule is a date-based per-court operational view with player, booking, payment and check-in state.
+- All Bookings provides date/search/status filtering and a booking-detail side drawer with player/contact, session, payment and check-in information.
+- Check-in remains a real backend mutation and is available from both booking table/detail where appropriate.
+- Closures can now be scoped to a specific court or all courts; existing manager/operator permissions remain intact.
+- Court active/maintenance/closed management remains intact.
+- `backend/tests/test_operations.py` now covers enriched operations booking context and searching by player email.
+- `run_admin_dev.ps1` launches the Next.js admin runtime at `http://127.0.0.1:3000` with the local backend API.
 
-## Important verification status
+Manual review is required for this first venue console before expanding to pricing, staff-created bookings, payment/refund operations and reporting.
+
+## Verification discipline
 
 The connected chat environment can edit/read GitHub but cannot clone GitHub into its container because outbound GitHub DNS is blocked. New QA can therefore be committed before its Actions results are visible through the connector.
 
@@ -68,11 +74,6 @@ Always distinguish:
 - implementation committed;
 - automated CI actually green;
 - user's Windows runtime manually accepted.
-
-## After final player acceptance
-
-1. lock the player web runtime milestone;
-2. begin the venue/admin operational product review and implementation.
 
 ## Working style
 
