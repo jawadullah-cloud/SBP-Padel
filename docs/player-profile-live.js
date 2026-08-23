@@ -55,7 +55,7 @@
     head.innerHTML=`<button type="button" class="profileAvatarButton" data-profile-photo aria-label="Change profile picture">${avatar}<span class="profileCameraBadge">${icons.camera}</span></button><div class="profileIdentity"><h3>${esc(user.full_name||'Player')}</h3><p>${esc(user.email||user.phone||'SBP Padel player')}</p><div class="profilePhotoActions"><span class="profilePhotoHint">Tap photo to change</span>${user.avatar_data_url?'<button type="button" class="profileRemovePhoto" data-remove-profile-photo>Remove</button>':''}<span class="profilePhotoStatus" aria-live="polite"></span></div><input type="file" data-profile-photo-input accept="image/jpeg,image/png,image/webp" hidden></div>`;
     let menu=wrap.querySelector('.menu');if(!menu){menu=document.createElement('div');menu.className='menu';wrap.appendChild(menu)}
     menu.innerHTML=[
-      row('bookings','My Bookings','bookings'),row('wallet','My Wallet','wallet'),row('payments','Payment History','payments'),row('players','Saved Players'),row('favourite','Favourite Venues'),row('notifications','Notifications'),row('appearance','Appearance','appearance',(document.body.dataset.theme||'dark').toUpperCase()),row('help','Help & Support'),row('logout','Sign Out','logout','')
+      row('bookings','My Bookings','bookings'),row('wallet','My Wallet','wallet'),row('payments','Payment History','payments'),row('players','Saved Players'),row('favourite','Favourite Venues'),row('notifications','Notifications','notifications'),row('appearance','Appearance','appearance',(document.body.dataset.theme||'dark').toUpperCase()),row('help','Help & Support'),row('logout','Sign Out','logout','')
     ].join('');
   }
   function setPhotoStatus(text,error=false){const el=root.querySelector('.profilePhotoStatus');if(el){el.textContent=text||'';el.classList.toggle('error',error)}}
@@ -71,6 +71,7 @@
     if(action==='bookings'){e.preventDefault();window.SBPNavigate?.('bookings');return}
     if(action==='wallet'){e.preventDefault();deep('wallet.html');return}
     if(action==='payments'){e.preventDefault();deep('payment-history.html');return}
+    if(action==='notifications'){e.preventDefault();if(typeof window.SBPShowNotifications==='function')window.SBPShowNotifications();return}
     if(action==='appearance'){e.preventDefault();if(typeof window.SBPToggleTheme==='function')window.SBPToggleTheme();else{const theme=(document.body.dataset.theme||'dark')==='dark'?'light':'dark';localStorage.setItem('sbpPadelTheme',theme);document.body.dataset.theme=theme;document.documentElement.dataset.theme=theme}return}
     if(action==='logout'){e.preventDefault();logout()}
   });
