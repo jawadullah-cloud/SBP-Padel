@@ -31,7 +31,8 @@
       .policyAccept input:checked:after{content:'✓';position:absolute;inset:0;display:grid;place-items:center;color:#071006;font-size:12px;font-weight:900}
       .policyAccept span{font-size:9px;line-height:1.45;color:var(--text)}
       .policyAccept span b{color:var(--brand)}
-      #toPayment:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.35);box-shadow:none}
+      #toPayment:disabled,#toPayment[aria-disabled="true"]{opacity:1!important;cursor:not-allowed!important;filter:none!important;box-shadow:none!important;background:#303a37!important;color:#77817d!important;border:1px solid #414b47!important;transform:none!important}
+      #toPayment:not(:disabled)[aria-disabled="false"]{opacity:1!important;cursor:pointer;background:linear-gradient(135deg,var(--brand),#73d90f)!important;color:#071006!important;border-color:transparent!important}
       .policyGateNote{font-size:8px;color:#e5c46e;text-align:center;margin-top:8px;line-height:1.4}
     `;
     document.head.appendChild(style);
