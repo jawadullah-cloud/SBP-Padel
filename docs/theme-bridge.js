@@ -5,6 +5,7 @@
   const style=document.createElement('style');
   style.dataset.sbpThemeBridge='1';
   style.textContent=`
+    .brandball{font-size:0!important;background-image:url('assets/ball-tennis.svg')!important;background-position:center!important;background-repeat:no-repeat!important;background-size:20px 20px!important}
     html[data-theme="light"]{
       --brand:#4f9218!important;
       --bg:#f7faf8!important;
@@ -21,12 +22,14 @@
     }
     html[data-theme="light"] body .phone{
       background:var(--bg)!important;
+      background-image:none!important;
       border-color:var(--line)!important;
       color:var(--text)!important;
     }
     html[data-theme="light"] body .back,
     html[data-theme="light"] body .secondary,
-    html[data-theme="light"] body .receipt{
+    html[data-theme="light"] body .receipt,
+    html[data-theme="light"] body .closeModal{
       background:var(--surface)!important;
       color:var(--text)!important;
       border-color:var(--line)!important;
@@ -36,7 +39,12 @@
     html[data-theme="light"] body .priceCard,
     html[data-theme="light"] body .secure,
     html[data-theme="light"] body .entry,
-    html[data-theme="light"] body .card{
+    html[data-theme="light"] body .card,
+    html[data-theme="light"] body .bookingCard,
+    html[data-theme="light"] body .playerCard,
+    html[data-theme="light"] body .policy,
+    html[data-theme="light"] body .savedPlayer,
+    html[data-theme="light"] body #livePolicy{
       background:var(--surface)!important;
       color:var(--text)!important;
       border-color:var(--line)!important;
@@ -45,10 +53,16 @@
     html[data-theme="light"] body .summaryGrid div,
     html[data-theme="light"] body .details div,
     html[data-theme="light"] body .grid div,
-    html[data-theme="light"] body .payIcon{
+    html[data-theme="light"] body .meta div,
+    html[data-theme="light"] body .payIcon,
+    html[data-theme="light"] body .avatar,
+    html[data-theme="light"] body .miniAvatar,
+    html[data-theme="light"] body #livePolicy label{
       background:var(--surface2)!important;
       color:var(--text)!important;
     }
+    html[data-theme="light"] body #livePolicy .lpHead{background:#eef5f0!important}
+    html[data-theme="light"] body #livePolicy .lpBody{color:var(--text)!important}
     html[data-theme="light"] body .tabs{
       background:#edf2ef!important;
       border-color:var(--line)!important;
@@ -68,7 +82,11 @@
     html[data-theme="light"] body .bottom{background:linear-gradient(180deg,transparent,var(--bg) 28%)!important}
     html[data-theme="light"] body .statusRefund{color:#9a6a00!important}
     html[data-theme="light"] body .radio{border-color:#91a098!important}
-    html[data-theme="light"] body .phone[style],html[data-theme="light"] body .phone{background-image:none!important}
+    html[data-theme="light"] body .modalBackdrop{background:rgba(16,28,22,.26)!important}
+    html[data-theme="light"] body .modal{background:#ffffff!important;color:var(--text)!important;border-color:var(--line)!important;box-shadow:0 -16px 45px #1c2d2518!important}
+    html[data-theme="light"] body .manualAdd input{background:#ffffff!important;color:var(--text)!important;border-color:var(--line)!important}
+    html[data-theme="light"] body .policyContent,html[data-theme="light"] body .policyContent h3{color:var(--text)!important}
+    html[data-theme="light"] body .draftNotice{background:#eef4f0!important;color:#596861!important;border-color:var(--line)!important}
   `;
   document.head.appendChild(style);
   function current(){
