@@ -1,4 +1,4 @@
-const BUILD='20260824-account-live2';
+const BUILD='20260824-stable-player3';
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 
@@ -21,7 +21,15 @@ self.addEventListener('fetch',event=>{
 
       const page=url.pathname.split('/').pop()||'index.html';
       if(['index.html','review-booking.html','payment.html','payment-success.html'].includes(page))add('booking-router-bridge.js');
-      if(['index.html','payment-history.html'].includes(page))add('player-account-live.js');
+      if(page==='index.html'){
+        add('profile-modules.js');
+        add('player-account-live.js');
+        add('discovery-tools.js');
+        add('bookings-search.js');
+        add('visual-live.js');
+        add('player-stability.js');
+      }
+      if(page==='payment-history.html')add('player-account-live.js');
       if(page==='auth-preview.html')add('player-live.js');
       if(page==='booking-detail.html'){
         add('player-live.js');
