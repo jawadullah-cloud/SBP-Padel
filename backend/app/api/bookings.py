@@ -1,6 +1,7 @@
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -32,6 +33,14 @@ class QuoteRequest(BaseModel):
 class CreateBookingRequest(QuoteRequest):
     policy_version_id: UUID
     policy_accepted: bool
+
+
+def venue_now(venue: Venue) -> datetime:
+    try:
+        tz = ZoneInfo(venue.timezone or "UTC")
+    except ZoneInfoNotFoundError:
+        tz = timezone.utc
+    return datetime.now(tz)
 
 
 def resolve_rate(rules: list[PricingRule], court: Court, slot_date: date, start_time: time) -> Decimal | None:
@@ -68,6 +77,10 @@ async def quote_payload(payload: QuoteRequest, db: AsyncSession) -> tuple[Venue,
     if court.status != CourtStatus.active:
         raise HTTPException(409, "Court is not currently bookable")
 
+    local_now = venue_now(venue)
+    if payload.booking_date < local_now.date():
+        raise HTTPException(400, "Past dates cannot be booked")
+
     requested = sorted({slot.start_time.replace(second=0, microsecond=0) for slot in payload.slots})
     rules = (await db.scalars(select(PricingRule).where(PricingRule.venue_id == venue.id, PricingRule.is_active.is_(True)))).all()
     blocks = (await db.scalars(select(VenueBlock).where(VenueBlock.venue_id == venue.id, VenueBlock.block_date == payload.booking_date, VenueBlock.is_active.is_(True), or_(VenueBlock.court_id.is_(None), VenueBlock.court_id == court.id)))).all()
@@ -80,6 +93,8 @@ async def quote_payload(payload: QuoteRequest, db: AsyncSession) -> tuple[Venue,
     for start in requested:
         if start < venue.opening_time or start >= venue.closing_time:
             raise HTTPException(400, f"Slot {start.isoformat(timespec='minutes')} is outside venue hours")
+        if payload.booking_date == local_now.date() and datetime.combine(payload.booking_date, start, tzinfo=local_now.tzinfo) <= local_now:
+            raise HTTPException(409, f"Slot {start.isoformat(timespec='minutes')} has already started")
         end = time((start.hour + 1) % 24, start.minute)
         block = next((b for b in blocks if b.start_time < end and b.end_time > start), None)
         if block:
