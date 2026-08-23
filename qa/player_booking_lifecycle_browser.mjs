@@ -18,6 +18,7 @@ let payment = { id: 'payment-live-1', booking_id: booking.id, status: 'paid', me
 let refund = null;
 let notifications = [];
 
+const rateFor = start => start === '13:00' ? '2200.00' : '2100.00';
 const availability = date => ({
   venue_id: venue.id, venue_name: venue.name, date, timezone: venue.timezone,
   courts: courts.map(c => ({
@@ -25,7 +26,7 @@ const availability = date => ({
     slots: ['13:00','14:00','15:00','16:00'].map(start => {
       const h = Number(start.slice(0,2));
       const booked = date === booking.date && c.id === booking.court_id && booking.slots.some(s => s.start_time === start) && !['cancelled','venue_cancelled'].includes(booking.status);
-      return { start_time: start, end_time: `${String(h+1).padStart(2,'0')}:00`, available: !booked, hourly_rate: '2100.00', currency: 'PKR', unavailable_reason: booked ? 'Booked' : null };
+      return { start_time: start, end_time: `${String(h+1).padStart(2,'0')}:00`, available: !booked, hourly_rate: rateFor(start), currency: 'PKR', unavailable_reason: booked ? 'Booked' : null };
     })
   }))
 });
@@ -46,7 +47,7 @@ await page.route('http://127.0.0.1:8000/api/v1/**', async route => {
   else if (path === '/notifications/me') body = notifications;
   else if (path === `/bookings/${booking.id}/reschedule` && req.method() === 'POST') {
     const payload = req.postDataJSON();
-    booking = { ...booking, date: payload.booking_date, status: 'rescheduled', slots: payload.slots.map(s => ({ start_time: s.start_time, end_time: `${String(Number(s.start_time.slice(0,2))+1).padStart(2,'0')}:00`, rate: '2100.00' })) };
+    booking = { ...booking, date: payload.booking_date, status: 'rescheduled', slots: payload.slots.map(s => ({ start_time: s.start_time, end_time: `${String(Number(s.start_time.slice(0,2))+1).padStart(2,'0')}:00`, rate: rateFor(s.start_time) })) };
     notifications.unshift({ id: 'n-reschedule', kind: 'booking_rescheduled', title: 'Booking rescheduled', body: `Booking ${booking.booking_code} has been moved.`, payload: { booking_id: booking.id }, read: false, created_at: new Date().toISOString() });
     body = booking;
   }
@@ -90,7 +91,16 @@ try {
   assert(await dateButtons.count() === 6, 'Reschedule did not offer six live date choices.');
   await dateButtons.nth(1).click();
   await frame.locator('#rescheduleModal .slots button').first().waitFor();
-  await frame.locator('#rescheduleModal .slots button').first().click();
+
+  const expensive = frame.locator('#rescheduleModal .slots button[data-start="13:00"]');
+  await expensive.click();
+  assert(await frame.locator('#confirmReschedule').isDisabled(), 'Price-mismatched reschedule remained actionable.');
+  assert((await frame.locator('#confirmReschedule').innerText()).includes('PRICE MUST MATCH'), 'Price mismatch was not explained on the action button.');
+
+  const matching = frame.locator('#rescheduleModal .slots button[data-start="15:00"]');
+  await matching.click();
+  assert(!(await frame.locator('#confirmReschedule').isDisabled()), 'Valid same-price selection did not recover the reschedule action.');
+  assert((await frame.locator('#confirmReschedule').innerText()) === 'CONFIRM RESCHEDULE', 'Reschedule action label did not recover after a price mismatch.');
   await frame.locator('#confirmReschedule').click();
   await frame.locator('#rescheduleModal:not(.show)').waitFor();
   assert((await frame.locator('#statusPill').innerText()) === 'RESCHEDULED', 'Reschedule did not update booking status in the live detail UI.');
