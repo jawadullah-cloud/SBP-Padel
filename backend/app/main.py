@@ -59,8 +59,10 @@ app.include_router(policies_router, prefix=settings.api_prefix)
 app.include_router(bookings_router, prefix=settings.api_prefix)
 app.include_router(cancellations_router, prefix=settings.api_prefix)
 app.include_router(reschedules_router, prefix=settings.api_prefix)
-app.include_router(payments_router, prefix=settings.api_prefix)
+# Player-specific static /payments routes must be registered before the generic
+# /payments/{payment_id} route so "me" is never parsed as a UUID.
 app.include_router(player_payments_router, prefix=settings.api_prefix)
+app.include_router(payments_router, prefix=settings.api_prefix)
 app.include_router(notifications_router, prefix=settings.api_prefix)
 app.include_router(admin_router, prefix=settings.api_prefix)
 app.include_router(admin_hq_router, prefix=settings.api_prefix)
