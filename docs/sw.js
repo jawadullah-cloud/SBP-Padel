@@ -1,4 +1,4 @@
-const BUILD='20260824-flow-v2d';
+const BUILD='20260824-account-live1';
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 
@@ -21,6 +21,7 @@ self.addEventListener('fetch',event=>{
 
       const page=url.pathname.split('/').pop()||'index.html';
       if(['index.html','review-booking.html','payment.html','payment-success.html'].includes(page))add('booking-router-bridge.js');
+      if(['index.html','payment-history.html'].includes(page))add('player-account-live.js');
       if(page==='auth-preview.html')add('player-live.js');
       if(page==='booking-detail.html'){
         add('player-live.js');
