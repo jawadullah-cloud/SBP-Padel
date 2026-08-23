@@ -1,16 +1,83 @@
 (function(){
-  const css=document.createElement('link');css.rel='stylesheet';css.href='bookings-module.css?v=20260823-spa1';document.head.appendChild(css);
-  const root=document.getElementById('bookings');if(!root)return;
-  const p=JSON.parse(localStorage.getItem('sbpPadelPayment')||'{}');
-  const cancelled=localStorage.getItem('sbpPadelCancelled')==='1';
-  const currentCourt=p.court?`${p.court} · ${p.court==='Court 01'?'Championship Court':'Training Court'}`:'Court 01 · Championship Court';
-  const currentDate=p.date||'Saturday, 22 Aug 2026';
-  const currentTime=Array.isArray(p.slots)&&p.slots.length?p.slots[0].split('–')[0].trim():'7:00 PM';
-  const currentId=localStorage.getItem('sbpPadelBookingId')||'PDL-002381';
-  const players=(p.players||['Adeel Raza']).length;
-  root.innerHTML=`<div class="bkWrap"><div class="bkHead"><div><h1>My Bookings</h1><p>Manage upcoming and previous court sessions.</p></div><div class="bkAvatar">AR</div></div><div class="bkTabs"><button class="on" data-bktab="upcoming">Upcoming</button><button data-bktab="past">Past</button><button data-bktab="cancelled">Cancelled</button></div><div class="bkList" id="bk-upcoming">${cancelled?'':`<article class="bkCard"><div class="bkHero"><span class="bkState">CONFIRMED</span></div><div class="bkBody"><div class="bkTop"><div><small>NISHTAR PARK SPORTS COMPLEX</small><h2>${currentCourt}</h2><small>${currentDate}</small></div><div class="bkTime">${currentTime}</div></div><div class="bkMeta"><div><small>Booking ID</small><b>${currentId}</b></div><div><small>Players</small><b>${players} of 4</b></div></div><div class="bkActions"><button class="bkPrimary" data-open="current">MANAGE BOOKING</button><button class="bkSecondary" data-pass>PASS</button></div></div></article>`}<article class="bkCard"><div class="bkHero"><span class="bkState">CONFIRMED</span></div><div class="bkBody"><div class="bkTop"><div><small>NISHTAR PARK SPORTS COMPLEX</small><h2>Court 05 · Training Court</h2><small>Tuesday, 25 Aug 2026</small></div><div class="bkTime">6:00 PM</div></div><div class="bkMeta"><div><small>Booking ID</small><b>PDL-002522</b></div><div><small>Players</small><b>2 of 4</b></div></div><div class="bkActions"><button class="bkPrimary" data-open="sample">MANAGE BOOKING</button><button class="bkSecondary" data-pass>PASS</button></div></div></article></div><div class="bkList" id="bk-past" hidden><article class="bkCard"><div class="bkHero"><span class="bkState past">COMPLETED</span></div><div class="bkBody"><div class="bkTop"><div><small>NISHTAR PARK SPORTS COMPLEX</small><h2>Court 03 · Training Court</h2><small>Sunday, 16 Aug 2026</small></div><div class="bkTime" style="color:#b9c5c0">6:00 PM</div></div><div class="bkMeta"><div><small>Booking ID</small><b>PDL-001942</b></div><div><small>Amount</small><b>PKR 2,100</b></div></div><div class="bkActions"><button class="bkPrimary" data-rebook>BOOK AGAIN</button><button class="bkSecondary" data-history="PDL-001942">RECEIPT</button></div></div></article><article class="bkCard"><div class="bkHero"><span class="bkState past">COMPLETED</span></div><div class="bkBody"><div class="bkTop"><div><small>NISHTAR PARK SPORTS COMPLEX</small><h2>Court 02 · Training Court</h2><small>Tuesday, 11 Aug 2026</small></div><div class="bkTime" style="color:#b9c5c0">8:00 PM</div></div><div class="bkMeta"><div><small>Booking ID</small><b>PDL-001801</b></div><div><small>Amount</small><b>PKR 2,100</b></div></div><div class="bkActions"><button class="bkPrimary" data-rebook>BOOK AGAIN</button><button class="bkSecondary" data-history="PDL-001801">RECEIPT</button></div></div></article></div><div class="bkList" id="bk-cancelled" hidden><article class="bkCard"><div class="bkHero"><span class="bkState cancelled">CANCELLED</span></div><div class="bkBody"><div class="bkTop"><div><small>NISHTAR PARK SPORTS COMPLEX</small><h2>Court 04 · Training Court</h2><small>Friday, 7 Aug 2026</small></div><div class="bkTime" style="color:#ff8b8b">5:00 PM</div></div><div class="bkRefund"><b>REFUND COMPLETED</b><br>PKR 2,100 returned to SBP Padel Wallet.</div><div class="bkActions"><button class="bkPrimary" data-rebook>BOOK AGAIN</button><button class="bkSecondary" data-history="PDL-001655" data-cancelled>DETAILS</button></div></div></article>${cancelled?`<article class="bkCard"><div class="bkHero"><span class="bkState cancelled">CANCELLED</span></div><div class="bkBody"><div class="bkTop"><div><small>NISHTAR PARK SPORTS COMPLEX</small><h2>${currentCourt}</h2><small>${currentDate}</small></div><div class="bkTime" style="color:#ff8b8b">${currentTime}</div></div><div class="bkRefund"><b>REFUND PENDING</b><br>Your refund request has been recorded and is awaiting processing.</div><div class="bkActions"><button class="bkPrimary" data-rebook>BOOK AGAIN</button><button class="bkSecondary" data-open="current">DETAILS</button></div></div></article>`:''}</div></div>`;
-  document.querySelectorAll('[data-bktab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-bktab]').forEach(x=>x.classList.remove('on'));b.classList.add('on');['upcoming','past','cancelled'].forEach(id=>document.getElementById('bk-'+id).hidden=id!==b.dataset.bktab)});
-  function deep(url){if(window.SBPDeepRoute)window.SBPDeepRoute(url);else location.href=url}
-  function rebook(){const target=document.getElementById('nishtar');if(!target)return;document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s===target));document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.nav==='venues'));document.querySelector('nav')?.classList.add('flowHidden');target.scrollTo({top:0,behavior:'smooth'})}
-  root.addEventListener('click',e=>{const re=e.target.closest('[data-rebook]');if(re){e.preventDefault();rebook();return}const open=e.target.closest('[data-open]');if(open){deep('booking-detail.html');return}const pass=e.target.closest('[data-pass]');if(pass){const btn=[...document.querySelectorAll('.nav')].find(n=>n.dataset.nav==='bookings');const passScreen=document.getElementById('pass');if(btn&&passScreen){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s===passScreen));document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.nav==='bookings'));document.querySelector('nav')?.classList.add('flowHidden')}return}const hist=e.target.closest('[data-history]');if(hist){deep(`booking-history-detail.html?type=${hist.hasAttribute('data-cancelled')?'cancelled':'past'}&id=${hist.dataset.history}`);return}});
+  'use strict';
+  if(window.__SBPBookingsNavigation)return;
+  window.__SBPBookingsNavigation=true;
+
+  const css=document.createElement('link');
+  css.rel='stylesheet';
+  css.href='bookings-module.css?v=20260823-spa1';
+  document.head.appendChild(css);
+
+  const root=document.getElementById('bookings');
+  if(!root)return;
+
+  function waitForRouter(){
+    if(typeof window.SBPDeepRoute==='function')return Promise.resolve(window.SBPDeepRoute);
+    return new Promise((resolve,reject)=>{
+      const started=Date.now();
+      const timer=setInterval(()=>{
+        if(typeof window.SBPDeepRoute==='function'){
+          clearInterval(timer);
+          resolve(window.SBPDeepRoute);
+          return;
+        }
+        if(Date.now()-started>2500){
+          clearInterval(timer);
+          reject(new Error('Navigation is still loading. Please try again.'));
+        }
+      },16);
+    });
+  }
+
+  async function openDeep(url){
+    try{
+      const route=await waitForRouter();
+      route(url);
+    }catch(err){
+      window.SBPPadelAPI?.toast?.(err.message,true);
+    }
+  }
+
+  function openMain(screen){
+    if(typeof window.SBPNavigate==='function'){
+      window.SBPNavigate(screen);
+      return;
+    }
+    const target=document.querySelector(`[data-nav="${CSS.escape(screen)}"]`);
+    target?.click();
+  }
+
+  // Capture phase is intentional. The live bookings renderer replaces this
+  // section asynchronously and some legacy button handlers use location.href.
+  // We own navigation before those handlers can cause a first-click page reload.
+  root.addEventListener('click',async e=>{
+    const manage=e.target.closest?.('[data-live-manage],[data-open]');
+    if(manage){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      const id=manage.dataset.liveManage||localStorage.getItem('sbpPadelSelectedBookingId')||'';
+      if(id)localStorage.setItem('sbpPadelSelectedBookingId',id);
+      await openDeep(`booking-detail.html${id?`?booking=${encodeURIComponent(id)}`:''}`);
+      return;
+    }
+
+    const history=e.target.closest?.('[data-history]');
+    if(history){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      const type=history.hasAttribute('data-cancelled')?'cancelled':'past';
+      await openDeep(`booking-history-detail.html?type=${type}&id=${encodeURIComponent(history.dataset.history||'')}`);
+      return;
+    }
+
+    const rebook=e.target.closest?.('[data-live-rebook],[data-rebook]');
+    if(rebook){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      openMain('nishtar');
+    }
+  },true);
 })();
