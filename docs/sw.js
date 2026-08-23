@@ -1,4 +1,4 @@
-const BUILD='20260824-bookings-live-v1';
+const BUILD='20260824-deep-route-smooth-v1';
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 
@@ -17,6 +17,7 @@ self.addEventListener('fetch',event=>{
 
       add('native-transitions.js');
       add('navigation-fix.js');
+      add('deep-route-smooth.js');
       add('review-entry.js');
 
       const page=url.pathname.split('/').pop()||'index.html';
