@@ -68,9 +68,12 @@ jobs:
       - name: First-click navigation guards
         shell: bash
         run: |
-          grep -q 'waitForRouter' docs/bookings-entry.js
-          grep -q 'data-live-manage' docs/bookings-entry.js
-          ! grep -q 'location.href' docs/bookings-entry.js
+          grep -q 'data-live-manage' docs/player-bookings-live.js
+          grep -q 'SBPDeepRoute' docs/player-bookings-live.js
+          grep -q 'currentTab' docs/player-bookings-live.js
+          grep -q 'loadSeq' docs/player-bookings-live.js
+          grep -q '__SBPBookingsNavigationRetired' docs/bookings-entry.js
+          ! grep -q 'addEventListener' docs/bookings-entry.js
           ! grep -q "id==='payButton')return'payment-success.html'" docs/deep-router.js
           ! grep -q "id==='toPayment')return'payment.html'" docs/deep-router.js
 
