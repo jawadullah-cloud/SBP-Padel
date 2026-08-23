@@ -22,6 +22,7 @@ COMMON_SCRIPTS = [
 PAGE_SCRIPTS = {
     "index.html": [
         "booking-router-bridge.js",
+        "player-venues-live.js",
         "player-profile-live.js",
         "profile-modules.js",
         "notifications-live.js",
