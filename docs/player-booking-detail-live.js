@@ -12,7 +12,7 @@
   const fmtDate=iso=>new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short',year:'numeric'});
   const fmtTime=t=>{const [h,m]=String(t||'00:00').split(':').map(Number);return new Date(2000,0,1,h,m||0).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})};
   const todayISO=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
-  let booking=null,venue=null,court=null,payment=null,refund=null,rescheduleDate=null,rescheduleSlots=[];
+  let booking=null,venue=null,court=null,payment=null,refund=null,rescheduleDate=null,rescheduleSlots=[],rescheduleRates=new Map(),rescheduleBusy=false;
 
   async function api(path,opts={}){
     const headers={'Content-Type':'application/json',...(opts.headers||{})};if(token())headers.Authorization=`Bearer ${token()}`;
@@ -65,18 +65,33 @@
     const reschedule=document.getElementById('rescheduleBtn');if(reschedule)reschedule.onclick=e=>{e.preventDefault();openReschedule()};
   }
 
+  function updateRescheduleAction(){
+    const modal=document.getElementById('rescheduleModal'),btn=modal?.querySelector('#confirmReschedule'),note=modal?.querySelector('.warn');if(!btn||!booking)return;
+    const needed=Math.max(1,booking.slots?.length||1),selectedFee=rescheduleSlots.reduce((sum,start)=>sum+Number(rescheduleRates.get(start)||0),0),expectedFee=Number(booking.court_fee||0),complete=rescheduleSlots.length===needed,priceMatches=complete&&Math.abs(selectedFee-expectedFee)<0.001;
+    btn.disabled=rescheduleBusy||!complete||!priceMatches;
+    if(rescheduleBusy)btn.textContent='RESCHEDULING…';
+    else if(!complete)btn.textContent=`SELECT ${needed} SLOT${needed===1?'':'S'}`;
+    else if(!priceMatches)btn.textContent=`PRICE MUST MATCH ${money(expectedFee)}`;
+    else btn.textContent='CONFIRM RESCHEDULE';
+    if(note){
+      if(!complete)note.innerHTML=`Your existing paid court fee is <b>${money(expectedFee)}</b>. Select ${needed} replacement slot${needed===1?'':'s'}.`;
+      else if(!priceMatches)note.innerHTML=`Selected court fee is <b>${money(selectedFee)}</b>, but this booking was paid at <b>${money(expectedFee)}</b>. Price-adjusted rescheduling is not available yet. Choose slot${needed===1?'':'s'} totalling ${money(expectedFee)}.`;
+      else note.innerHTML=`Replacement court fee matches the existing paid amount: <b>${money(expectedFee)}</b>.`;
+    }
+  }
+
   async function openReschedule(){
     const modal=document.getElementById('rescheduleModal');if(!modal)return;openModal('rescheduleModal');const dates=modal.querySelector('.dates'),slots=modal.querySelector('.slots'),action=modal.querySelector('#confirmReschedule');
-    rescheduleDate=todayISO();rescheduleSlots=[];dates.innerHTML='';slots.innerHTML='<div style="padding:18px 8px;color:var(--muted);font-size:9px">Choose a date to load live availability.</div>';
+    rescheduleDate=todayISO();rescheduleSlots=[];rescheduleRates=new Map();rescheduleBusy=false;dates.innerHTML='';slots.innerHTML='<div style="padding:18px 8px;color:var(--muted);font-size:9px">Choose a date to load live availability.</div>';
     const base=new Date();for(let i=0;i<6;i++){const d=new Date(base);d.setDate(base.getDate()+i);const iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;const b=document.createElement('button');b.dataset.date=iso;b.innerHTML=`<small>${d.toLocaleDateString('en-US',{weekday:'short'}).toUpperCase()}</small><b>${d.getDate()}</b>`;b.onclick=()=>loadRescheduleSlots(iso,b);dates.appendChild(b)}
-    action.textContent='CONFIRM RESCHEDULE';action.disabled=true;action.onclick=confirmReschedule;dates.querySelector('button')?.click();
+    action.onclick=confirmReschedule;updateRescheduleAction();dates.querySelector('button')?.click();
   }
   async function loadRescheduleSlots(iso,button){
-    rescheduleDate=iso;rescheduleSlots=[];const modal=document.getElementById('rescheduleModal'),dates=modal.querySelector('.dates'),slots=modal.querySelector('.slots'),action=modal.querySelector('#confirmReschedule');dates.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===button));slots.innerHTML='<div style="padding:18px 8px;color:var(--muted);font-size:9px">Checking live availability…</div>';action.disabled=true;
-    try{const a=await api(`/venues/${booking.venue_id}/availability?date=${encodeURIComponent(iso)}&_=${Date.now()}`);const c=a.courts.find(x=>x.court_id===booking.court_id);const available=(c?.slots||[]).filter(x=>x.available);if(!available.length){slots.innerHTML='<div style="padding:18px 8px;color:var(--muted);font-size:9px">No available slots on this date.</div>';return}slots.innerHTML=available.map(s=>`<button type="button" data-start="${esc(s.start_time)}">${esc(fmtTime(s.start_time))} – ${esc(fmtTime(s.end_time))} · ${money(s.hourly_rate)}</button>`).join('');slots.querySelectorAll('button').forEach(btn=>btn.onclick=()=>{const needed=Math.max(1,booking.slots?.length||1);if(!btn.classList.contains('on')&&rescheduleSlots.length>=needed){slots.querySelectorAll('button').forEach(x=>x.classList.remove('on'));rescheduleSlots=[]}btn.classList.toggle('on');rescheduleSlots=[...slots.querySelectorAll('button.on')].map(x=>x.dataset.start);action.disabled=rescheduleSlots.length!==needed});}catch(err){slots.innerHTML=`<div style="padding:18px 8px;color:#ffaaaa;font-size:9px">${esc(err.message)}</div>`}
+    rescheduleDate=iso;rescheduleSlots=[];rescheduleRates=new Map();const modal=document.getElementById('rescheduleModal'),dates=modal.querySelector('.dates'),slots=modal.querySelector('.slots');dates.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===button));slots.innerHTML='<div style="padding:18px 8px;color:var(--muted);font-size:9px">Checking live availability…</div>';updateRescheduleAction();
+    try{const a=await api(`/venues/${booking.venue_id}/availability?date=${encodeURIComponent(iso)}&_=${Date.now()}`);const c=a.courts.find(x=>x.court_id===booking.court_id);const available=(c?.slots||[]).filter(x=>x.available);if(!available.length){slots.innerHTML='<div style="padding:18px 8px;color:var(--muted);font-size:9px">No available slots on this date.</div>';updateRescheduleAction();return}slots.innerHTML=available.map(s=>`<button type="button" data-start="${esc(s.start_time)}" data-rate="${Number(s.hourly_rate||0)}">${esc(fmtTime(s.start_time))} – ${esc(fmtTime(s.end_time))} · ${money(s.hourly_rate)}</button>`).join('');slots.querySelectorAll('button').forEach(btn=>btn.onclick=()=>{const needed=Math.max(1,booking.slots?.length||1);if(!btn.classList.contains('on')&&rescheduleSlots.length>=needed){slots.querySelectorAll('button').forEach(x=>x.classList.remove('on'));rescheduleSlots=[];rescheduleRates=new Map()}btn.classList.toggle('on');rescheduleSlots=[...slots.querySelectorAll('button.on')].map(x=>x.dataset.start);rescheduleRates=new Map([...slots.querySelectorAll('button.on')].map(x=>[x.dataset.start,Number(x.dataset.rate||0)]));updateRescheduleAction()});updateRescheduleAction();}catch(err){slots.innerHTML=`<div style="padding:18px 8px;color:#ffaaaa;font-size:9px">${esc(err.message)}</div>`;updateRescheduleAction()}
   }
   async function confirmReschedule(){
-    const btn=document.getElementById('confirmReschedule');if(!btn||btn.disabled||!rescheduleSlots.length)return;btn.disabled=true;btn.textContent='RESCHEDULING…';try{await api(`/bookings/${booking.id}/reschedule`,{method:'POST',body:JSON.stringify({booking_date:rescheduleDate,slots:rescheduleSlots.map(start_time=>({start_time}))})});closeModal('rescheduleModal');toast('Booking rescheduled.');await hydrate();notifyParents()}catch(err){toast(err.message,true);btn.disabled=false;btn.textContent='CONFIRM RESCHEDULE'}
+    const btn=document.getElementById('confirmReschedule');if(!btn||rescheduleBusy||!rescheduleSlots.length)return;rescheduleBusy=true;updateRescheduleAction();try{await api(`/bookings/${booking.id}/reschedule`,{method:'POST',body:JSON.stringify({booking_date:rescheduleDate,slots:rescheduleSlots.map(start_time=>({start_time}))})});closeModal('rescheduleModal');toast('Booking rescheduled.');await hydrate();notifyParents()}catch(err){toast(err.message,true)}finally{rescheduleBusy=false;updateRescheduleAction()}
   }
   async function confirmCancel(){
     const btn=document.getElementById('confirmCancel');if(!btn)return;btn.disabled=true;btn.textContent='CANCELLING…';try{const cancelled=await api(`/bookings/${booking.id}/cancel`,{method:'POST',body:JSON.stringify({reason:'Cancelled by player'})});if(cancelled.refund_required&&payment?.id)await api(`/payments/${payment.id}/refund`,{method:'POST',body:JSON.stringify({reason:'Booking cancelled by player'})});closeModal('cancelModal');toast(cancelled.refund_required?'Booking cancelled. Refund requested.':'Booking cancelled.');await hydrate();notifyParents()}catch(err){toast(err.message,true);btn.disabled=false;btn.textContent='CANCEL & REQUEST REFUND'}
