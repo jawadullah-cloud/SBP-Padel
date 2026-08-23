@@ -1,4 +1,4 @@
-const BUILD='20260824-flow-v2b';
+const BUILD='20260824-flow-v2c';
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 
@@ -20,7 +20,7 @@ self.addEventListener('fetch',event=>{
       add('review-entry.js');
 
       const page=url.pathname.split('/').pop()||'index.html';
-      if(page==='review-booking.html'||page==='payment.html')add('booking-router-bridge.js');
+      if(['review-booking.html','payment.html','payment-success.html'].includes(page))add('booking-router-bridge.js');
       if(page==='auth-preview.html')add('player-live.js');
       if(page==='booking-detail.html'){
         add('player-live.js');
