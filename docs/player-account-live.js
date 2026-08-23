@@ -11,7 +11,7 @@
   async function api(path,opts={}){
     const headers={'Content-Type':'application/json',...(opts.headers||{})};
     if(token())headers.Authorization=`Bearer ${token()}`;
-    const res=await fetch(`${API}${path}`,{...opts,headers});
+    const res=await fetch(`${API}${path}`,{...opts,headers,cache:'no-store'});
     let body=null;try{body=await res.json()}catch{}
     if(!res.ok)throw new Error(body?.detail||`Request failed (${res.status})`);
     return body;
@@ -35,21 +35,18 @@
   bellStyle.textContent='.topNotify:after{display:none!important}.topNotify.hasUnread:after{display:block!important}.topNotify .liveUnreadCount{position:absolute;right:-3px;top:-4px;min-width:15px;height:15px;padding:0 4px;border-radius:999px;background:var(--brand);color:#071006;display:none;place-items:center;font:900 8px var(--sport);line-height:15px;border:2px solid var(--bg)}.topNotify.hasUnread .liveUnreadCount{display:grid}';
   document.head.appendChild(bellStyle);
 
-  function ensureNotificationShell(){
+  function ensureNotificationShell(force=false){
     let screen=document.getElementById('notifications');
     if(!screen){
       const app=document.querySelector('.app'),nav=document.querySelector('nav');if(!app||!nav)return null;
       screen=document.createElement('section');screen.className='screen';screen.id='notifications';app.insertBefore(screen,nav);
     }
-    if(!screen.querySelector('.pmNoticeList')){
-      screen.innerHTML=`<div class="pmWrap"><div class="pmHead"><button class="pmBack" data-live-notification-back>←</button><div><small>ACTIVITY</small><h1>Notifications</h1></div></div><div class="pmNoticeHead"><p class="pmIntro">Booking updates, reminders and important SBP Padel announcements.</p><button data-mark-read>MARK ALL READ</button></div><div class="pmSectionTitle"><h2>Activity</h2><small>Loading…</small></div><div class="pmNoticeList"><div class="pmEmpty show">Loading notifications…</div></div></div>`;
+    if(force||!screen.querySelector('[data-live-notification-shell]')){
+      screen.innerHTML=`<div class="pmWrap" data-live-notification-shell><div class="pmHead"><button class="pmBack" data-live-notification-back>←</button><div><small>ACTIVITY</small><h1>Notifications</h1></div></div><div class="pmNoticeHead"><p class="pmIntro">Booking updates, reminders and important SBP Padel announcements.</p><button data-mark-read>MARK ALL READ</button></div><div class="pmSectionTitle"><h2>Activity</h2><small>Loading…</small></div><div class="pmNoticeList"><div class="pmEmpty show">Loading notifications…</div></div></div>`;
     }
     return screen;
   }
-  function hideNotifications(){
-    const screen=document.getElementById('notifications');
-    if(screen)screen.classList.remove('active');
-  }
+  function hideNotifications(){const screen=document.getElementById('notifications');if(screen)screen.classList.remove('active')}
   function openMainScreen(id){
     hideNotifications();
     document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));
@@ -58,17 +55,18 @@
     document.getElementById(id)?.scrollTo({top:0,behavior:'smooth'});
   }
   function showNotifications(){
-    const screen=ensureNotificationShell();if(!screen)return;
+    const screen=ensureNotificationShell(true);if(!screen)return;
     document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s===screen));
     document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.nav==='profile'));
     document.querySelector('nav')?.classList.remove('flowHidden');
     screen.scrollTo({top:0,behavior:'smooth'});
     loadNotifications();
   }
+  window.SBPShowNotifications=showNotifications;
 
   async function loadNotifications(){
     const screen=ensureNotificationShell();if(!screen||!token())return;
-    let rows;try{rows=await api('/notifications/me')}catch{return}
+    let rows;try{rows=await api(`/notifications/me?_=${Date.now()}`)}catch{return}
     const list=screen.querySelector('.pmNoticeList');if(!list)return;
     const unread=rows.filter(n=>!n.read).length;
     list.innerHTML=rows.length?rows.map(n=>`<article class="pmNotice ${n.read?'':'unread'}" data-notification="${esc(n.id)}"><div class="pmNoticeIcon">${iconFor(n.kind)}</div><div><b>${esc(n.title)}</b><p>${esc(n.body)}</p><small>${relativeTime(n.created_at)}</small></div></article>`).join(''):'<div class="pmEmpty show">No notifications yet.</div>';
@@ -78,7 +76,7 @@
     await refreshNotificationDot(rows);
   }
   async function refreshNotificationDot(existing){
-    let rows=existing;try{if(!rows)rows=await api('/notifications/me')}catch{return}
+    let rows=existing;try{if(!rows)rows=await api(`/notifications/me?_=${Date.now()}`)}catch{return}
     const unread=rows.filter(n=>!n.read).length;
     const bell=document.querySelector('header .topNotify');if(!bell)return;
     bell.classList.toggle('hasUnread',unread>0);
@@ -119,19 +117,20 @@
   document.addEventListener('click',e=>{
     const bell=e.target.closest?.('header .topNotify');
     if(bell){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();showNotifications();return}
+    const btn=e.target.closest?.('#profile .menu button');
+    if(btn?.querySelector?.('span')?.textContent?.trim()==='Notifications'){
+      e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();showNotifications();return;
+    }
     const back=e.target.closest?.('[data-live-notification-back]');
     if(back){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openMainScreen('profile');return}
     const notifications=document.getElementById('notifications');
     const navTarget=e.target.closest?.('[data-nav]');
     if(notifications?.classList.contains('active')&&navTarget&&['home','bookings','venues','profile'].includes(navTarget.dataset.nav))hideNotifications();
-    const btn=e.target.closest?.('button');
-    const label=btn?.querySelector?.('span')?.textContent?.trim();
-    if(label==='Notifications')setTimeout(loadNotifications,30);
   },true);
   window.addEventListener('pageshow',()=>{if(document.getElementById('notifications')?.classList.contains('active'))loadNotifications();refreshNotificationDot()});
   window.addEventListener('focus',()=>refreshNotifications());
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshNotifications()});
-  window.addEventListener('storage',e=>{if(e.key==='sbpPadelBookingSessionV2'||e.key==='sbpPadelBookingId')refreshNotifications()});
+  window.addEventListener('storage',e=>{if(['sbpPadelBookingSessionV2','sbpPadelBookingId','sbpPadelNotificationsVersion'].includes(e.key))refreshNotifications()});
   setInterval(refreshNotifications,10000);
   setTimeout(refreshNotificationDot,50);
   loadPaymentHistory();
