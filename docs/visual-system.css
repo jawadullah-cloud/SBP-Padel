@@ -18,3 +18,13 @@ body[data-theme=light] #sbpNativePanel .npGrid div{background:#eef3f0!important;
 body[data-theme=light] #sbpNativePanel .nrCard,body[data-theme=light] #sbpNativePanel .nrReceipt{background:#fff!important;color:#17201d!important;border-color:#d7e0db!important}
 body[data-theme=light] #sbpNativePanel .nrGrid div{background:#eef3f0!important;color:#17201d!important}
 body[data-theme=light] #sbpNativePanel .nrLine span,body[data-theme=light] #sbpNativePanel .nrReceiptRow span{color:#66736d!important}
+/* Booking interaction polish */
+#select .bookingBottom,#time .bookingBottom{position:relative!important;bottom:auto!important;z-index:1!important;background:var(--bg)!important;padding-top:12px!important;margin-top:10px!important;pointer-events:auto!important}
+#select .courtList{padding-bottom:2px!important;position:relative!important;z-index:2!important}
+#select .courtOption{position:relative!important;z-index:2!important;pointer-events:auto!important}
+#time .slotRow.booked>div:first-child small{display:none!important}
+body[data-theme=light] #time .slotRow b{color:#17201d!important}
+body[data-theme=light] #time .slotRow.booked b{color:#5f6b66!important}
+body[data-theme=light] #time .slotRow.booked{background:#eef2ef!important;border-color:#d5ddd8!important}
+body[data-theme=light] #time .slotRow.booked .slotBook{color:#727d78!important}
+body[data-theme=light] #time .slotRow:before{box-shadow:0 0 0 3px #f7faf8!important}
