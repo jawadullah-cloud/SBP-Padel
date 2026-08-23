@@ -96,13 +96,17 @@ jobs:
           grep -q 'deep-route-smooth.js' dev_player_server.py
           grep -q 'deep-route-smooth.js' docs/sw.js
           grep -q 'sbp-preload-detail' docs/deep-route-smooth.js
-          grep -q "page!=='booking-detail.html'" docs/deep-route-smooth.js
+          grep -q "review-booking.html" docs/deep-route-smooth.js
+          grep -q "payment.html" docs/deep-route-smooth.js
+          grep -q "booking-detail.html" docs/deep-route-smooth.js
           grep -q "frame.addEventListener('load'" docs/deep-route-smooth.js
 
       - name: Live player ownership guards
         shell: bash
         run: |
           grep -q "'/notifications/me'" docs/notifications-live.js
+          grep -q 'SBPShowNotifications' docs/player-profile-live.js
+          grep -q 'data-profile-action="notifications"' docs/player-profile-live.js
           grep -q 'notifications-live.js' docs/sw.js
           grep -q 'notifications-live.js' dev_player_server.py
           grep -q '/bookings/me' docs/player-bookings-live.js
