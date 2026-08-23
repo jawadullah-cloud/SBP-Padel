@@ -13,116 +13,106 @@ Before discussing or changing anything:
 
 1. Inspect the current HEAD of `backend-v1-dev`.
 2. Read this file (`docs/NEXT_CHAT_PROMPT.md`).
-3. Read the repository's durable documentation and current implementation relevant to the player app, booking flow, navigation, notifications, and QA.
-4. Inspect recent commits around the current HEAD rather than assuming previous fixes worked.
-5. Treat the repository and actual runtime behavior as the source of truth.
+3. Read the repository's durable documentation and implementation relevant to the current task.
+4. Inspect recent commits around HEAD.
+5. Treat repository state and actual runtime behavior as the source of truth.
 
-This is a continuation of an existing project, **not a new project**. Do not redesign from scratch and do not ask the user to repeat information already available in the repository.
+This is a continuation of an existing project, not a new project.
 
-## Critical current state
+## Player runtime milestone accepted
 
-The player frontend still has unresolved interaction/runtime defects. Several attempted fixes in the previous chat were reported by the user as producing **no visible improvement**. Therefore, do **not** assume recent commits fixed the runtime merely because the code looks plausible.
+The player runtime investigation established the effective local serving path through `run_player_dev.ps1` and `dev_player_server.py`. The local dev server serves `docs/`, disables caching, neutralizes legacy service workers, and injects a visible `DEV <sha>` build badge.
 
-Recent work touched files including:
+The user manually reviewed and accepted the fixes for the earlier critical runtime defects, including:
 
-- `docs/visual-system.css`
-- `docs/deep-router.js`
-- `docs/player-account-live.js`
-- `docs/native-transitions.js`
-- `docs/sw.js`
-- `backend/run_acceptance.ps1`
+- app-wide first-click navigation/interactions;
+- Court 4 selection;
+- unavailable slot duplicate text;
+- 6 quick dates + MORE;
+- MORE date selection;
+- checkout first-click routing;
+- Pakistan timezone handling for elapsed slots;
+- live booking confirmation notifications;
+- notification timestamp handling;
+- stale availability races;
+- booking bottom navigation dead space;
+- fresh booking date/court reset with explicit court selection;
+- notification page closing through normal navigation/logo;
+- venue favourite heart persistence.
 
-Recent commits included attempts to:
+Do not reopen these areas without a concrete reproduced regression.
 
-- remove the duplicate left-side `Unavailable` text from unavailable time slots;
-- constrain the booking date selector to 6 dates + MORE on one row;
-- prevent inactive screens from intercepting taps;
-- stop the deep router from bypassing real checkout/payment actions;
-- improve notification ownership/live loading;
-- add regression guards.
+## Booking flow ownership
 
-**User's latest report: none of this visibly changed the running app.** Treat that report as authoritative evidence that there may be a loader/runtime/versioning/served-file problem or that the changes are targeting the wrong effective code path.
+`docs/review-entry.js` remains the single owner of the Venue → Date → Court → Time → Review → Payment → Confirmation booking state and actions.
 
-## Immediate priority for the new chat
+`docs/notifications-live.js` is the only notification owner.
 
-Do not start by applying more speculative CSS/JS patches.
+`docs/player-bookings-live.js` is now the dedicated live My Bookings owner.
 
-First establish exactly what code the browser is actually executing and why the user's runtime does not reflect repository changes.
+`docs/player-booking-detail-live.js` is now the dedicated live booking-detail lifecycle owner. `booking-detail.html` must not be owned by legacy `player-live.js` or `player-booking-refund.js` in the effective runtime.
 
-Investigate systematically:
+## Active milestone: player booking lifecycle
 
-1. Inspect current HEAD and recent commit history.
-2. Inspect `run_player_dev.ps1` and `dev_player_server.py` to determine exactly what directory/files are served and what scripts/styles are injected.
-3. Inspect `docs/index.html`, `docs/sw.js`, all script/style loading paths, service-worker behavior, cache headers, query-string/build versioning, and any duplicate/legacy modules.
-4. Trace the effective ownership of:
-   - main navigation and screen activation;
-   - booking venue/court/date/time selection;
-   - unavailable slot rendering;
-   - checkout/review/payment navigation;
-   - notifications.
-5. Search for duplicate implementations and stale prototype markup. Do not merely override them with higher-specificity CSS or additional event listeners. Consolidate ownership where appropriate.
-6. Verify whether the local dev server actually serves the modified `docs/*` files and whether injected modules match the repository HEAD.
-7. Add a visible/runtime build identifier or diagnostic only if useful to prove which commit/build is loaded.
-8. Use automated browser/runtime QA if available in the repository. The key requirement is to test actual click behavior, not just syntax/static assertions.
-9. Only after proving the runtime path, fix the defects at their real source.
+The current work moved from initial booking creation into a complete player-side lifecycle review:
 
-## User-visible defects that must be verified
+1. My Bookings
+2. booking detail
+3. reschedule
+4. cancellation
+5. refund state
+6. payment receipt/history linkage
+7. lifecycle notifications
 
-### A. App-wide click/tap reliability
+### Implemented in the current milestone
 
-The user reported controls often require multiple clicks and may start working only after scrolling. This affects more than one screen. A correct fix must prove that normal controls respond on the first click/tap without scrolling tricks.
+- `docs/player-bookings-live.js` loads `/bookings/me` and real booking details from the API and renders Upcoming / Past / Cancelled groups.
+- `docs/player-booking-detail-live.js` hydrates booking, venue, court, payment and refund data from live APIs.
+- cancellation now uses the real `/bookings/{id}/cancel` endpoint and requests a refund through the real payment endpoint when required.
+- a real player reschedule API was added at `/bookings/{id}/reschedule` in `backend/app/api/reschedules.py`.
+- reschedule revalidates live availability/pricing, moves the stored booking slots, retains blocking status, and creates a `booking_rescheduled` notification.
+- price-adjusted rescheduling is intentionally rejected for now if the new booking total differs from the already-paid amount. Do not silently change a paid booking total without implementing a payment adjustment workflow.
+- booking quote/create validation now has the same Windows-safe Pakistan UTC+05:00 fallback used by availability.
 
-At minimum verify:
+### QA added
 
-- Home → Book a Court
-- bottom navigation
-- venue/facility actions
-- court selection including Court 4
-- date selector and MORE
-- time-slot selection
-- Continue actions
-- checkout/payment actions
-- notifications/profile actions
+- `backend/tests/test_player_booking_lifecycle.py` covers confirm → reschedule → old/new slot availability → cancellation → refund → lifecycle notifications/payment history.
+- `qa/player_booking_lifecycle_browser.mjs` covers My Bookings → Manage Booking → live payment detail → reschedule → cancel → refund state → return to updated booking lists.
+- `.github/workflows/player-flow-ci.yml` now runs both the original player runtime browser QA and the lifecycle browser QA.
+- `backend/run_acceptance.ps1` includes ownership/lifecycle regression guards.
 
-### B. Unavailable time-slot presentation
+## Important verification status
 
-An unavailable time slot was showing `Unavailable` twice, once on the left and once on the right. Desired presentation:
+The connected chat environment can edit/read GitHub but cannot clone GitHub into its container because outbound GitHub DNS is blocked. Therefore new lifecycle code and QA may be committed before their GitHub Actions results are visible through the connector.
 
-- left: time/details only
-- right: a single `UNAVAILABLE` status
+Always distinguish:
 
-Do not claim this is fixed until actual rendered runtime behavior is verified.
+- implementation committed;
+- automated CI actually green;
+- user's Windows runtime manually accepted.
 
-### C. Booking date selector
+For the lifecycle milestone, inspect the newest Backend CI and Player Flow CI runs first if available. Fix any failures before asking the user to review.
 
-Desired compact presentation is **6 quick dates + MORE on one row**. MORE must remain usable and must not create overlapping/invisible hit areas.
+## Next work after lifecycle acceptance
 
-### D. Notifications/payment lifecycle
+After My Bookings / detail / reschedule / cancellation / refund are manually accepted, continue the player product review through:
 
-A newly completed booking should generate and display its real booking notification. Verify the actual backend call and notification creation, not just navigation to a success page. Existing prototype/stale notifications must not replace live API data.
+- payment history and wallet;
+- saved players;
+- favourite venues consistency;
+- profile/account/auth/logout;
+- help/support;
+- full light/dark theme functional review;
+- final player regression.
+
+Then lock the player web runtime milestone and begin the venue/admin operational product.
 
 ## Working style
 
-The user is frustrated by repeated speculative fixes. Work autonomously and return only after meaningful investigation and implementation.
+Work autonomously through investigation → implementation → runtime/CI QA → fixes → regression QA.
 
-Do not say a defect is fixed merely because a commit was made. Distinguish clearly between:
+Do not add speculative click interceptors, CSS patches or duplicate feature owners.
 
-- code changed;
-- automated/static checks passed;
-- actual browser/runtime behavior verified.
+Do not claim behavior is fixed merely because code exists in Git. State clearly what was code-reviewed, automatically tested, and manually verified.
 
-Prefer root-cause simplification over adding more patches, event interceptors, injected modules, or CSS overrides.
-
-Do not stop after finding the first plausible cause. Follow the effective runtime end-to-end and check for secondary ownership conflicts.
-
-When implementation is complete:
-
-1. Run all relevant targeted QA.
-2. Inspect failures and fix them.
-3. Confirm current branch HEAD.
-4. Give the user exact minimal PowerShell commands required to pull/restart/test.
-5. State anything that still requires manual verification without pretending it was tested.
-
-## Important warning from previous chat
-
-The previous chat repeatedly inferred root causes and committed fixes, but the user's runtime reportedly did not change. The next chat must therefore begin with **runtime provenance and effective-code-path verification**, not another inferred UI patch.
+When a manual review is required, provide only the minimal PowerShell pull/restart commands and the exact flow to inspect.
