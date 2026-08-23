@@ -104,6 +104,9 @@ jobs:
           grep -q '/bookings/me' docs/player-bookings-live.js
           grep -q 'player-bookings-live.js' docs/sw.js
           grep -q '/auth/me' docs/player-profile-live.js
+          grep -q '/auth/me/avatar' docs/player-profile-live.js
+          grep -q 'data-profile-photo-input' docs/player-profile-live.js
+          grep -q 'profileIcon.*svg' docs/player-profile-live.js
           grep -q 'player-profile-live.js' docs/sw.js
           grep -q 'player-profile-live.js' dev_player_server.py
           grep -q '/payments/me' docs/player-payment-history-live.js
