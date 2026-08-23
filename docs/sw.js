@@ -1,5 +1,5 @@
-const BUILD='20260824-flowfix1';
-const BASE_INJECT=`<script src="native-transitions.js?v=${BUILD}"></script><script src="saved-players-bridge.js?v=${BUILD}"></script><script src="navigation-fix.js?v=${BUILD}"></script><script src="flow-recovery.js?v=${BUILD}"></script>`;
+const BUILD='20260824-nav4';
+const BASE_INJECT=`<script src="native-transitions.js?v=${BUILD}"></script><script src="saved-players-bridge.js?v=${BUILD}"></script><script src="navigation-fix.js?v=${BUILD}"></script>`;
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 self.addEventListener('fetch',event=>{
@@ -14,17 +14,16 @@ self.addEventListener('fetch',event=>{
       let html=await res.text();
       let inject=BASE_INJECT;
       if(!html.includes('player-live.js'))inject+=`<script src="player-live.js?v=${BUILD}"></script>`;
-      if(url.pathname.endsWith('/review-booking.html'))inject+=`<script src="review-live-ui.js?v=${BUILD}"></script>`;
+      if(url.pathname.endsWith('/review-booking.html'))inject+=`<script src="review-disabled-state.js?v=${BUILD}"></script>`;
       if(url.pathname.endsWith('/booking-detail.html'))inject+=`<script src="player-booking-refund.js?v=${BUILD}"></script>`;
       if(url.pathname.endsWith('/payment-success.html'))inject+=`<script src="player-success.js?v=${BUILD}"></script>`;
       if(!html.includes('native-transitions.js'))html=html.replace('</body>',inject+'</body>');
       else {
-        let extras=inject
-          .replace(`<script src="native-transitions.js?v=${BUILD}"></script>`,'')
-          .replace(`<script src="saved-players-bridge.js?v=${BUILD}"></script>`,'');
-        for(const name of ['navigation-fix.js','flow-recovery.js','review-live-ui.js','player-booking-refund.js','player-success.js']){
-          if(html.includes(name))extras=extras.replace(`<script src="${name}?v=${BUILD}"></script>`,'');
-        }
+        let extras=inject.replace(`<script src="native-transitions.js?v=${BUILD}"></script>`,'').replace(`<script src="saved-players-bridge.js?v=${BUILD}"></script>`,'');
+        if(html.includes('navigation-fix.js'))extras=extras.replace(`<script src="navigation-fix.js?v=${BUILD}"></script>`,'');
+        if(html.includes('review-disabled-state.js'))extras=extras.replace(`<script src="review-disabled-state.js?v=${BUILD}"></script>`,'');
+        if(html.includes('player-booking-refund.js'))extras=extras.replace(`<script src="player-booking-refund.js?v=${BUILD}"></script>`,'');
+        if(html.includes('player-success.js'))extras=extras.replace(`<script src="player-success.js?v=${BUILD}"></script>`,'');
         if(extras)html=html.replace('</body>',extras+'</body>');
       }
       const headers=new Headers(res.headers);headers.delete('content-length');headers.set('x-sbp-build',BUILD);
