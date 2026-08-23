@@ -31,20 +31,49 @@
   }
   const iconFor=k=>String(k||'').includes('refund')?'↺':String(k||'').includes('cancel')?'×':String(k||'').includes('reminder')?'◷':'✓';
 
+  const bellStyle=document.createElement('style');
+  bellStyle.textContent='.topNotify:after{display:none!important}.topNotify.hasUnread:after{display:block!important}.topNotify .liveUnreadCount{position:absolute;right:-3px;top:-4px;min-width:15px;height:15px;padding:0 4px;border-radius:999px;background:var(--brand);color:#071006;display:none;place-items:center;font:900 8px var(--sport);line-height:15px;border:2px solid var(--bg)}.topNotify.hasUnread .liveUnreadCount{display:grid}';
+  document.head.appendChild(bellStyle);
+
+  function ensureNotificationShell(){
+    let screen=document.getElementById('notifications');
+    if(!screen){
+      const app=document.querySelector('.app'),nav=document.querySelector('nav');if(!app||!nav)return null;
+      screen=document.createElement('section');screen.className='screen';screen.id='notifications';app.insertBefore(screen,nav);
+    }
+    if(!screen.querySelector('.pmNoticeList')){
+      screen.innerHTML=`<div class="pmWrap"><div class="pmHead"><button class="pmBack" data-live-notification-back>←</button><div><small>ACTIVITY</small><h1>Notifications</h1></div></div><div class="pmNoticeHead"><p class="pmIntro">Booking updates, reminders and important SBP Padel announcements.</p><button data-mark-read>MARK ALL READ</button></div><div class="pmSectionTitle"><h2>Activity</h2><small>Loading…</small></div><div class="pmNoticeList"><div class="pmEmpty show">Loading notifications…</div></div></div>`;
+    }
+    return screen;
+  }
+  function showNotifications(){
+    const screen=ensureNotificationShell();if(!screen)return;
+    document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s===screen));
+    document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.nav==='profile'));
+    document.querySelector('nav')?.classList.remove('flowHidden');
+    screen.scrollTo({top:0,behavior:'smooth'});
+    loadNotifications();
+  }
+
   async function loadNotifications(){
-    const screen=document.getElementById('notifications');if(!screen||!token())return;
+    const screen=ensureNotificationShell();if(!screen||!token())return;
     let rows;try{rows=await api('/notifications/me')}catch{return}
     const list=screen.querySelector('.pmNoticeList');if(!list)return;
     const unread=rows.filter(n=>!n.read).length;
     list.innerHTML=rows.length?rows.map(n=>`<article class="pmNotice ${n.read?'':'unread'}" data-notification="${esc(n.id)}"><div class="pmNoticeIcon">${iconFor(n.kind)}</div><div><b>${esc(n.title)}</b><p>${esc(n.body)}</p><small>${relativeTime(n.created_at)}</small></div></article>`).join(''):'<div class="pmEmpty show">No notifications yet.</div>';
     const count=screen.querySelector('.pmSectionTitle small');if(count)count.textContent=unread?`${unread} new`:'All read';
     const mark=screen.querySelector('[data-mark-read]');if(mark){mark.hidden=unread===0;mark.onclick=async()=>{mark.disabled=true;try{await api('/notifications/me/read-all',{method:'POST'});await loadNotifications()}finally{mark.disabled=false}}}
-    list.querySelectorAll('[data-notification]').forEach(card=>card.onclick=async()=>{if(!card.classList.contains('unread'))return;try{await api(`/notifications/${card.dataset.notification}/read`,{method:'POST'});card.classList.remove('unread');await refreshNotificationDot()}catch{}});
+    list.querySelectorAll('[data-notification]').forEach(card=>card.onclick=async()=>{if(!card.classList.contains('unread'))return;try{await api(`/notifications/${card.dataset.notification}/read`,{method:'POST'});await loadNotifications()}catch{}});
     await refreshNotificationDot(rows);
   }
   async function refreshNotificationDot(existing){
     let rows=existing;try{if(!rows)rows=await api('/notifications/me')}catch{return}
-    const unread=rows.some(n=>!n.read);const bell=document.querySelector('header .topNotify');if(bell)bell.classList.toggle('hasUnread',unread);
+    const unread=rows.filter(n=>!n.read).length;
+    const bell=document.querySelector('header .topNotify');if(!bell)return;
+    bell.classList.toggle('hasUnread',unread>0);
+    let badge=bell.querySelector('.liveUnreadCount');if(!badge){badge=document.createElement('span');badge.className='liveUnreadCount';bell.appendChild(badge)}
+    badge.textContent=unread>99?'99+':String(unread);
+    bell.setAttribute('aria-label',unread?`Notifications, ${unread} unread`:'Notifications, all read');
   }
 
   async function loadPaymentHistory(){
@@ -70,12 +99,14 @@
   }
 
   document.addEventListener('click',e=>{
+    const bell=e.target.closest?.('header .topNotify');
+    if(bell){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();showNotifications();return}
     const btn=e.target.closest?.('button');
     const label=btn?.querySelector?.('span')?.textContent?.trim();
     if(label==='Notifications')setTimeout(loadNotifications,30);
-    if(btn?.classList?.contains('topNotify'))setTimeout(loadNotifications,30);
+    if(e.target.closest?.('[data-live-notification-back]')){e.preventDefault();window.SBPNavigate?window.SBPNavigate('profile'):deep('index.html?open=profile')}
   },true);
-  window.addEventListener('pageshow',()=>{if(document.getElementById('notifications')?.classList.contains('active'))loadNotifications();});
-  refreshNotificationDot();
+  window.addEventListener('pageshow',()=>{if(document.getElementById('notifications')?.classList.contains('active'))loadNotifications();refreshNotificationDot()});
+  setTimeout(refreshNotificationDot,50);
   loadPaymentHistory();
 })();
