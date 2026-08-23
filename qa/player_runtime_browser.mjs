@@ -6,7 +6,7 @@ const page = await browser.newPage({ viewport: { width: 412, height: 915 } });
 
 const venue = {
   id: 'venue-1', name: 'Nishtar Park Sports Complex', latitude: 31.511617, longitude: 74.337527,
-  opening_time: '06:00', closing_time: '23:00'
+  opening_time: '06:00', closing_time: '23:00', timezone: 'Asia/Karachi'
 };
 const courts = Array.from({ length: 5 }, (_, i) => ({
   id: `court-${i + 1}`,
@@ -19,16 +19,24 @@ const courts = Array.from({ length: 5 }, (_, i) => ({
     { start_time: '19:00', end_time: '20:00', available: true, hourly_rate: 2100 }
   ]
 }));
+let notifications = [{
+  id: 'notification-1', kind: 'booking_confirmed', title: 'Booking confirmed',
+  body: 'Your booking PDL-RUNTIME-QA has been confirmed.', read: false,
+  created_at: new Date().toISOString()
+}];
 
 await page.route('http://127.0.0.1:8000/api/v1/**', async route => {
-  const url = new URL(route.request().url());
+  const req = route.request();
+  const url = new URL(req.url());
   const path = url.pathname.replace('/api/v1', '');
   let body;
   if (path === '/venues') body = [venue];
   else if (path === '/venues/venue-1') body = { ...venue, description: 'Five professional padel courts.', courts: courts.map(c => ({ id: c.id, name: c.court_name, court_type: c.court_type })) };
-  else if (path === '/venues/venue-1/availability') body = { venue_id: venue.id, date: url.searchParams.get('date'), courts };
+  else if (path === '/venues/venue-1/availability') body = { venue_id: venue.id, date: url.searchParams.get('date'), timezone: venue.timezone, courts };
   else if (path === '/bookings/quote') body = { venue: { id: venue.id, name: venue.name }, court: { id: 'court-4', name: 'Court 04', court_type: 'Training' }, slots: [{ start_time: '17:00', end_time: '18:00', rate: 2100 }], court_fee: 2100, service_fee: 100, total: 2200 };
-  else if (path === '/notifications/me') body = [];
+  else if (path === '/notifications/me' && req.method() === 'GET') body = notifications;
+  else if (path === '/notifications/me/read-all') { notifications = notifications.map(n => ({ ...n, read: true })); body = { updated: notifications.length }; }
+  else if (path === '/notifications/notification-1/read') { notifications = notifications.map(n => ({ ...n, read: true })); body = { id: 'notification-1', read: true }; }
   else if (path === '/bookings/me') body = [];
   else if (path === '/auth/me') body = { id: 'user-1', full_name: 'Runtime QA' };
   else body = {};
@@ -48,6 +56,20 @@ try {
   const build = await page.evaluate(() => window.__SBP_DEV_BUILD__);
   assert(build && build !== 'unknown', 'Dev runtime build provenance is missing.');
 
+  await page.locator('nav [data-nav="profile"]').click();
+  assert(await active('profile'), 'Profile did not open on first click.');
+  const notificationsButton = page.locator('#profile .menu button').filter({ hasText: 'Notifications' });
+  await notificationsButton.click();
+  assert(await active('notifications'), 'Notifications did not open on first click.');
+  await page.waitForSelector('#notifications .ntCard');
+  const notificationText = await page.locator('#notifications').innerText();
+  assert(notificationText.includes('PDL-RUNTIME-QA'), 'Live API notification was not rendered.');
+  assert(!notificationText.includes('Your Championship Court booking at Nishtar Park is confirmed for 7:00 PM.'), 'Prototype notification leaked into live notifications.');
+  await page.locator('#notifications .ntCard').click();
+  assert((await page.locator('#notifications .ntCard').getAttribute('class'))?.includes('unread') === false, 'Notification did not mark read from the API.');
+  await page.locator('#notifications .ntBack').click();
+  await page.locator('nav [data-nav="home"]').click();
+
   await page.locator('#home .primary[data-nav="venues"]').click();
   assert(await active('venues'), 'Home → Book a Court did not navigate on first click.');
 
@@ -59,15 +81,17 @@ try {
 
   await page.waitForSelector('#select .dateRail button[data-date]');
   const quickVisible = await page.locator('#select .dateRail button[data-date]:visible').count();
-  const moreVisible = await page.locator('#select .dateRail .dateMore:visible').count();
+  const moreVisible = await page.locator('#select .dateRail .dateMoreButton:visible').count();
   assert(quickVisible === 6, `Expected 6 visible quick dates, got ${quickVisible}.`);
   assert(moreVisible === 1, `Expected one visible MORE control, got ${moreVisible}.`);
 
-  const moreBox = await page.locator('#select .dateRail .dateMore').boundingBox();
-  const inputBox = await page.locator('#select .dateRail .dateMore input').boundingBox();
-  assert(moreBox && inputBox, 'MORE date picker is missing geometry.');
-  assert(inputBox.x >= moreBox.x - 1 && inputBox.x + inputBox.width <= moreBox.x + moreBox.width + 1, 'MORE date input overlaps another control horizontally.');
-  assert(inputBox.y >= moreBox.y - 1 && inputBox.y + inputBox.height <= moreBox.y + moreBox.height + 1, 'MORE date input overlaps another control vertically.');
+  await page.locator('#select .dateRail .dateMoreButton').click();
+  await page.waitForSelector('#sbpDateSheet');
+  const future = await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() + 10); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; });
+  await page.locator('#sbpDateSheet input[type="date"]').fill(future);
+  await page.locator('#sbpDateSheet .apply').click();
+  await page.waitForFunction(date => { try { return JSON.parse(localStorage.getItem('sbpPadelBookingSessionV2') || '{}').date === date; } catch { return false; } }, future);
+  assert(await page.locator('#sbpDateSheet').count() === 0, 'MORE date sheet did not close after Apply.');
 
   const fourth = page.locator('#select .courtOption').filter({ hasText: 'Court 04' });
   await fourth.click();
