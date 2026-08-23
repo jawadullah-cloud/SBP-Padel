@@ -16,6 +16,7 @@ COMMON_SCRIPTS = [
     "dev-runtime.js",
     "native-transitions.js",
     "navigation-fix.js",
+    "deep-route-smooth.js",
     "review-entry.js",
 ]
 PAGE_SCRIPTS = {
