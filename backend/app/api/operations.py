@@ -92,7 +92,9 @@ async def operational_bookings(
                 User.phone.ilike(needle),
             )
         )
-    bookings = (await db.scalars(stmt.order_by(Booking.booking_date.desc(), Booking.created_at.desc()).limit(200))).all()
+    # General Bookings is an activity/history view: newest booking created first.
+    # Court Schedule remains the chronological session view.
+    bookings = (await db.scalars(stmt.order_by(Booking.created_at.desc(), Booking.booking_date.desc()).limit(200))).all()
     result = []
     for booking in bookings:
         slots = (
