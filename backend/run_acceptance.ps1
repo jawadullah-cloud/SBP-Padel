@@ -32,7 +32,7 @@ Write-Host "Cache-free development runtime OK" -ForegroundColor Green
 
 Write-Host "6/6 Player frontend integration checks..." -ForegroundColor Yellow
 if (Get-Command node -ErrorAction SilentlyContinue) {
-  @('dev-runtime.js','player-live.js','player-booking-refund.js','navigation-fix.js','review-entry.js','booking-router-bridge.js','player-account-live.js','notifications-live.js','booking-date-more.js','deep-router.js','native-transitions.js','player-stability.js','sw.js') | ForEach-Object {
+  @('dev-runtime.js','player-live.js','player-booking-refund.js','navigation-fix.js','review-entry.js','booking-router-bridge.js','profile-modules.js','player-account-live.js','notifications-live.js','booking-date-more.js','deep-router.js','native-transitions.js','player-stability.js','sw.js') | ForEach-Object {
     node --check (Join-Path '..\docs' $_)
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   }
@@ -52,6 +52,11 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
   if ($flow -notmatch 'data-sbp-step') { Write-Error 'Booking flow v2 regression: clickable booking steps are missing.' }
   if ($flow -notmatch '/payments/initiate') { Write-Error 'Booking flow v2 regression: real payment initiation is missing.' }
   if ($flow -notmatch '/simulate-success') { Write-Error 'Development confirmation must execute the backend success path.' }
+  if ($flow -notmatch 'SBPRefreshNotifications') { Write-Error 'Confirmed bookings must trigger a live notification refresh.' }
+
+  $profile = Get-Content (Join-Path '..\docs' 'profile-modules.js') -Raw
+  if ($profile -match 'renderNotifications|installHeaderNotification|Championship Court booking at Nishtar Park is confirmed for 7:00 PM') { Write-Error 'Profile modules must never own or render notifications.' }
+  if ($profile -notmatch 'Notifications.*return') { Write-Error 'Profile modules must explicitly defer Notifications to the live owner.' }
 
   $notifications = Get-Content (Join-Path '..\docs' 'notifications-live.js') -Raw
   if ($notifications -notmatch '/notifications/me') { Write-Error 'Notifications must load from the live API.' }
@@ -70,10 +75,13 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
   if ($visual -notmatch '\.screen:not\(\.active\).*pointer-events:none') { Write-Error 'Inactive player screens must not intercept taps.' }
   if ($visual -notmatch 'slotRow\.booked>div:first-child small\{display:none') { Write-Error 'Unavailable slot status must not be duplicated on both sides.' }
 
+  $reference = Get-Content (Join-Path '..\docs' 'reference-flow.css') -Raw
+  if ($reference -match '\.flowHidden\{[^}]*opacity:0') { Write-Error 'Booking flow must not leave a hidden bottom-navigation dead zone.' }
+
   $routes = Get-Content (Join-Path 'app\api' 'routes.py') -Raw
   if ($routes -notmatch 'timezone\(timedelta\(hours=5\)') { Write-Error 'Pakistan timezone must retain a Windows-safe UTC+5 fallback.' }
 
-  Write-Host "Booking flow, notifications, date selection and timezone guards OK" -ForegroundColor Green
+  Write-Host "Booking flow, notifications, date selection, navigation and timezone guards OK" -ForegroundColor Green
 } else {
   Write-Host "Node.js not found; frontend syntax checks skipped." -ForegroundColor DarkYellow
 }
