@@ -36,10 +36,9 @@
     const input=sheet.querySelector('input');sheet.querySelector('.cancel').onclick=closeSheet;sheet.querySelector('.apply').onclick=()=>{const iso=input.value;closeSheet();choose(iso)};sheet.addEventListener('click',e=>{if(e.target===sheet)closeSheet()});setTimeout(()=>input.focus(),0)
   }
   function install(){
-    const rail=document.querySelector('#select .dateRail');if(!rail)return;
-    rail.querySelectorAll('.dateMoreButton').forEach(x=>x.remove());
+    const rail=document.querySelector('#select .dateRail');if(!rail||rail.querySelector('.dateMoreButton'))return;
     const more=document.createElement('button');more.type='button';more.className='dateMoreButton';more.innerHTML='<small>MORE</small><b>＋</b>';more.setAttribute('aria-label','Choose another date');more.onclick=e=>{e.preventDefault();e.stopPropagation();openSheet()};rail.appendChild(more)
   }
   const rail=document.querySelector('#select .dateRail');if(!rail)return;
-  let busy=false;const observer=new MutationObserver(()=>{if(busy)return;busy=true;queueMicrotask(()=>{install();busy=false})});observer.observe(rail,{childList:true});install();
+  const observer=new MutationObserver(install);observer.observe(rail,{childList:true});install();
 })();
