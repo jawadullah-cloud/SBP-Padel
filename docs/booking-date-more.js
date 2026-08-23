@@ -19,12 +19,13 @@
   `;
   document.head.appendChild(style);
 
+  const SESSION='sbpPadelBookingSessionV2';
   const todayISO=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
-  function currentDate(){return document.querySelector('#select .dateRail button[data-date].selected')?.dataset.date||localStorage.getItem('sbpPadelBookingDatePicker')||todayISO()}
+  function sessionDate(){try{const value=JSON.parse(localStorage.getItem(SESSION)||'{}')?.date;return value&&value>=todayISO()?value:todayISO()}catch{return todayISO()}}
+  function currentDate(){return document.querySelector('#select .dateRail button[data-date].selected')?.dataset.date||sessionDate()}
   function closeSheet(){document.getElementById('sbpDateSheet')?.remove()}
   function choose(iso){
     if(!iso||iso<todayISO())return;
-    localStorage.setItem('sbpPadelBookingDatePicker',iso);
     const rail=document.querySelector('#select .dateRail');if(!rail)return;
     const proxy=document.createElement('button');proxy.type='button';proxy.dataset.date=iso;proxy.hidden=true;rail.appendChild(proxy);proxy.click();
   }
@@ -39,6 +40,7 @@
     const rail=document.querySelector('#select .dateRail');if(!rail||rail.querySelector('.dateMoreButton'))return;
     const more=document.createElement('button');more.type='button';more.className='dateMoreButton';more.innerHTML='<small>MORE</small><b>＋</b>';more.setAttribute('aria-label','Choose another date');more.onclick=e=>{e.preventDefault();e.stopPropagation();openSheet()};rail.appendChild(more)
   }
+  localStorage.removeItem('sbpPadelBookingDatePicker');
   const rail=document.querySelector('#select .dateRail');if(!rail)return;
   const observer=new MutationObserver(install);observer.observe(rail,{childList:true});install();
 })();
