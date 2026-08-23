@@ -6,7 +6,8 @@
   const token=()=>localStorage.getItem('sbpPadelAccessToken')||'';
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money=v=>`PKR ${Number(v||0).toLocaleString(undefined,{maximumFractionDigits:0})}`;
-  async function api(path){const h={'Content-Type':'application/json'};if(token())h.Authorization=`Bearer ${token()}`;const r=await fetch(`${API}${path}`,{headers:h,cache:'no-store'});let b=null;try{b=await r.json()}catch{}if(!r.ok)throw new Error(b?.detail||`Request failed (${r.status})`);return b}
+  const errorText=(body,status)=>{if(typeof body?.detail==='string')return body.detail;if(Array.isArray(body?.detail))return body.detail.map(x=>x?.msg||String(x)).join('; ');if(typeof body?.message==='string')return body.message;return `Request failed (${status})`};
+  async function api(path){const h={'Content-Type':'application/json'};if(token())h.Authorization=`Bearer ${token()}`;const r=await fetch(`${API}${path}`,{headers:h,cache:'no-store'});let b=null;try{b=await r.json()}catch{}if(!r.ok)throw new Error(errorText(b,r.status));if(!Array.isArray(b))throw new Error('Payment activity returned an invalid response');return b}
   function deep(url){if(window.parent&&window.parent!==window&&typeof window.parent.SBPDeepRoute==='function'){window.parent.SBPDeepRoute(url);return}location.href=url}
   function date(v){try{return new Date(v).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}catch{return''}}
   async function load(){
@@ -22,7 +23,7 @@
         items.push(`<article class="item"><div class="icon">↗</div><div><b>${esc(r.booking_code||'Padel booking')}</b><small>${esc(r.booking_date||'')} · ${esc(String(r.payment_status||'payment').replaceAll('_',' '))}</small></div><div class="amount out">− ${money(r.amount)}</div></article>`)
       }
       const tx=document.querySelector('.tx');if(tx)tx.innerHTML=items.length?items.join(''):'<div style="padding:28px 8px;text-align:center;color:var(--muted);font-size:9px">No payment activity yet.</div>';
-    }catch(err){const tx=document.querySelector('.tx');if(tx)tx.innerHTML=`<div style="padding:28px 8px;text-align:center;color:#ffaaaa;font-size:9px">${esc(err.message)}</div>`}
+    }catch(err){const tx=document.querySelector('.tx');if(tx)tx.innerHTML=`<div style="padding:28px 8px;text-align:center;color:#ffaaaa;font-size:9px">Could not load payment activity: ${esc(err.message||'Unknown error')}</div>`}
   }
   document.querySelectorAll('[data-wallet-history]').forEach(b=>b.onclick=e=>{e.preventDefault();deep('payment-history.html')});
   const back=document.querySelector('.head .back');if(back)back.onclick=e=>{e.preventDefault();deep('index.html?open=profile')};
