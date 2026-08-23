@@ -47,6 +47,29 @@ async def _owned_booking(booking_id: UUID, user: User, db: AsyncSession) -> Book
     return booking
 
 
+async def _ensure_confirmation_notification(booking: Booking, user: User, db: AsyncSession) -> None:
+    existing = await db.scalar(
+        select(Notification)
+        .where(
+            Notification.user_id == user.id,
+            Notification.kind == "booking_confirmed",
+            Notification.body.contains(booking.booking_code),
+        )
+        .order_by(Notification.created_at.desc())
+    )
+    if existing:
+        return
+    db.add(
+        Notification(
+            user_id=user.id,
+            kind="booking_confirmed",
+            title="Booking confirmed",
+            body=f"Your booking {booking.booking_code} has been confirmed.",
+            payload={"booking_id": str(booking.id), "booking_code": booking.booking_code},
+        )
+    )
+
+
 @router.post("/initiate")
 async def initiate_payment(
     payload: InitiatePaymentRequest,
@@ -134,7 +157,9 @@ async def simulate_success(
         raise HTTPException(404, "Payment not found")
     booking = await _owned_booking(payment.booking_id, user, db)
     if payment.status == PaymentStatus.paid and booking.status == BookingStatus.confirmed:
-        return {"payment_status": "paid", "booking_status": "confirmed"}
+        await _ensure_confirmation_notification(booking, user, db)
+        await db.commit()
+        return {"payment_status": "paid", "booking_status": "confirmed", "booking_id": str(booking.id), "booking_code": booking.booking_code}
     if booking.status != BookingStatus.pending_payment or _hold_expired(booking):
         booking.status = BookingStatus.expired
         payment.status = PaymentStatus.failed
@@ -146,7 +171,7 @@ async def simulate_success(
     payment.provider = "development-simulator"
     payment.provider_metadata = {"simulated": True, "confirmed_at": datetime.now(timezone.utc).isoformat()}
     booking.status = BookingStatus.confirmed
-    db.add(Notification(user_id=user.id, kind="booking_confirmed", title="Booking confirmed", body=f"Your booking {booking.booking_code} has been confirmed.", payload={"booking_id": str(booking.id), "booking_code": booking.booking_code}))
+    await _ensure_confirmation_notification(booking, user, db)
     await db.commit()
     await slot_locks.release_booking(booking.id)
     return {"payment_status": payment.status.value, "booking_status": booking.status.value, "booking_id": str(booking.id), "booking_code": booking.booking_code}
