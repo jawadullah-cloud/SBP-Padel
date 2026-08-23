@@ -51,7 +51,10 @@
 
   window.SBPShowNotifications=show;
   window.SBPRefreshNotifications=async()=>{if(screen.classList.contains('active'))return load();return refreshBadge()};
-  replaceOldListeners();shell();refreshBadge();
+  // The legacy profile module may be injected later in the same parser turn. Take
+  // ownership after synchronous shell setup has finished, then clone its controls
+  // to discard every prototype notification listener and repaint only from the API.
+  setTimeout(()=>{replaceOldListeners();shell();refreshBadge()},0);
   window.addEventListener('focus',refreshBadge);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)window.SBPRefreshNotifications()});
   window.addEventListener('storage',e=>{if(['sbpPadelBookingSessionV2','sbpPadelBookingId','sbpPadelNotificationsVersion'].includes(e.key))window.SBPRefreshNotifications()});
