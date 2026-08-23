@@ -19,12 +19,21 @@ def money(value: Decimal | None) -> str | None:
     return None if value is None else f"{value:.2f}"
 
 
-def venue_now(venue: Venue) -> datetime:
+def venue_timezone(venue: Venue):
+    name = venue.timezone or "Asia/Karachi"
     try:
-        tz = ZoneInfo(venue.timezone or "UTC")
+        return ZoneInfo(name)
     except ZoneInfoNotFoundError:
-        tz = timezone.utc
-    return datetime.now(tz)
+        # Windows Python installations may not have the IANA timezone database.
+        # Nishtar Park must still use Pakistan Standard Time rather than silently
+        # falling back to UTC, otherwise elapsed evening slots remain bookable.
+        if name == "Asia/Karachi":
+            return timezone(timedelta(hours=5), name="PKT")
+        return timezone.utc
+
+
+def venue_now(venue: Venue) -> datetime:
+    return datetime.now(venue_timezone(venue))
 
 
 def resolve_rate(rules: list[PricingRule], court: Court, slot_date: date, start_hour: int) -> Decimal | None:
