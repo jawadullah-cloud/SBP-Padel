@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
@@ -40,7 +40,7 @@ async def reschedule_booking(
         booking_date=payload.booking_date,
         slots=payload.slots,
     )
-    venue, court, slots, court_fee = await quote_payload(request, db)
+    _, court, slots, court_fee = await quote_payload(request, db)
     new_total = court_fee + booking.service_fee
     if Decimal(new_total) != Decimal(booking.total_amount):
         raise HTTPException(
