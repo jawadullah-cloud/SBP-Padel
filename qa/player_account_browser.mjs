@@ -51,6 +51,12 @@ try{
   assert(!/Sara Khan|Hamza Ali|Mariam Shah/.test(savedText),'Prototype saved players were seeded.');
   await page.locator('#savedPlayers [data-pm-back]').click();
 
+  await page.locator('#profile [data-profile-action="notifications"]').click();
+  await page.waitForFunction(()=>document.getElementById('notifications')?.classList.contains('active'));
+  assert((await page.locator('#notifications').innerText()).includes('Notifications'),'Profile Notifications row did not open the live notification owner.');
+  await page.locator('#notifications .ntBack').click();
+  await page.waitForFunction(()=>document.getElementById('profile')?.classList.contains('active'));
+
   const before=await page.evaluate(()=>document.documentElement.dataset.theme||'dark');
   await page.locator('#profile [data-profile-action="appearance"]').click();
   const after=await page.evaluate(()=>document.documentElement.dataset.theme);
