@@ -55,38 +55,13 @@
     head.innerHTML=`<button type="button" class="profileAvatarButton" data-profile-photo aria-label="Change profile picture">${avatar}<span class="profileCameraBadge">${icons.camera}</span></button><div class="profileIdentity"><h3>${esc(user.full_name||'Player')}</h3><p>${esc(user.email||user.phone||'SBP Padel player')}</p><div class="profilePhotoActions"><span class="profilePhotoHint">Tap photo to change</span>${user.avatar_data_url?'<button type="button" class="profileRemovePhoto" data-remove-profile-photo>Remove</button>':''}<span class="profilePhotoStatus" aria-live="polite"></span></div><input type="file" data-profile-photo-input accept="image/jpeg,image/png,image/webp" hidden></div>`;
     let menu=wrap.querySelector('.menu');if(!menu){menu=document.createElement('div');menu.className='menu';wrap.appendChild(menu)}
     menu.innerHTML=[
-      row('bookings','My Bookings','bookings'),
-      row('wallet','My Wallet','wallet'),
-      row('payments','Payment History','payments'),
-      row('players','Saved Players'),
-      row('favourite','Favourite Venues'),
-      row('notifications','Notifications'),
-      row('appearance','Appearance','appearance',(document.body.dataset.theme||'dark').toUpperCase()),
-      row('help','Help & Support'),
-      row('logout','Sign Out','logout','')
+      row('bookings','My Bookings','bookings'),row('wallet','My Wallet','wallet'),row('payments','Payment History','payments'),row('players','Saved Players'),row('favourite','Favourite Venues'),row('notifications','Notifications'),row('appearance','Appearance','appearance',(document.body.dataset.theme||'dark').toUpperCase()),row('help','Help & Support'),row('logout','Sign Out','logout','')
     ].join('');
   }
   function setPhotoStatus(text,error=false){const el=root.querySelector('.profilePhotoStatus');if(el){el.textContent=text||'';el.classList.toggle('error',error)}}
-  async function resizeImage(file){
-    if(!file.type.match(/^image\/(jpeg|png|webp)$/))throw new Error('Choose a JPEG, PNG or WebP image');
-    if(file.size>8*1024*1024)throw new Error('Profile picture must be smaller than 8 MB');
-    const src=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read image'));r.readAsDataURL(file)});
-    const img=await new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(new Error('Could not open image'));i.src=src});
-    const size=256,canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;const ctx=canvas.getContext('2d');
-    const side=Math.min(img.naturalWidth,img.naturalHeight),sx=(img.naturalWidth-side)/2,sy=(img.naturalHeight-side)/2;
-    ctx.drawImage(img,sx,sy,side,side,0,0,size,size);
-    return canvas.toDataURL('image/jpeg',0.84);
-  }
-  async function uploadPhoto(file){
-    setPhotoStatus('Uploading…');
-    try{const data=await resizeImage(file);await api('/auth/me/avatar',{method:'PUT',body:JSON.stringify({avatar_data_url:data})});await load();setPhotoStatus('Photo updated')}
-    catch(err){setPhotoStatus(err.message||'Could not update photo',true)}
-  }
-  async function removePhoto(){
-    setPhotoStatus('Removing…');
-    try{await api('/auth/me/avatar',{method:'DELETE'});await load()}
-    catch(err){setPhotoStatus(err.message||'Could not remove photo',true)}
-  }
+  async function resizeImage(file){if(!file.type.match(/^image\/(jpeg|png|webp)$/))throw new Error('Choose a JPEG, PNG or WebP image');if(file.size>8*1024*1024)throw new Error('Profile picture must be smaller than 8 MB');const src=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read image'));r.readAsDataURL(file)});const img=await new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(new Error('Could not open image'));i.src=src});const size=256,canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;const ctx=canvas.getContext('2d');const side=Math.min(img.naturalWidth,img.naturalHeight),sx=(img.naturalWidth-side)/2,sy=(img.naturalHeight-side)/2;ctx.drawImage(img,sx,sy,side,side,0,0,size,size);return canvas.toDataURL('image/jpeg',0.84)}
+  async function uploadPhoto(file){setPhotoStatus('Uploading…');try{const data=await resizeImage(file);await api('/auth/me/avatar',{method:'PUT',body:JSON.stringify({avatar_data_url:data})});await load();setPhotoStatus('Photo updated')}catch(err){setPhotoStatus(err.message||'Could not update photo',true)}}
+  async function removePhoto(){setPhotoStatus('Removing…');try{await api('/auth/me/avatar',{method:'DELETE'});await load()}catch(err){setPhotoStatus(err.message||'Could not remove photo',true)}}
   function logout(){['sbpPadelAccessToken','sbpPadelUser','sbpPadelBookingSessionV2','sbpPadelSelectedBookingId','sbpPadelPayment','sbpPadelBookingId'].forEach(k=>localStorage.removeItem(k));location.href='auth-preview.html'}
 
   root.addEventListener('click',e=>{
@@ -96,11 +71,11 @@
     if(action==='bookings'){e.preventDefault();window.SBPNavigate?.('bookings');return}
     if(action==='wallet'){e.preventDefault();deep('wallet.html');return}
     if(action==='payments'){e.preventDefault();deep('payment-history.html');return}
-    if(action==='appearance'){e.preventDefault();const theme=(document.body.dataset.theme||'dark')==='dark'?'light':'dark';localStorage.setItem('sbpPadelTheme',theme);if(typeof window.SBPApplyTheme==='function')window.SBPApplyTheme(theme);else{document.body.dataset.theme=theme;document.documentElement.dataset.theme=theme}const em=btn.querySelector('.profileTail');if(em)em.textContent=theme.toUpperCase();return}
+    if(action==='appearance'){e.preventDefault();if(typeof window.SBPToggleTheme==='function')window.SBPToggleTheme();else{const theme=(document.body.dataset.theme||'dark')==='dark'?'light':'dark';localStorage.setItem('sbpPadelTheme',theme);document.body.dataset.theme=theme;document.documentElement.dataset.theme=theme}return}
     if(action==='logout'){e.preventDefault();logout()}
   });
   root.addEventListener('change',e=>{const input=e.target.closest?.('[data-profile-photo-input]');if(!input)return;const file=input.files?.[0];input.value='';if(file)uploadPhoto(file)});
 
   async function load(){if(!token()){location.href='auth-preview.html';return}try{const user=await api(`/auth/me?_=${Date.now()}`);localStorage.setItem('sbpPadelUser',JSON.stringify(user));render(user)}catch{let fallback={full_name:'Player'};try{fallback={...fallback,...JSON.parse(localStorage.getItem('sbpPadelUser')||'{}')}}catch{}render(fallback)}}
-  window.SBPRefreshProfile=load;document.addEventListener('click',e=>{if(e.target.closest?.('[data-nav="profile"]'))setTimeout(load,0)},true);load();
+  window.SBPRefreshProfile=load;document.addEventListener('click',e=>{if(e.target.closest?.('[data-nav="profile"]'))setTimeout(load,0)},true);window.addEventListener('sbp-theme-change',()=>{const t=root.querySelector('[data-profile-action="appearance"] .profileTail');if(t)t.textContent=(document.body.dataset.theme||'dark').toUpperCase()});load();
 })();
