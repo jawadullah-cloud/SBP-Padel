@@ -36,10 +36,10 @@
   }
   function openRequestedScreen(){
     const wanted=new URLSearchParams(location.search).get('open');
-    if(wanted!=='pass')return;
-    hydratePass();
+    if(!wanted)return;
+    if(wanted==='pass')hydratePass();
     setTimeout(()=>{
-      const target=document.querySelector('[data-nav="pass"]');
+      const target=document.querySelector(`[data-nav="${CSS.escape(wanted)}"]`);
       if(target)target.click();
     },30);
   }
@@ -49,4 +49,10 @@
   }
   hydratePass();
   openRequestedScreen();
+  if(!window.__sbpNavigationFixLoading){
+    window.__sbpNavigationFixLoading=true;
+    const s=document.createElement('script');
+    s.src='navigation-fix.js?v=20260824-nav1';
+    document.head.appendChild(s);
+  }
 })();
