@@ -33,11 +33,12 @@ PAGE_SCRIPTS = {
         "visual-live.js",
         "player-stability.js",
     ],
-    "review-booking.html": ["booking-router-bridge.js"],
+    "review-booking.html": ["booking-router-bridge.js", "review-players-live.js"],
     "payment.html": ["booking-router-bridge.js"],
     "payment-success.html": ["booking-router-bridge.js"],
     "payment-history.html": ["player-payment-history-live.js"],
     "wallet.html": ["player-wallet-live.js"],
+    "digital-pass.html": ["digital-pass-live.js"],
     "auth-preview.html": ["player-live.js"],
     "booking-detail.html": ["player-booking-detail-live.js"],
 }
