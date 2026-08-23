@@ -1,4 +1,4 @@
-const BUILD='20260824-nav2';
+const BUILD='20260824-nav3';
 const BASE_INJECT=`<script src="native-transitions.js?v=${BUILD}"></script><script src="saved-players-bridge.js?v=${BUILD}"></script><script src="navigation-fix.js?v=${BUILD}"></script>`;
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
@@ -14,7 +14,7 @@ self.addEventListener('fetch',event=>{
       let html=await res.text();
       let inject=BASE_INJECT;
       if(!html.includes('player-live.js'))inject+=`<script src="player-live.js?v=${BUILD}"></script>`;
-      if(url.pathname.endsWith('/review-booking.html'))inject+=`<script src="review-pricing.js?v=${BUILD}"></script><script src="review-policy-gate.js?v=${BUILD}"></script>`;
+      if(url.pathname.endsWith('/review-booking.html'))inject+=`<script src="review-pricing.js?v=${BUILD}"></script><script src="review-policy-gate.js?v=${BUILD}"></script><script src="review-disabled-state.js?v=${BUILD}"></script>`;
       if(url.pathname.endsWith('/booking-detail.html'))inject+=`<script src="player-booking-refund.js?v=${BUILD}"></script>`;
       if(url.pathname.endsWith('/payment-success.html'))inject+=`<script src="player-success.js?v=${BUILD}"></script>`;
       if(!html.includes('native-transitions.js'))html=html.replace('</body>',inject+'</body>');
@@ -23,6 +23,7 @@ self.addEventListener('fetch',event=>{
         if(html.includes('navigation-fix.js'))extras=extras.replace(`<script src="navigation-fix.js?v=${BUILD}"></script>`,'');
         if(html.includes('review-pricing.js'))extras=extras.replace(`<script src="review-pricing.js?v=${BUILD}"></script>`,'');
         if(html.includes('review-policy-gate.js'))extras=extras.replace(`<script src="review-policy-gate.js?v=${BUILD}"></script>`,'');
+        if(html.includes('review-disabled-state.js'))extras=extras.replace(`<script src="review-disabled-state.js?v=${BUILD}"></script>`,'');
         if(html.includes('player-booking-refund.js'))extras=extras.replace(`<script src="player-booking-refund.js?v=${BUILD}"></script>`,'');
         if(html.includes('player-success.js'))extras=extras.replace(`<script src="player-success.js?v=${BUILD}"></script>`,'');
         if(extras)html=html.replace('</body>',extras+'</body>');
