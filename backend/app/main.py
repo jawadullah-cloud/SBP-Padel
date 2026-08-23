@@ -14,6 +14,7 @@ from app.api.notifications import router as notifications_router
 from app.api.operations import router as operations_router
 from app.api.operations_courts import router as operations_courts_router
 from app.api.payments import router as payments_router
+from app.api.player_payments import router as player_payments_router
 from app.api.policies import router as policies_router
 from app.api.routes import router
 from app.core.audit_middleware import AdministrationAuditMiddleware
@@ -39,7 +40,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.7.0",
+    version="0.8.0",
     description="Sports Board Punjab Padel booking and venue management API",
     lifespan=lifespan,
 )
@@ -57,6 +58,7 @@ app.include_router(policies_router, prefix=settings.api_prefix)
 app.include_router(bookings_router, prefix=settings.api_prefix)
 app.include_router(cancellations_router, prefix=settings.api_prefix)
 app.include_router(payments_router, prefix=settings.api_prefix)
+app.include_router(player_payments_router, prefix=settings.api_prefix)
 app.include_router(notifications_router, prefix=settings.api_prefix)
 app.include_router(admin_router, prefix=settings.api_prefix)
 app.include_router(admin_hq_router, prefix=settings.api_prefix)
