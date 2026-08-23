@@ -20,6 +20,7 @@ PAGE_SCRIPTS = {
         "booking-router-bridge.js",
         "profile-modules.js",
         "player-account-live.js",
+        "visual-live.js",
     ],
     "review-booking.html": ["booking-router-bridge.js"],
     "payment.html": ["booking-router-bridge.js"],
