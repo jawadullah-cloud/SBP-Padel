@@ -1,0 +1,45 @@
+name: Player Flow CI
+
+on:
+  push:
+    branches: [backend-v1-dev]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/player-flow-ci.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - '.github/workflows/player-flow-ci.yml'
+
+jobs:
+  player-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: JavaScript syntax
+        run: |
+          node --check docs/review-entry.js
+          node --check docs/booking-router-bridge.js
+          node --check docs/navigation-fix.js
+          node --check docs/sw.js
+
+      - name: Booking flow architecture guards
+        shell: bash
+        run: |
+          grep -q 'sbpPadelBookingSessionV2' docs/review-entry.js
+          grep -q 'data-sbp-step' docs/review-entry.js
+          grep -q 'Final availability validation happens immediately before creating the booking' docs/review-entry.js
+          grep -q 'booking-router-bridge.js' docs/sw.js
+          grep -q 'review-entry.js' docs/sw.js
+          ! grep -q 'review-policy-gate.js' docs/sw.js
+          ! grep -q 'review-disabled-state.js' docs/sw.js
+          ! grep -q 'review-live-ui.js' docs/sw.js
+          ! grep -q 'review-pricing.js' docs/sw.js
+          ! grep -q 'flow-recovery.js' docs/sw.js
