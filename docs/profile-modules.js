@@ -45,8 +45,13 @@
   }
   function setPlayers(rows){localStorage.setItem(playersKey,JSON.stringify(rows))}
   if(!localStorage.getItem(playersKey))setPlayers(defaults.slice());
-  if(localStorage.getItem(favKey)===null)localStorage.setItem(favKey,'1');
-  const isFav=()=>localStorage.getItem(favKey)!=='0';
+  if(localStorage.getItem(favKey)===null)localStorage.setItem(favKey,'0');
+  const isFav=()=>localStorage.getItem(favKey)==='1';
+  function paintVenueHeart(){
+    const heart=document.querySelector('#nishtar .heartBtn');if(!heart)return;
+    const fav=isFav();heart.textContent=fav?'♥':'♡';heart.classList.toggle('selected',fav);heart.setAttribute('aria-pressed',String(fav));heart.setAttribute('aria-label',fav?'Remove from favourites':'Add to favourites');
+  }
+  function setFav(value){localStorage.setItem(favKey,value?'1':'0');paintVenueHeart();if(favs.classList.contains('active'))renderFavs()}
 
   function renderPlayers(){
     const rows=getPlayers();
@@ -103,8 +108,8 @@
   saved.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='pmPlayerName'){e.preventDefault();addPlayer()}});
   favs.addEventListener('click',e=>{
     if(e.target.closest('[data-pm-back]')){backProfile();return}
-    if(e.target.closest('[data-toggle-favourite]')){localStorage.setItem(favKey,isFav()?'0':'1');renderFavs();return}
-    if(e.target.closest('[data-open-nishtar]')){window.SBPNavigate?window.SBPNavigate('nishtar'):switchScreen('nishtar');return}
+    if(e.target.closest('[data-toggle-favourite]')){setFav(false);return}
+    if(e.target.closest('[data-open-nishtar]')){window.SBPNavigate?window.SBPNavigate('nishtar'):switchScreen('nishtar');paintVenueHeart();return}
     if(e.target.closest('[data-directions]'))window.open('https://www.google.com/maps/dir/?api=1&destination=31.511617,74.337527','_blank','noopener');
   });
   help.addEventListener('click',e=>{
@@ -112,7 +117,12 @@
     const faq=e.target.closest('[data-faq]');if(!faq)return;
     const answer=faq.nextElementSibling;if(!answer)return;answer.classList.toggle('open');const i=faq.querySelector('i');if(i)i.textContent=answer.classList.contains('open')?'−':'＋';
   });
+  document.addEventListener('click',e=>{
+    const heart=e.target.closest('#nishtar .heartBtn');if(!heart)return;
+    e.preventDefault();e.stopPropagation();setFav(!isFav());
+  });
 
   const stored=localStorage.getItem('sbpPadelTheme');if(stored==='light'||stored==='dark')document.body.dataset.theme=stored;
-  installThemeRow();
+  installThemeRow();paintVenueHeart();
+  window.addEventListener('storage',e=>{if(e.key===favKey)paintVenueHeart()});
 })();
