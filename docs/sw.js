@@ -1,4 +1,4 @@
-const BUILD='20260824-deep-route-smooth-v1';
+const BUILD='20260824-player-account-live-v1';
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 
@@ -23,6 +23,7 @@ self.addEventListener('fetch',event=>{
       const page=url.pathname.split('/').pop()||'index.html';
       if(['index.html','review-booking.html','payment.html','payment-success.html'].includes(page))add('booking-router-bridge.js');
       if(page==='index.html'){
+        add('player-profile-live.js');
         add('profile-modules.js');
         add('notifications-live.js');
         add('booking-date-more.js');
@@ -32,7 +33,8 @@ self.addEventListener('fetch',event=>{
         add('visual-live.js');
         add('player-stability.js');
       }
-      if(page==='payment-history.html')add('player-account-live.js');
+      if(page==='payment-history.html')add('player-payment-history-live.js');
+      if(page==='wallet.html')add('player-wallet-live.js');
       if(page==='auth-preview.html')add('player-live.js');
       if(page==='booking-detail.html')add('player-booking-detail-live.js');
 
