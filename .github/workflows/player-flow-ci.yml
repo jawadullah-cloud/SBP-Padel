@@ -26,6 +26,7 @@ jobs:
       - name: JavaScript syntax
         run: |
           node --check docs/review-entry.js
+          node --check docs/bookings-entry.js
           node --check docs/booking-router-bridge.js
           node --check docs/navigation-fix.js
           node --check docs/sw.js
@@ -43,3 +44,12 @@ jobs:
           ! grep -q 'review-live-ui.js' docs/sw.js
           ! grep -q 'review-pricing.js' docs/sw.js
           ! grep -q 'flow-recovery.js' docs/sw.js
+
+      - name: First-click navigation guards
+        shell: bash
+        run: |
+          grep -q 'waitForRouter' docs/bookings-entry.js
+          grep -q 'data-live-manage' docs/bookings-entry.js
+          ! grep -q 'location.href' docs/bookings-entry.js
+          grep -q "document.addEventListener('click'" docs/payment-success.html
+          grep -q "index.html?open=bookings" docs/payment-success.html
