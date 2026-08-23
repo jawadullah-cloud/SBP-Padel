@@ -26,13 +26,16 @@ if ($devServer -notmatch 'Cache-Control') { Write-Error 'Player dev server must 
 if ($devServer -notmatch 'NOOP_SERVICE_WORKER') { Write-Error 'Player dev server must neutralize service workers locally.' }
 if ($devServer -notmatch 'notifications-live\.js') { Write-Error 'Player dev server must inject the dedicated live notifications module.' }
 if ($devServer -notmatch 'booking-date-more\.js') { Write-Error 'Player dev server must inject the reliable MORE date module.' }
+if ($devServer -notmatch 'player-bookings-live\.js') { Write-Error 'Player dev server must inject the API-driven My Bookings owner.' }
+if ($devServer -notmatch 'player-booking-detail-live\.js') { Write-Error 'Player dev server must inject the API-driven booking detail owner.' }
+if ($devServer -match '"booking-detail\.html": \["player-live\.js"') { Write-Error 'Booking detail must not fall back to the legacy player-live owner.' }
 if ($devServer -notmatch 'profile-modules\.js') { Write-Error 'Player dev server must load profile modules explicitly.' }
 if ($devServer -notmatch 'discovery-tools\.js') { Write-Error 'Player dev server must load facility discovery explicitly.' }
 Write-Host "Cache-free development runtime OK" -ForegroundColor Green
 
 Write-Host "6/6 Player frontend integration checks..." -ForegroundColor Yellow
 if (Get-Command node -ErrorAction SilentlyContinue) {
-  @('dev-runtime.js','player-live.js','player-booking-refund.js','navigation-fix.js','review-entry.js','booking-router-bridge.js','profile-modules.js','player-account-live.js','notifications-live.js','booking-date-more.js','deep-router.js','native-transitions.js','player-stability.js','sw.js') | ForEach-Object {
+  @('dev-runtime.js','player-live.js','navigation-fix.js','review-entry.js','booking-router-bridge.js','profile-modules.js','player-account-live.js','notifications-live.js','booking-date-more.js','player-bookings-live.js','player-booking-detail-live.js','deep-router.js','native-transitions.js','player-stability.js','sw.js') | ForEach-Object {
     node --check (Join-Path '..\docs' $_)
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   }
@@ -45,6 +48,10 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
   if ($sw -notmatch 'booking-router-bridge\.js') { Write-Error 'Booking flow v2 regression: checkout must use the deep-router bridge.' }
   if ($sw -notmatch 'notifications-live\.js') { Write-Error 'Notification regression: dedicated live notifications module is not loaded.' }
   if ($sw -notmatch 'booking-date-more\.js') { Write-Error 'Booking date regression: reliable MORE date module is not loaded.' }
+  if ($sw -notmatch 'player-bookings-live\.js') { Write-Error 'My Bookings must be owned by its live API module.' }
+  if ($sw -notmatch 'player-booking-detail-live\.js') { Write-Error 'Booking detail must be owned by its live API module.' }
+  if ($sw -match "booking-detail\.html'\)\{\s*add\('player-live\.js'\)") { Write-Error 'Service worker must not inject legacy player-live into booking detail.' }
+  if ($sw -match 'player-booking-refund\.js') { Write-Error 'Service worker must not inject the old competing refund owner.' }
   if ($sw -notmatch 'profile-modules\.js') { Write-Error 'Player shell regression: profile modules must be loaded explicitly.' }
 
   $flow = Get-Content (Join-Path '..\docs' 'review-entry.js') -Raw
@@ -58,6 +65,20 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
   if ($flow -notmatch 'availabilitySeq') { Write-Error 'Availability requests must be sequenced so stale responses cannot overwrite current state.' }
   if ($flow -notmatch "goMain\('time',4\);showTimeLoading") { Write-Error 'Time screen must navigate immediately on the first Continue click before live refresh completes.' }
   if ($flow -match 'One of your previously selected slots is no longer available') { Write-Error 'Post-confirmation slot reconciliation must not show the stale-selection toast.' }
+
+  $bookings = Get-Content (Join-Path '..\docs' 'player-bookings-live.js') -Raw
+  if ($bookings -notmatch '/bookings/me') { Write-Error 'My Bookings must load actual player bookings from the API.' }
+  if ($bookings -notmatch 'SBPRefreshBookings') { Write-Error 'My Bookings must expose a refresh hook after lifecycle changes.' }
+
+  $detail = Get-Content (Join-Path '..\docs' 'player-booking-detail-live.js') -Raw
+  if ($detail -notmatch '/reschedule') { Write-Error 'Booking detail must execute the real reschedule API.' }
+  if ($detail -notmatch '/cancel') { Write-Error 'Booking detail must execute the real cancellation API.' }
+  if ($detail -notmatch '/refund') { Write-Error 'Booking detail must execute the real refund API when required.' }
+  if ($detail -match 'Prototype rule|simulated refund') { Write-Error 'Live booking detail owner must not contain prototype lifecycle behavior.' }
+
+  $rescheduleApi = Get-Content (Join-Path 'app\api' 'reschedules.py') -Raw
+  if ($rescheduleApi -notmatch 'booking_rescheduled') { Write-Error 'Reschedule API must create a real player notification.' }
+  if ($rescheduleApi -notmatch 'quote_payload') { Write-Error 'Reschedule API must revalidate live availability and pricing.' }
 
   $profile = Get-Content (Join-Path '..\docs' 'profile-modules.js') -Raw
   if ($profile -match 'renderNotifications|installHeaderNotification|Championship Court booking at Nishtar Park is confirmed for 7:00 PM') { Write-Error 'Profile modules must never own or render notifications.' }
@@ -88,8 +109,10 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
 
   $routes = Get-Content (Join-Path 'app\api' 'routes.py') -Raw
   if ($routes -notmatch 'timezone\(timedelta\(hours=5\)') { Write-Error 'Pakistan timezone must retain a Windows-safe UTC+5 fallback.' }
+  $bookingApi = Get-Content (Join-Path 'app\api' 'bookings.py') -Raw
+  if ($bookingApi -notmatch 'timezone\(timedelta\(hours=5\)') { Write-Error 'Booking quote/create validation must use the same Windows-safe Pakistan timezone fallback.' }
 
-  Write-Host "Booking flow, notifications, date selection, navigation and timezone guards OK" -ForegroundColor Green
+  Write-Host "Booking flow, lifecycle, notifications, date selection, navigation and timezone guards OK" -ForegroundColor Green
 } else {
   Write-Host "Node.js not found; frontend syntax checks skipped." -ForegroundColor DarkYellow
 }
