@@ -1,22 +1,30 @@
 $ErrorActionPreference = 'Stop'
 
-Write-Host "SBP Padel backend acceptance test" -ForegroundColor Cyan
+Write-Host "SBP Padel platform acceptance test" -ForegroundColor Cyan
 
-Write-Host "1/4 Pytest business logic suite..." -ForegroundColor Yellow
+Write-Host "1/5 Pytest business logic suite..." -ForegroundColor Yellow
 pytest -q
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "2/4 Critical Python correctness checks..." -ForegroundColor Yellow
+Write-Host "2/5 Critical Python correctness checks..." -ForegroundColor Yellow
 ruff check app tests
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "3/4 Alembic migration head check..." -ForegroundColor Yellow
+Write-Host "3/5 Alembic migration head check..." -ForegroundColor Yellow
 alembic heads
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "4/4 Import/startup smoke check..." -ForegroundColor Yellow
+Write-Host "4/5 FastAPI import/startup smoke check..." -ForegroundColor Yellow
 python -c "from app.main import app; assert app.title == 'SBP Padel API'; print('FastAPI import OK')"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+Write-Host "5/5 Player frontend integration syntax check..." -ForegroundColor Yellow
+if (Get-Command node -ErrorAction SilentlyContinue) {
+  node --check ..\docs\player-live.js
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+} else {
+  Write-Host "Node.js not found; frontend syntax check skipped." -ForegroundColor DarkYellow
+}
+
 Write-Host ""
-Write-Host "ALL BACKEND ACCEPTANCE CHECKS PASSED" -ForegroundColor Green
+Write-Host "ALL PLATFORM ACCEPTANCE CHECKS PASSED" -ForegroundColor Green
