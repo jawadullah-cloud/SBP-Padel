@@ -1,7 +1,8 @@
 (()=>{
   'use strict';
   if(window.__SBPPlayerVenuesLive)return;window.__SBPPlayerVenuesLive=true;
-  if(!location.pathname.endsWith('index.html')&&!location.pathname.endsWith('/docs/'))return;
+  const path=location.pathname||'/';
+  if(path!=='/'&&!path.endsWith('/index.html')&&!path.endsWith('/docs/')&&!path.endsWith('/docs/index.html'))return;
   const API=(localStorage.getItem('sbpPadelApiBase')||'http://127.0.0.1:8000/api/v1').replace(/\/$/,'');
   const STATE='sbpPadelBookingSessionV2';
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
