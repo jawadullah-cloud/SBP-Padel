@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, current_user, hash_password, verify_password
 from app.db.session import get_db
-from app.models.domain import User, UserRole
+from app.models.domain import User, UserProfile, UserRole
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -23,6 +23,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class AvatarRequest(BaseModel):
+    avatar_data_url: str = Field(min_length=20, max_length=500_000)
+
+
 async def authenticate(identifier: str, password: str, db: AsyncSession) -> User:
     normalized = identifier.strip()
     user = await db.scalar(
@@ -33,6 +37,11 @@ async def authenticate(identifier: str, password: str, db: AsyncSession) -> User
     if not user or not verify_password(password, user.password_hash):
         raise HTTPException(401, "Invalid login credentials")
     return user
+
+
+async def avatar_for(user_id, db: AsyncSession) -> str | None:
+    profile = await db.get(UserProfile, user_id)
+    return profile.avatar_data_url if profile else None
 
 
 @router.post("/register")
@@ -67,6 +76,7 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
             "full_name": user.full_name,
             "email": user.email,
             "phone": user.phone,
+            "avatar_data_url": None,
         },
     }
 
@@ -77,7 +87,12 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> di
     return {
         "access_token": create_access_token(user.id, user.role.value),
         "token_type": "bearer",
-        "user": {"id": str(user.id), "full_name": user.full_name, "role": user.role.value},
+        "user": {
+            "id": str(user.id),
+            "full_name": user.full_name,
+            "role": user.role.value,
+            "avatar_data_url": await avatar_for(user.id, db),
+        },
     }
 
 
@@ -94,11 +109,46 @@ async def token(
 
 
 @router.get("/me")
-async def me(user: User = Depends(current_user)) -> dict:
+async def me(
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
     return {
         "id": str(user.id),
         "full_name": user.full_name,
         "email": user.email,
         "phone": user.phone,
         "role": user.role.value,
+        "avatar_data_url": await avatar_for(user.id, db),
     }
+
+
+@router.put("/me/avatar")
+async def update_avatar(
+    payload: AvatarRequest,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    value = payload.avatar_data_url.strip()
+    if not value.startswith(("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,")):
+        raise HTTPException(400, "Profile picture must be JPEG, PNG or WebP")
+    profile = await db.get(UserProfile, user.id)
+    if profile is None:
+        profile = UserProfile(user_id=user.id, avatar_data_url=value)
+        db.add(profile)
+    else:
+        profile.avatar_data_url = value
+    await db.commit()
+    return {"avatar_data_url": value}
+
+
+@router.delete("/me/avatar")
+async def delete_avatar(
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    profile = await db.get(UserProfile, user.id)
+    if profile is not None:
+        profile.avatar_data_url = None
+        await db.commit()
+    return {"avatar_data_url": None}
