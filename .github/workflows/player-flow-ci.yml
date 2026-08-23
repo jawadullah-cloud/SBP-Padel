@@ -72,6 +72,8 @@ jobs:
           grep -q 'SBPDeepRoute' docs/player-bookings-live.js
           grep -q 'currentTab' docs/player-bookings-live.js
           grep -q 'loadSeq' docs/player-bookings-live.js
+          grep -q 'bookings-module.css' docs/player-bookings-live.js
+          grep -q 'data-sbp-bookings-style' docs/player-bookings-live.js
           grep -q '__SBPBookingsNavigationRetired' docs/bookings-entry.js
           ! grep -q 'addEventListener' docs/bookings-entry.js
           ! grep -q "id==='payButton')return'payment-success.html'" docs/deep-router.js
