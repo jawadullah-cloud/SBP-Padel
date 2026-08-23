@@ -89,3 +89,5 @@ def test_successful_new_booking_creates_actual_player_notification() -> None:
         assert len(matches) == 1
         assert matches[0]["title"] == "Booking confirmed"
         assert matches[0]["read"] is False
+        assert matches[0]["created_at"].endswith("Z")
+        assert notifications.json()[0]["id"] == matches[0]["id"]
