@@ -88,6 +88,7 @@ class User(TimestampMixin, Base):
     email: Mapped[str | None] = mapped_column(String(254), unique=True)
     password_hash: Mapped[str | None] = mapped_column(String(255))
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.player, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
 class UserProfile(TimestampMixin, Base):
@@ -96,10 +97,6 @@ class UserProfile(TimestampMixin, Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
-    # The current player client resizes uploads before saving them. Keeping the
-    # resulting data URL in a separate profile table avoids schema changes to
-    # existing users while still making the avatar account-backed and portable
-    # between browsers for the same backend account.
     avatar_data_url: Mapped[str | None] = mapped_column(Text)
 
 
@@ -108,72 +105,83 @@ class Venue(TimestampMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(180), nullable=False)
-    slug: Mapped[str] = mapped_column(String(180), unique=True, nullable=False)
     city: Mapped[str] = mapped_column(String(100), nullable=False)
-    address: Mapped[str | None] = mapped_column(String(300))
-    latitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
-    longitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
-    timezone: Mapped[str] = mapped_column(String(80), default="Asia/Karachi", nullable=False)
-    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    address: Mapped[str] = mapped_column(String(300), nullable=False)
+    latitude: Mapped[Decimal] = mapped_column(Numeric(10, 7), nullable=False)
+    longitude: Mapped[Decimal] = mapped_column(Numeric(10, 7), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), default="Asia/Karachi", nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    amenities: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    opening_time: Mapped[time] = mapped_column(Time, default=time(6, 0), nullable=False)
+    closing_time: Mapped[time] = mapped_column(Time, default=time(23, 0), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     courts: Mapped[list[Court]] = relationship(back_populates="venue", cascade="all, delete-orphan")
 
 
 class Court(TimestampMixin, Base):
     __tablename__ = "courts"
+    __table_args__ = (UniqueConstraint("venue_id", "code", name="uq_court_venue_code"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    venue_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("venues.id", ondelete="CASCADE"), nullable=False, index=True)
+    venue_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("venues.id", ondelete="CASCADE"), nullable=False)
+    code: Mapped[str] = mapped_column(String(40), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
-    court_type: Mapped[str] = mapped_column(String(120), default="Padel Court", nullable=False)
+    court_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    capacity: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    is_indoor: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[CourtStatus] = mapped_column(Enum(CourtStatus), default=CourtStatus.active, nullable=False)
-    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     venue: Mapped[Venue] = relationship(back_populates="courts")
 
 
 class PricingRule(TimestampMixin, Base):
     __tablename__ = "pricing_rules"
-    __table_args__ = (UniqueConstraint("court_id", "weekday", "start_time", name="uq_pricing_court_weekday_start"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    court_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("courts.id", ondelete="CASCADE"), nullable=False, index=True)
-    weekday: Mapped[int] = mapped_column(Integer, nullable=False)
+    venue_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("venues.id"), nullable=False, index=True)
+    court_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("courts.id"), index=True)
+    court_type: Mapped[str | None] = mapped_column(String(80))
+    valid_from: Mapped[date | None] = mapped_column(Date)
+    valid_to: Mapped[date | None] = mapped_column(Date)
+    weekdays: Mapped[list[int]] = mapped_column(JSON, default=list, nullable=False)
     start_time: Mapped[time] = mapped_column(Time, nullable=False)
     end_time: Mapped[time] = mapped_column(Time, nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    hourly_rate: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="PKR", nullable=False)
-    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
 class PolicyVersion(TimestampMixin, Base):
     __tablename__ = "policy_versions"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    version: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    version: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
     title: Mapped[str] = mapped_column(String(180), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
-    cancellation_cutoff_hours: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
-    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    effective_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class Booking(TimestampMixin, Base):
     __tablename__ = "bookings"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    booking_code: Mapped[str] = mapped_column(String(30), unique=True, nullable=False, index=True)
+    booking_code: Mapped[str] = mapped_column(String(40), unique=True, nullable=False, index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     venue_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("venues.id"), nullable=False, index=True)
     court_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("courts.id"), nullable=False, index=True)
     booking_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    status: Mapped[BookingStatus] = mapped_column(Enum(BookingStatus), default=BookingStatus.draft, nullable=False, index=True)
-    policy_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("policy_versions.id"), nullable=False)
-    policy_accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    subtotal_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    service_fee_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"), nullable=False)
-    total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    status: Mapped[BookingStatus] = mapped_column(Enum(BookingStatus), default=BookingStatus.draft, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="PKR", nullable=False)
-    notes: Mapped[str | None] = mapped_column(Text)
+    court_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"), nullable=False)
+    service_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"), nullable=False)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"), nullable=False)
+    policy_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("policy_versions.id"))
+    policy_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancellation_reason: Mapped[str | None] = mapped_column(Text)
 
     slots: Mapped[list[BookingSlot]] = relationship(back_populates="booking", cascade="all, delete-orphan")
 
