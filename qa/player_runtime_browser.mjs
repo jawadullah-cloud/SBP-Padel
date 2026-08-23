@@ -80,6 +80,7 @@ await page.route('http://127.0.0.1:8000/api/v1/**', async route => {
 await page.addInitScript(() => {
   localStorage.setItem('sbpPadelAccessToken', 'qa-token');
   localStorage.setItem('sbpPadelUser', JSON.stringify({ id: 'user-1', full_name: 'Runtime QA' }));
+  localStorage.setItem('sbpPadelBookingDatePicker', '2099-12-31');
 });
 
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
@@ -93,6 +94,7 @@ try {
   await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
   const build = await page.evaluate(() => window.__SBP_DEV_BUILD__);
   assert(build && build !== 'unknown', 'Dev runtime build provenance is missing.');
+  assert(await page.evaluate(() => localStorage.getItem('sbpPadelBookingDatePicker')) === null, 'Legacy MORE date state was not cleared.');
 
   await page.locator('nav [data-nav="profile"]').click();
   assert(await active('profile'), 'Profile did not open on first click.');
@@ -129,6 +131,15 @@ try {
   assert(await navVisible(), 'Bottom navigation is hidden on court/date selection.');
 
   await page.waitForSelector('#select .dateRail button[data-date]');
+  const selectedCourtsAtStart = await page.locator('#select .courtOption.selected').count();
+  assert(selectedCourtsAtStart === 0, `A new booking auto-selected ${selectedCourtsAtStart} court(s).`);
+  const selectedDate = await page.locator('#select .dateRail button[data-date].selected').getAttribute('data-date');
+  const sessionDate = await page.evaluate(() => JSON.parse(localStorage.getItem('sbpPadelBookingSessionV2') || '{}').date);
+  assert(selectedDate === sessionDate, `Visible booking date ${selectedDate} disagrees with session date ${sessionDate}.`);
+
+  await page.locator('#select .bookingBottom .primary').click();
+  assert(await active('select'), 'Booking advanced to Time without an explicit court selection.');
+
   const quickVisible = await page.locator('#select .dateRail button[data-date]:visible').count();
   const moreVisible = await page.locator('#select .dateRail .dateMoreButton:visible').count();
   assert(quickVisible === 6, `Expected 6 visible quick dates, got ${quickVisible}.`);
