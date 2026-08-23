@@ -20,20 +20,22 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "5/5 Player frontend integration checks..." -ForegroundColor Yellow
 if (Get-Command node -ErrorAction SilentlyContinue) {
-  @('player-live.js','player-booking-refund.js','player-success.js','navigation-fix.js','flow-recovery.js','review-disabled-state.js','review-live-ui.js','sw.js') | ForEach-Object {
+  @('player-live.js','player-booking-refund.js','navigation-fix.js','review-entry.js','sw.js') | ForEach-Object {
     node --check (Join-Path '..\docs' $_)
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   }
 
   $sw = Get-Content (Join-Path '..\docs' 'sw.js') -Raw
-  if ($sw -match 'review-policy-gate\.js') {
-    Write-Error 'Checkout regression: service worker must not inject review-policy-gate.js.'
+  @('review-policy-gate.js','review-disabled-state.js','review-live-ui.js','review-pricing.js','flow-recovery.js') | ForEach-Object {
+    if ($sw -match [regex]::Escape($_)) { Write-Error "Booking flow v2 regression: service worker must not inject $_." }
   }
-  $disabled = Get-Content (Join-Path '..\docs' 'review-disabled-state.js') -Raw
-  if ($disabled -match "attributeFilter:\['disabled','aria-disabled','class','style'\]") {
-    Write-Error 'Checkout regression: disabled-state observer must not observe style and mutate style in a loop.'
-  }
-  Write-Host "Checkout race/static guards OK" -ForegroundColor Green
+  if ($sw -notmatch 'review-entry\.js') { Write-Error 'Booking flow v2 regression: service worker must inject the single booking flow owner.' }
+
+  $flow = Get-Content (Join-Path '..\docs' 'review-entry.js') -Raw
+  if ($flow -notmatch 'sbpPadelBookingSessionV2') { Write-Error 'Booking flow v2 regression: persistent session state is missing.' }
+  if ($flow -notmatch 'data-sbp-step') { Write-Error 'Booking flow v2 regression: clickable booking steps are missing.' }
+  if ($flow -notmatch 'Final availability validation happens immediately before creating the booking') { Write-Error 'Booking flow v2 regression: payment-time booking creation guard is missing.' }
+  Write-Host "Booking flow v2 architecture guards OK" -ForegroundColor Green
 } else {
   Write-Host "Node.js not found; frontend syntax checks skipped." -ForegroundColor DarkYellow
 }
