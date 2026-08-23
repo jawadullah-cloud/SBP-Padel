@@ -16,6 +16,7 @@
   function fresh(){return {version:2,venueId:null,venueName:null,date:todayISO(),courtId:null,courtName:null,courtType:null,slotStarts:[],quote:null,policyId:null,policyTitle:null,policyBody:null,policyAccepted:false,paymentMethod:'wallet',bookingUuid:null,bookingCode:null,paymentUuid:null,paymentStatus:null,status:'selecting',updatedAt:Date.now()}}
   function load(){try{return {...fresh(),...JSON.parse(localStorage.getItem(STATE)||'{}')}}catch{return fresh()}}
   let state=load();
+  function reloadState(){state=load();return state}
   function save(){state.updatedAt=Date.now();localStorage.setItem(STATE,JSON.stringify(state));syncLegacy()}
   function syncLegacy(){
     const slots=state.quote?.slots?.map(s=>`${fmtTime(s.start_time)} – ${fmtTime(s.end_time)}`)||state.slotStarts.map(x=>fmtTime(x));
@@ -35,7 +36,7 @@
 
   async function api(path,opts={}){
     const headers={'Content-Type':'application/json',...(opts.headers||{})};const token=localStorage.getItem(TOKEN);if(token)headers.Authorization=`Bearer ${token}`;
-    const res=await fetch(`${API}${path}`,{...opts,headers});let body=null;try{body=await res.json()}catch{}
+    const res=await fetch(`${API}${path}`,{...opts,headers,cache:'no-store'});let body=null;try{body=await res.json()}catch{}
     if(!res.ok){const e=new Error(body?.detail||`Request failed (${res.status})`);e.status=res.status;e.body=body;throw e}return body;
   }
   function toast(msg,bad=false){let el=document.getElementById('flowV2Toast');if(!el){el=document.createElement('div');el.id='flowV2Toast';Object.assign(el.style,{position:'fixed',left:'50%',bottom:'78px',transform:'translateX(-50%)',zIndex:'99999',maxWidth:'340px',padding:'10px 13px',borderRadius:'12px',font:'700 10px Inter,sans-serif',boxShadow:'0 14px 40px #0008',transition:'.2s'});document.body.appendChild(el)}el.textContent=msg;el.style.background=bad?'#3a1717':'#10271d';el.style.color=bad?'#ffaaaa':'#d9ffc0';el.style.border=`1px solid ${bad?'#783838':'#376844'}`;el.style.opacity='1';clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity='0',2800)}
@@ -56,7 +57,7 @@
   async function stepTo(n){
     if(n===1){goMain('nishtar',1);return}
     if(n===2||n===3){goMain('select',n);return}
-    if(n===4){if(!state.courtId){toast('Choose a court first.',true);goMain('select',3);return}goMain('time',4);return}
+    if(n===4){if(!state.courtId){toast('Choose a court first.',true);goMain('select',3);return}await refreshAvailability();goMain('time',4);return}
     if(n===5){if(!state.slotStarts.length){toast('Select at least one time slot first.',true);goMain('time',4);return}try{await ensureQuote();goDeep('review-booking.html')}catch(e){toast(e.message,true)}}
   }
 
@@ -90,7 +91,13 @@
     list.innerHTML=c.slots.map(s=>{const chosen=state.slotStarts.includes(s.start_time)&&s.available;const unavailable=!s.available;return `<article class="slotRow ${unavailable?'booked':''} ${chosen?'chosen':''}" data-start="${esc(s.start_time)}" data-rate="${Number(s.hourly_rate||0)}"><div><b>${fmtTime(s.start_time)} – ${fmtTime(s.end_time)}</b><small>${unavailable?esc(s.unavailable_reason||'Unavailable'):chosen?'Selected':`${money(s.hourly_rate)} / hour`}</small></div><div style="text-align:right"><strong style="display:block;font:800 10px var(--sport);color:${unavailable?'var(--muted)':'var(--brand)'}">${s.hourly_rate?money(s.hourly_rate):'—'}</strong><button class="slotBook" ${unavailable?'disabled':''}>${unavailable?'UNAVAILABLE':chosen?'✓':'BOOK'}</button></div></article>`}).join('');refreshSummary();
   }
   function refreshSummary(){const summary=document.getElementById('slotSummary'),total=document.getElementById('slotTotal');if(!summary||!total)return;const c=selectedCourt();const rows=(c?.slots||[]).filter(s=>state.slotStarts.includes(s.start_time));if(!rows.length){summary.textContent='No slots selected';total.textContent='Choose slots';return}summary.textContent=`${rows.length} slot${rows.length>1?'s':''} · ${rows.length} Hour${rows.length>1?'s':''}`;total.textContent=`${money(rows.reduce((a,s)=>a+Number(s.hourly_rate||0),0))} court fee`}
-  async function refreshAvailability(){availability=await api(`/venues/${state.venueId}/availability?date=${encodeURIComponent(state.date)}`);const c=availability.courts.find(x=>x.court_id===state.courtId)||availability.courts[0];if(c&&!state.courtId){state.courtId=c.court_id;state.courtName=c.court_name;state.courtType=c.court_type;save()}renderCourts();renderTimes()}
+  async function refreshAvailability(){
+    if(!state.venueId||!state.date)return;
+    availability=await api(`/venues/${state.venueId}/availability?date=${encodeURIComponent(state.date)}&_=${Date.now()}`);
+    const c=availability.courts.find(x=>x.court_id===state.courtId)||availability.courts[0];
+    if(c&&!state.courtId){state.courtId=c.court_id;state.courtName=c.court_name;state.courtType=c.court_type;save()}
+    renderCourts();renderTimes();
+  }
   async function ensureQuote(){
     if(!state.venueId||!state.courtId||!state.date||!state.slotStarts.length)throw new Error('Booking selection is incomplete.');
     const q=await api('/bookings/quote',{method:'POST',body:JSON.stringify({venue_id:state.venueId,court_id:state.courtId,booking_date:state.date,slots:state.slotStarts.map(start_time=>({start_time}))})});
@@ -100,21 +107,30 @@
   function installMainCapture(){
     document.addEventListener('click',async e=>{
       const step=e.target.closest?.('[data-sbp-step]');if(step){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();await stepTo(Number(step.dataset.sbpStep));return}
-      const start=e.target.closest?.('#nishtar [data-nav="select"],#home [data-nav="select"]');if(start){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(state.status==='confirmed')newBooking();goMain('select',2);return}
+      const start=e.target.closest?.('#nishtar [data-nav="select"],#home [data-nav="select"]');if(start){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();reloadState();if(state.status==='confirmed')newBooking();await refreshAvailability();goMain('select',2);return}
       const date=e.target.closest?.('#select .dateRail button[data-date]');if(date){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(date.dataset.date!==state.date){state.date=date.dataset.date;invalidate(2);state.date=date.dataset.date;await refreshAvailability()}dateButtons();renderCourts();return}
       const court=e.target.closest?.('#select .courtOption[data-court]');if(court){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(court.dataset.court!==state.courtId){const c=availability?.courts?.find(x=>x.court_id===court.dataset.court);state.courtId=c?.court_id||court.dataset.court;state.courtName=c?.court_name||'';state.courtType=c?.court_type||'';invalidate(3);state.courtId=c?.court_id||court.dataset.court;state.courtName=c?.court_name||'';state.courtType=c?.court_type||'';save()}renderCourts();return}
-      const toTime=e.target.closest?.('#select .bookingBottom .primary');if(toTime){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(!state.courtId){toast('Choose a court first.',true);return}renderTimes();goMain('time',4);return}
+      const toTime=e.target.closest?.('#select .bookingBottom .primary');if(toTime){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(!state.courtId){toast('Choose a court first.',true);return}toTime.disabled=true;const old=toTime.innerHTML;toTime.textContent='CHECKING AVAILABILITY…';try{await refreshAvailability();renderTimes();goMain('time',4)}catch(err){toast(err.message,true)}finally{toTime.disabled=false;toTime.innerHTML=old}return}
       const slot=e.target.closest?.('#time .slotRow:not(.booked)');if(slot){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();const startTime=slot.dataset.start;if(!startTime)return;const set=new Set(state.slotStarts);set.has(startTime)?set.delete(startTime):set.add(startTime);state.slotStarts=[...set].sort();invalidate(4);state.slotStarts=[...set].sort();save();renderTimes();return}
-      const review=e.target.closest?.('#time .bookingBottom .primary');if(review){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(!state.slotStarts.length){toast('Select at least one available time slot.',true);return}review.disabled=true;review.textContent='CHECKING AVAILABILITY…';try{await ensureQuote();review.disabled=false;review.innerHTML='CONTINUE <span>→</span>';goDeep('review-booking.html')}catch(err){review.disabled=false;review.innerHTML='CONTINUE <span>→</span>';toast(err.message,true);await refreshAvailability()}return}
+      const review=e.target.closest?.('#time .bookingBottom .primary');if(review){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(!state.slotStarts.length){toast('Select at least one available time slot.',true);return}review.disabled=true;review.textContent='CHECKING AVAILABILITY…';try{await refreshAvailability();if(!state.slotStarts.length){throw new Error('Your selected slot is no longer available. Please choose another time.')}await ensureQuote();review.disabled=false;review.innerHTML='CONTINUE <span>→</span>';goDeep('review-booking.html')}catch(err){review.disabled=false;review.innerHTML='CONTINUE <span>→</span>';toast(err.message,true);await refreshAvailability()}return}
     },true);
     document.addEventListener('keydown',e=>{const s=e.target.closest?.('[data-sbp-step]');if(s&&(e.key==='Enter'||e.key===' ')){e.preventDefault();stepTo(Number(s.dataset.sbpStep))}},true);
   }
 
+  async function syncFromStorage(){
+    reloadState();
+    if(!state.venueId)return;
+    try{await refreshAvailability();dateButtons();renderCourts();renderTimes();decorateSteps()}catch(e){console.warn('[SBP Padel] availability sync failed',e)}
+  }
+
   async function mainPage(){
     installMainCapture();
+    window.SBPBookingFlowSync=syncFromStorage;
     try{await bootstrapData();dateButtons();renderCourts();renderTimes();decorateSteps();const wanted=new URLSearchParams(location.search).get('flowStep');setTimeout(()=>focusSection(Number(wanted)||0),100)}catch(e){toast(e.message,true)}
-    window.addEventListener('load',()=>setTimeout(()=>{dateButtons();renderCourts();renderTimes();decorateSteps()},650),{once:true});
-    window.addEventListener('pageshow',()=>{setTimeout(()=>{dateButtons();renderCourts();renderTimes();decorateSteps()},0)});
+    window.addEventListener('load',()=>setTimeout(()=>{syncFromStorage()},650),{once:true});
+    window.addEventListener('pageshow',()=>{setTimeout(()=>{syncFromStorage()},0)});
+    window.addEventListener('focus',()=>{if(document.querySelector('#select.active,#time.active'))syncFromStorage()});
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden&&document.querySelector('#select.active,#time.active'))syncFromStorage()});
   }
 
   function reviewStyle(){if(document.getElementById('flowV2ReviewStyle'))return;const s=document.createElement('style');s.id='flowV2ReviewStyle';s.textContent=`#livePolicy{display:block!important;cursor:default!important;padding:0!important;overflow:hidden!important;border:1px solid var(--line)!important;background:var(--surface)!important;border-radius:16px!important;color:var(--text)!important}#livePolicy .lpHead{padding:12px 13px;border-bottom:1px solid var(--line);background:var(--surface2)}#livePolicy .lpHead b{color:var(--text);font-size:11px}#livePolicy .lpBody{padding:12px 13px;white-space:pre-wrap;line-height:1.55;font-size:9px;color:var(--muted)}#livePolicy label{display:flex;align-items:flex-start;gap:10px;padding:12px 13px;border-top:1px solid var(--line);background:var(--surface2);color:var(--text);font-size:9px;line-height:1.45;cursor:pointer}#livePolicyAccept{appearance:none;width:20px;height:20px;min-width:20px;margin:0;border:1px solid #486159;border-radius:6px;background:var(--surface);position:relative}#livePolicyAccept:checked{background:var(--brand);border-color:var(--brand)}#livePolicyAccept:checked:after{content:'✓';position:absolute;inset:0;display:grid;place-items:center;color:#071006;font-size:12px;font-weight:900}#toPayment:disabled{background:#cfd5d2!important;background-image:none!important;color:#7a8480!important;border:1px solid #bdc6c1!important;box-shadow:none!important;opacity:1!important;cursor:not-allowed!important;transform:none!important}`;document.head.appendChild(s)}
@@ -146,6 +162,7 @@
       const paid=await api(`/payments/${init.payment_id}/simulate-success`,{method:'POST'});state.paymentStatus=paid.payment_status;state.status='confirmed';save();
       localStorage.setItem('sbpPadelNotificationsVersion',String(Date.now()));
       try{window.parent?.SBPRefreshNotifications?.()}catch{}
+      try{await window.parent?.SBPBookingFlowSync?.()}catch{}
       goDeep('payment-success.html');
     }catch(err){btn.disabled=false;if(label)label.textContent='PAY & CONFIRM';if(err.status===409||/available|booked|conflict|past|started/i.test(err.message)){state.slotStarts=[];state.quote=null;state.policyAccepted=false;state.status='selecting';save();toast(err.message||'That slot is no longer available.',true);setTimeout(()=>goMain('time',4),1000)}else toast(err.message,true)}};
   }
