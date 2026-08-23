@@ -1,5 +1,5 @@
-const BUILD='20260824-live5';
-const BASE_INJECT=`<script src="native-transitions.js?v=${BUILD}"></script><script src="saved-players-bridge.js?v=${BUILD}"></script>`;
+const BUILD='20260824-nav1';
+const BASE_INJECT=`<script src="native-transitions.js?v=${BUILD}"></script><script src="saved-players-bridge.js?v=${BUILD}"></script><script src="navigation-fix.js?v=${BUILD}"></script>`;
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 self.addEventListener('fetch',event=>{
@@ -18,7 +18,8 @@ self.addEventListener('fetch',event=>{
       if(url.pathname.endsWith('/payment-success.html'))inject+=`<script src="player-success.js?v=${BUILD}"></script>`;
       if(!html.includes('native-transitions.js'))html=html.replace('</body>',inject+'</body>');
       else {
-        const extras=inject.replace(BASE_INJECT,'');
+        let extras=inject.replace(`<script src="native-transitions.js?v=${BUILD}"></script>`,'').replace(`<script src="saved-players-bridge.js?v=${BUILD}"></script>`,'');
+        if(html.includes('navigation-fix.js'))extras=extras.replace(`<script src="navigation-fix.js?v=${BUILD}"></script>`,'');
         if(extras)html=html.replace('</body>',extras+'</body>');
       }
       const headers=new Headers(res.headers);headers.delete('content-length');headers.set('x-sbp-build',BUILD);
