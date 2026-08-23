@@ -14,6 +14,7 @@ from app.api.notifications import router as notifications_router
 from app.api.operations import router as operations_router
 from app.api.operations_courts import router as operations_courts_router
 from app.api.operations_management import router as operations_management_router
+from app.api.operations_players import router as operations_players_router
 from app.api.payments import router as payments_router
 from app.api.player_payments import router as player_payments_router
 from app.api.policies import router as policies_router
@@ -72,6 +73,7 @@ app.include_router(admin_reports_router, prefix=settings.api_prefix)
 app.include_router(operations_router, prefix=settings.api_prefix)
 app.include_router(operations_courts_router, prefix=settings.api_prefix)
 app.include_router(operations_management_router, prefix=settings.api_prefix)
+app.include_router(operations_players_router, prefix=settings.api_prefix)
 
 
 @app.get("/", include_in_schema=False)
