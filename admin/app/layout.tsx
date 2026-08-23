@@ -1,5 +1,6 @@
 import './globals.css';
 import './operations-v2.css';
+import './players-ui.css';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
