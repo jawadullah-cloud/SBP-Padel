@@ -53,6 +53,9 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
   if ($flow -notmatch '/payments/initiate') { Write-Error 'Booking flow v2 regression: real payment initiation is missing.' }
   if ($flow -notmatch '/simulate-success') { Write-Error 'Development confirmation must execute the backend success path.' }
   if ($flow -notmatch 'SBPRefreshNotifications') { Write-Error 'Confirmed bookings must trigger a live notification refresh.' }
+  if ($flow -notmatch "cache:'no-store'") { Write-Error 'Booking availability must bypass browser caches.' }
+  if ($flow -notmatch 'SBPBookingFlowSync') { Write-Error 'Parent booking state must resync after checkout confirmation.' }
+  if ($flow -notmatch 'CHECKING AVAILABILITY') { Write-Error 'Time selection must perform a live availability refresh before opening.' }
 
   $profile = Get-Content (Join-Path '..\docs' 'profile-modules.js') -Raw
   if ($profile -match 'renderNotifications|installHeaderNotification|Championship Court booking at Nishtar Park is confirmed for 7:00 PM') { Write-Error 'Profile modules must never own or render notifications.' }
@@ -61,6 +64,9 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
   $notifications = Get-Content (Join-Path '..\docs' 'notifications-live.js') -Raw
   if ($notifications -notmatch '/notifications/me') { Write-Error 'Notifications must load from the live API.' }
   if ($notifications -match 'Championship Court booking at Nishtar Park is confirmed for 7:00 PM') { Write-Error 'Prototype notification content must not exist in the live notification owner.' }
+
+  $notificationApi = Get-Content (Join-Path 'app\api' 'notifications.py') -Raw
+  if ($notificationApi -notmatch '_utc_iso') { Write-Error 'Notification timestamps must be serialized as explicit UTC.' }
 
   $router = Get-Content (Join-Path '..\docs' 'deep-router.js') -Raw
   if ($router -match "id==='payButton'\)return'payment-success\.html'") { Write-Error 'Deep router must never bypass the Pay & Confirm business action.' }
