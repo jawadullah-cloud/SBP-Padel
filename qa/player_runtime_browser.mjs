@@ -19,11 +19,24 @@ const courts = Array.from({ length: 5 }, (_, i) => ({
     { start_time: '19:00', end_time: '20:00', available: true, hourly_rate: 2100 }
   ]
 }));
+let availabilityCalls = 0;
 let notifications = [{
   id: 'notification-1', kind: 'booking_confirmed', title: 'Booking confirmed',
   body: 'Your booking PDL-RUNTIME-QA has been confirmed.', read: false,
   created_at: new Date().toISOString()
 }];
+
+const availabilityBody = date => {
+  availabilityCalls += 1;
+  const freshCourts = courts.map(c => ({ ...c, slots: c.slots.map(s => ({ ...s })) }));
+  // Simulate another booking taking Court 04 at 17:00 after the initial selection data was loaded.
+  if (availabilityCalls >= 3) {
+    const slot = freshCourts[3].slots.find(s => s.start_time === '17:00');
+    slot.available = false;
+    slot.unavailable_reason = 'Unavailable';
+  }
+  return { venue_id: venue.id, date, timezone: venue.timezone, courts: freshCourts };
+};
 
 await page.route('http://127.0.0.1:8000/api/v1/**', async route => {
   const req = route.request();
@@ -32,8 +45,8 @@ await page.route('http://127.0.0.1:8000/api/v1/**', async route => {
   let body;
   if (path === '/venues') body = [venue];
   else if (path === '/venues/venue-1') body = { ...venue, description: 'Five professional padel courts.', courts: courts.map(c => ({ id: c.id, name: c.court_name, court_type: c.court_type })) };
-  else if (path === '/venues/venue-1/availability') body = { venue_id: venue.id, date: url.searchParams.get('date'), timezone: venue.timezone, courts };
-  else if (path === '/bookings/quote') body = { venue: { id: venue.id, name: venue.name }, court: { id: 'court-4', name: 'Court 04', court_type: 'Training' }, slots: [{ start_time: '17:00', end_time: '18:00', rate: 2100 }], court_fee: 2100, service_fee: 100, total: 2200 };
+  else if (path === '/venues/venue-1/availability') body = availabilityBody(url.searchParams.get('date'));
+  else if (path === '/bookings/quote') body = { venue: { id: venue.id, name: venue.name }, court: { id: 'court-4', name: 'Court 04', court_type: 'Training' }, slots: [{ start_time: '19:00', end_time: '20:00', rate: 2100 }], court_fee: 2100, service_fee: 100, total: 2200 };
   else if (path === '/notifications/me' && req.method() === 'GET') body = notifications;
   else if (path === '/notifications/me/read-all') { notifications = notifications.map(n => ({ ...n, read: true })); body = { updated: notifications.length }; }
   else if (path.startsWith('/notifications/') && path.endsWith('/read')) { const id=path.split('/')[2]; notifications = notifications.map(n => n.id===id ? ({ ...n, read: true }) : n); body = { id, read: true }; }
@@ -120,6 +133,10 @@ try {
   assert(await navVisible(), 'Bottom navigation is hidden on time selection.');
 
   await page.waitForSelector('#time .slotRow');
+  const newlyTaken = page.locator('#time .slotRow[data-start="17:00"]');
+  assert(await newlyTaken.evaluate(el => el.classList.contains('booked')), 'A slot booked after selection was not refreshed before opening the time screen.');
+  assert((await newlyTaken.innerText()).toUpperCase().includes('UNAVAILABLE'), 'Freshly booked slot was not rendered unavailable immediately.');
+
   const unavailable = page.locator('#time .slotRow.booked').first();
   const visibleText = (await unavailable.innerText()).toUpperCase();
   assert((visibleText.match(/UNAVAILABLE/g) || []).length === 1, `Unavailable status rendered more than once: ${visibleText}`);
