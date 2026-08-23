@@ -59,7 +59,7 @@
     document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s===screen));
     document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.nav==='profile'));
     document.querySelector('nav')?.classList.remove('flowHidden');
-    screen.scrollTo({top:0,behavior:'smooth'});
+    screen.scrollTo({top:0,behavior:'auto'});
     loadNotifications();
   }
   window.SBPShowNotifications=showNotifications;
@@ -127,6 +127,22 @@
     const navTarget=e.target.closest?.('[data-nav]');
     if(notifications?.classList.contains('active')&&navTarget&&['home','bookings','venues','profile'].includes(navTarget.dataset.nav))hideNotifications();
   },true);
+
+  let notificationRepairing=false;
+  const app=document.querySelector('.app');
+  if(app){
+    const observer=new MutationObserver(()=>{
+      if(notificationRepairing)return;
+      const screen=document.getElementById('notifications');
+      if(!screen?.classList.contains('active'))return;
+      if(screen.querySelector('[data-live-notification-shell]'))return;
+      notificationRepairing=true;
+      ensureNotificationShell(true);
+      Promise.resolve(loadNotifications()).finally(()=>{notificationRepairing=false});
+    });
+    observer.observe(app,{childList:true,subtree:true});
+  }
+
   window.addEventListener('pageshow',()=>{if(document.getElementById('notifications')?.classList.contains('active'))loadNotifications();refreshNotificationDot()});
   window.addEventListener('focus',()=>refreshNotifications());
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshNotifications()});
