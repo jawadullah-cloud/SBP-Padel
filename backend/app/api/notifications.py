@@ -12,6 +12,18 @@ from app.models.domain import Notification, User
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
+def _utc_iso(value: datetime) -> str:
+    """Serialize database timestamps as unambiguous UTC for browser clients.
+
+    SQLite can return timezone-aware columns as naive datetimes. Those values are
+    still stored in UTC by the application, so treating a naive value as local
+    browser time creates an apparent five-hour offset in Pakistan.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 @router.get("/me")
 async def my_notifications(
     user: User = Depends(current_user),
@@ -21,7 +33,7 @@ async def my_notifications(
         await db.scalars(
             select(Notification)
             .where(Notification.user_id == user.id)
-            .order_by(Notification.created_at.desc())
+            .order_by(Notification.created_at.desc(), Notification.id.desc())
         )
     ).all()
     return [
@@ -32,7 +44,7 @@ async def my_notifications(
             "body": n.body,
             "payload": n.payload,
             "read": n.read_at is not None,
-            "created_at": n.created_at.isoformat(),
+            "created_at": _utc_iso(n.created_at),
         }
         for n in rows
     ]
