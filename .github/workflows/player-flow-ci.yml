@@ -29,6 +29,7 @@ jobs:
           node --check docs/bookings-entry.js
           node --check docs/booking-router-bridge.js
           node --check docs/navigation-fix.js
+          node --check docs/player-account-live.js
           node --check docs/sw.js
 
       - name: Booking flow architecture guards
@@ -53,3 +54,10 @@ jobs:
           ! grep -q 'location.href' docs/bookings-entry.js
           grep -q "document.addEventListener('click'" docs/payment-success.html
           grep -q "index.html?open=bookings" docs/payment-success.html
+
+      - name: Live account activity guards
+        shell: bash
+        run: |
+          grep -q "'/notifications/me'" docs/player-account-live.js
+          grep -q "'/payments/me'" docs/player-account-live.js
+          grep -q 'player-account-live.js' docs/sw.js
