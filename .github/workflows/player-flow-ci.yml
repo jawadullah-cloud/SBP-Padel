@@ -37,6 +37,7 @@ jobs:
           node --check docs/player-booking-detail-live.js
           node --check docs/booking-router-bridge.js
           node --check docs/navigation-fix.js
+          node --check docs/deep-route-smooth.js
           node --check docs/player-account-live.js
           node --check docs/notifications-live.js
           node --check docs/booking-date-more.js
@@ -78,6 +79,15 @@ jobs:
           ! grep -q 'addEventListener' docs/bookings-entry.js
           ! grep -q "id==='payButton')return'payment-success.html'" docs/deep-router.js
           ! grep -q "id==='toPayment')return'payment.html'" docs/deep-router.js
+
+      - name: Deep-route transition guards
+        shell: bash
+        run: |
+          grep -q 'deep-route-smooth.js' dev_player_server.py
+          grep -q 'deep-route-smooth.js' docs/sw.js
+          grep -q 'sbp-preload-detail' docs/deep-route-smooth.js
+          grep -q "page!=='booking-detail.html'" docs/deep-route-smooth.js
+          grep -q "frame.addEventListener('load'" docs/deep-route-smooth.js
 
       - name: Live notification and bookings ownership guards
         shell: bash
