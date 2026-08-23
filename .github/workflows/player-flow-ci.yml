@@ -5,10 +5,14 @@ on:
     branches: [backend-v1-dev]
     paths:
       - 'docs/**'
+      - 'dev_player_server.py'
+      - 'qa/player_runtime_browser.mjs'
       - '.github/workflows/player-flow-ci.yml'
   pull_request:
     paths:
       - 'docs/**'
+      - 'dev_player_server.py'
+      - 'qa/player_runtime_browser.mjs'
       - '.github/workflows/player-flow-ci.yml'
 
 jobs:
@@ -30,6 +34,10 @@ jobs:
           node --check docs/booking-router-bridge.js
           node --check docs/navigation-fix.js
           node --check docs/player-account-live.js
+          node --check docs/deep-router.js
+          node --check docs/native-transitions.js
+          node --check docs/player-stability.js
+          node --check qa/player_runtime_browser.mjs
           node --check docs/sw.js
 
       - name: Booking flow architecture guards
@@ -37,7 +45,8 @@ jobs:
         run: |
           grep -q 'sbpPadelBookingSessionV2' docs/review-entry.js
           grep -q 'data-sbp-step' docs/review-entry.js
-          grep -q 'Final availability validation happens immediately before creating the booking' docs/review-entry.js
+          grep -q '/payments/initiate' docs/review-entry.js
+          grep -q '/simulate-success' docs/review-entry.js
           grep -q 'booking-router-bridge.js' docs/sw.js
           grep -q 'review-entry.js' docs/sw.js
           ! grep -q 'review-policy-gate.js' docs/sw.js
@@ -45,6 +54,9 @@ jobs:
           ! grep -q 'review-live-ui.js' docs/sw.js
           ! grep -q 'review-pricing.js' docs/sw.js
           ! grep -q 'flow-recovery.js' docs/sw.js
+          ! grep -q 'slot-pricing.js' docs/sw.js
+          ! grep -q 'player-live.js' docs/index.html
+          ! grep -q 'player-ui-fixes.js' docs/app.js
 
       - name: First-click navigation guards
         shell: bash
@@ -52,8 +64,8 @@ jobs:
           grep -q 'waitForRouter' docs/bookings-entry.js
           grep -q 'data-live-manage' docs/bookings-entry.js
           ! grep -q 'location.href' docs/bookings-entry.js
-          grep -q "document.addEventListener('click'" docs/payment-success.html
-          grep -q "index.html?open=bookings" docs/payment-success.html
+          ! grep -q "id==='payButton')return'payment-success.html'" docs/deep-router.js
+          ! grep -q "id==='toPayment')return'payment.html'" docs/deep-router.js
 
       - name: Live account activity guards
         shell: bash
@@ -61,3 +73,28 @@ jobs:
           grep -q "'/notifications/me'" docs/player-account-live.js
           grep -q "'/payments/me'" docs/player-account-live.js
           grep -q 'player-account-live.js' docs/sw.js
+
+      - name: Dev runtime provenance guards
+        shell: bash
+        run: |
+          grep -q 'X-SBP-Padel-Build' dev_player_server.py
+          grep -q '__SBP_DEV_BUILD__' dev_player_server.py
+          grep -q 'NOOP_SERVICE_WORKER' dev_player_server.py
+          grep -q 'Cache-Control' dev_player_server.py
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Browser runtime interaction QA
+        shell: bash
+        run: |
+          python dev_player_server.py > /tmp/sbp-player-dev.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:5173/index.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node qa/player_runtime_browser.mjs
