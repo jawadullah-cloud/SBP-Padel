@@ -18,12 +18,14 @@ Write-Host "4/5 FastAPI import/startup smoke check..." -ForegroundColor Yellow
 python -c "from app.main import app; assert app.title == 'SBP Padel API'; print('FastAPI import OK')"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "5/5 Player frontend integration syntax check..." -ForegroundColor Yellow
+Write-Host "5/5 Player frontend integration syntax checks..." -ForegroundColor Yellow
 if (Get-Command node -ErrorAction SilentlyContinue) {
-  node --check ..\docs\player-live.js
-  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  @('player-live.js','player-booking-refund.js','player-success.js','sw.js') | ForEach-Object {
+    node --check (Join-Path '..\docs' $_)
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  }
 } else {
-  Write-Host "Node.js not found; frontend syntax check skipped." -ForegroundColor DarkYellow
+  Write-Host "Node.js not found; frontend syntax checks skipped." -ForegroundColor DarkYellow
 }
 
 Write-Host ""
