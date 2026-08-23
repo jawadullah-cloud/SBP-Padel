@@ -18,6 +18,7 @@ async def seed_reference_data(session: AsyncSession) -> None:
             address="Nishtar Park Sports Complex, Lahore",
             latitude=Decimal("31.5116170"),
             longitude=Decimal("74.3375270"),
+            timezone="Asia/Karachi",
             description="Sports Board Punjab Padel facility with one championship court and four training courts.",
             amenities=["Floodlights", "Parking", "Cafeteria", "Changing", "Seating"],
             opening_time=time(6, 0),
@@ -39,6 +40,8 @@ async def seed_reference_data(session: AsyncSession) -> None:
                 session.add(PricingRule(venue_id=venue.id, court_id=court.id, start_time=time(start_hour, 0), end_time=time(end_hour, 0), hourly_rate=rate, priority=100))
     else:
         venue = await session.scalar(select(Venue).where(Venue.name == "Nishtar Park Sports Complex"))
+        if venue and venue.timezone != "Asia/Karachi":
+            venue.timezone = "Asia/Karachi"
 
     if not await session.scalar(select(PolicyVersion.id).limit(1)):
         session.add(PolicyVersion(version="2026-draft-1", title="SBP Padel Booking, Cancellation & Refund Policy", body="Prototype policy for system development. A booking is confirmed only after successful payment. Players should arrive before their booked session. Cancellation, refund and rescheduling eligibility will be governed by the final Sports Board Punjab approved policy. Venue-side closure may result in rescheduling, wallet credit or refund according to the approved rules.", effective_from=datetime.now(timezone.utc), is_active=True))
