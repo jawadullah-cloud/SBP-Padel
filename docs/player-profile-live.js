@@ -9,41 +9,9 @@
   const initials=n=>String(n||'Player').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]?.toUpperCase()).join('')||'P';
   async function api(path){const headers={'Content-Type':'application/json'};if(token())headers.Authorization=`Bearer ${token()}`;const r=await fetch(`${API}${path}`,{headers,cache:'no-store'});let b=null;try{b=await r.json()}catch{}if(!r.ok)throw new Error(b?.detail||`Request failed (${r.status})`);return b}
   function deep(url){if(typeof window.SBPDeepRoute==='function'){window.SBPDeepRoute(url);return}location.href=url}
-  function render(user){
-    const wrap=root.querySelector('.content')||root;
-    let head=wrap.querySelector('.profileHead');if(!head){head=document.createElement('div');head.className='profileHead';wrap.prepend(head)}
-    head.innerHTML=`<div class="avatar">${esc(initials(user.full_name))}</div><div><h3>${esc(user.full_name||'Player')}</h3><p>${esc(user.email||user.phone||'SBP Padel player')}</p></div>`;
-    let menu=wrap.querySelector('.menu');if(!menu){menu=document.createElement('div');menu.className='menu';wrap.appendChild(menu)}
-    menu.innerHTML=`
-      <button type="button" data-profile-action="bookings">▣ <span>My Bookings</span>›</button>
-      <button type="button" data-profile-action="wallet">▤ <span>My Wallet</span>›</button>
-      <button type="button" data-profile-action="payments">◫ <span>Payment History</span>›</button>
-      <button type="button"><span>Saved Players</span>›</button>
-      <button type="button"><span>Favourite Venues</span>›</button>
-      <button type="button"><span>Notifications</span>›</button>
-      <button type="button" data-profile-action="appearance">◐ <span>Appearance</span><em>${(document.body.dataset.theme||'dark').toUpperCase()}</em></button>
-      <button type="button"><span>Help & Support</span>›</button>
-      <button type="button" data-profile-action="logout">↪ <span>Sign Out</span></button>`;
-  }
-  function logout(){
-    ['sbpPadelAccessToken','sbpPadelUser','sbpPadelBookingSessionV2','sbpPadelSelectedBookingId','sbpPadelPayment','sbpPadelBookingId'].forEach(k=>localStorage.removeItem(k));
-    location.href='auth-preview.html';
-  }
-  root.addEventListener('click',e=>{
-    const btn=e.target.closest?.('[data-profile-action]');if(!btn)return;
-    const action=btn.dataset.profileAction;
-    if(action==='bookings'){e.preventDefault();window.SBPNavigate?.('bookings');return}
-    if(action==='wallet'){e.preventDefault();deep('wallet.html');return}
-    if(action==='payments'){e.preventDefault();deep('payment-history.html');return}
-    if(action==='appearance'){e.preventDefault();const theme=(document.body.dataset.theme||'dark')==='dark'?'light':'dark';document.body.dataset.theme=theme;localStorage.setItem('sbpPadelTheme',theme);const em=btn.querySelector('em');if(em)em.textContent=theme.toUpperCase();return}
-    if(action==='logout'){e.preventDefault();logout()}
-  });
-  async function load(){
-    if(!token()){location.href='auth-preview.html';return}
-    try{const user=await api(`/auth/me?_=${Date.now()}`);localStorage.setItem('sbpPadelUser',JSON.stringify(user));render(user)}
-    catch{let fallback={full_name:'Player'};try{fallback={...fallback,...JSON.parse(localStorage.getItem('sbpPadelUser')||'{}')} }catch{}render(fallback)}
-  }
-  window.SBPRefreshProfile=load;
-  document.addEventListener('click',e=>{if(e.target.closest?.('[data-nav="profile"]'))setTimeout(load,0)},true);
-  load();
+  function render(user){const wrap=root.querySelector('.content')||root;let head=wrap.querySelector('.profileHead');if(!head){head=document.createElement('div');head.className='profileHead';wrap.prepend(head)}head.innerHTML=`<div class="avatar">${esc(initials(user.full_name))}</div><div><h3>${esc(user.full_name||'Player')}</h3><p>${esc(user.email||user.phone||'SBP Padel player')}</p></div>`;let menu=wrap.querySelector('.menu');if(!menu){menu=document.createElement('div');menu.className='menu';wrap.appendChild(menu)}menu.innerHTML=`<button type="button" data-profile-action="bookings">▣ <span>My Bookings</span>›</button><button type="button" data-profile-action="wallet">▤ <span>My Wallet</span>›</button><button type="button" data-profile-action="payments">◫ <span>Payment History</span>›</button><button type="button"><span>Saved Players</span>›</button><button type="button"><span>Favourite Venues</span>›</button><button type="button"><span>Notifications</span>›</button><button type="button" data-profile-action="appearance">◐ <span>Appearance</span><em>${(document.body.dataset.theme||'dark').toUpperCase()}</em></button><button type="button"><span>Help & Support</span>›</button><button type="button" data-profile-action="logout">↪ <span>Sign Out</span></button>`}
+  function logout(){['sbpPadelAccessToken','sbpPadelUser','sbpPadelBookingSessionV2','sbpPadelSelectedBookingId','sbpPadelPayment','sbpPadelBookingId'].forEach(k=>localStorage.removeItem(k));location.href='auth-preview.html'}
+  root.addEventListener('click',e=>{const btn=e.target.closest?.('[data-profile-action]');if(!btn)return;const action=btn.dataset.profileAction;if(action==='bookings'){e.preventDefault();window.SBPNavigate?.('bookings');return}if(action==='wallet'){e.preventDefault();deep('wallet.html');return}if(action==='payments'){e.preventDefault();deep('payment-history.html');return}if(action==='appearance'){e.preventDefault();const theme=(document.body.dataset.theme||'dark')==='dark'?'light':'dark';localStorage.setItem('sbpPadelTheme',theme);if(typeof window.SBPApplyTheme==='function')window.SBPApplyTheme(theme);else{document.body.dataset.theme=theme;document.documentElement.dataset.theme=theme}const em=btn.querySelector('em');if(em)em.textContent=theme.toUpperCase();return}if(action==='logout'){e.preventDefault();logout()}});
+  async function load(){if(!token()){location.href='auth-preview.html';return}try{const user=await api(`/auth/me?_=${Date.now()}`);localStorage.setItem('sbpPadelUser',JSON.stringify(user));render(user)}catch{let fallback={full_name:'Player'};try{fallback={...fallback,...JSON.parse(localStorage.getItem('sbpPadelUser')||'{}')}}catch{}render(fallback)}}
+  window.SBPRefreshProfile=load;document.addEventListener('click',e=>{if(e.target.closest?.('[data-nav="profile"]'))setTimeout(load,0)},true);load();
 })();
