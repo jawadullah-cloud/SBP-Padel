@@ -28,3 +28,8 @@ body[data-theme=light] #time .slotRow.booked b{color:#5f6b66!important}
 body[data-theme=light] #time .slotRow.booked{background:#eef2ef!important;border-color:#d5ddd8!important}
 body[data-theme=light] #time .slotRow.booked .slotBook{color:#727d78!important}
 body[data-theme=light] #time .slotRow:before{box-shadow:0 0 0 3px #f7faf8!important}
+/* Six quick dates + one More control, always one row. */
+#select .dateRail{display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:4px!important;overflow:visible!important}
+#select .dateRail>button:nth-of-type(7){display:none!important}
+#select .dateRail>button,#select .dateRail>.dateMore{min-width:0!important;width:100%!important;height:53px!important}
+#select .dateRail>.dateMore input{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;opacity:.001!important;z-index:5!important;cursor:pointer!important}
