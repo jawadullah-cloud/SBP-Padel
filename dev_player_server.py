@@ -32,6 +32,7 @@ PAGE_SCRIPTS = {
         "bookings-search.js",
         "visual-live.js",
         "player-stability.js",
+        "native-pass-qr-live.js",
     ],
     "review-booking.html": ["booking-router-bridge.js", "review-players-live.js"],
     "payment.html": ["booking-router-bridge.js"],
