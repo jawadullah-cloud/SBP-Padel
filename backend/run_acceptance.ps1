@@ -20,7 +20,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "5/5 Player frontend integration checks..." -ForegroundColor Yellow
 if (Get-Command node -ErrorAction SilentlyContinue) {
-  @('player-live.js','player-booking-refund.js','navigation-fix.js','review-entry.js','sw.js') | ForEach-Object {
+  @('player-live.js','player-booking-refund.js','navigation-fix.js','review-entry.js','booking-router-bridge.js','sw.js') | ForEach-Object {
     node --check (Join-Path '..\docs' $_)
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   }
@@ -30,6 +30,7 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
     if ($sw -match [regex]::Escape($_)) { Write-Error "Booking flow v2 regression: service worker must not inject $_." }
   }
   if ($sw -notmatch 'review-entry\.js') { Write-Error 'Booking flow v2 regression: service worker must inject the single booking flow owner.' }
+  if ($sw -notmatch 'booking-router-bridge\.js') { Write-Error 'Booking flow v2 regression: checkout must use the deep-router bridge.' }
 
   $flow = Get-Content (Join-Path '..\docs' 'review-entry.js') -Raw
   if ($flow -notmatch 'sbpPadelBookingSessionV2') { Write-Error 'Booking flow v2 regression: persistent session state is missing.' }
