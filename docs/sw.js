@@ -1,4 +1,4 @@
-const BUILD='20260824-notifications-v2';
+const BUILD='20260824-bookings-live-v1';
 self.addEventListener('install',event=>{self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 
@@ -25,6 +25,7 @@ self.addEventListener('fetch',event=>{
         add('profile-modules.js');
         add('notifications-live.js');
         add('booking-date-more.js');
+        add('player-bookings-live.js');
         add('discovery-tools.js');
         add('bookings-search.js');
         add('visual-live.js');
@@ -32,10 +33,7 @@ self.addEventListener('fetch',event=>{
       }
       if(page==='payment-history.html')add('player-account-live.js');
       if(page==='auth-preview.html')add('player-live.js');
-      if(page==='booking-detail.html'){
-        add('player-live.js');
-        add('player-booking-refund.js');
-      }
+      if(page==='booking-detail.html')add('player-booking-detail-live.js');
 
       if(scripts.length){
         const inject=scripts.map(name=>`<script src="${name}?v=${BUILD}"></script>`).join('');
