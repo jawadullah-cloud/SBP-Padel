@@ -19,71 +19,42 @@ Before discussing or changing anything:
 
 This is a continuation of an existing project, not a new project.
 
-## Player runtime milestone accepted
+## Accepted player runtime / booking lifecycle
 
-The player runtime investigation established the effective local serving path through `run_player_dev.ps1` and `dev_player_server.py`. The local dev server serves `docs/`, disables caching, neutralizes legacy service workers, and injects a visible `DEV <sha>` build badge.
-
-The user manually reviewed and accepted the fixes for the earlier critical runtime defects, including:
-
-- app-wide first-click navigation/interactions;
-- Court 4 selection;
-- unavailable slot duplicate text;
-- 6 quick dates + MORE;
-- MORE date selection;
-- checkout first-click routing;
-- Pakistan timezone handling for elapsed slots;
-- live booking confirmation notifications;
-- notification timestamp handling;
-- stale availability races;
-- booking bottom navigation dead space;
-- fresh booking date/court reset with explicit court selection;
-- notification page closing through normal navigation/logo;
-- venue favourite heart persistence.
+The user has manually accepted the major player booking/runtime fixes through the booking lifecycle review, including first-click behavior, date/court/time selection, live notifications, Pakistan timezone handling, My Bookings tabs/navigation, booking detail transitions, reschedule, pending-payment cancellation, confirmed cancellation/refund state, favourite-heart behavior, and the booking-detail push transition.
 
 Do not reopen these areas without a concrete reproduced regression.
 
-## Booking flow ownership
+## Runtime ownership
 
-`docs/review-entry.js` remains the single owner of the Venue → Date → Court → Time → Review → Payment → Confirmation booking state and actions.
+- `docs/review-entry.js` owns Venue → Date → Court → Time → Review → Payment → Confirmation.
+- `docs/notifications-live.js` owns Notifications.
+- `docs/player-bookings-live.js` owns My Bookings.
+- `docs/player-booking-detail-live.js` owns booking detail / reschedule / cancellation / refund state.
+- `docs/player-profile-live.js` owns live profile/auth/menu/logout behavior.
+- `docs/player-payment-history-live.js` owns Payment History.
+- `docs/player-wallet-live.js` owns Wallet presentation/activity.
+- `docs/profile-modules.js` owns only Saved Players, Favourite Venues and Help & Support sub-screens plus favourite persistence. It must not seed prototype people or own Appearance/Notifications/auth.
 
-`docs/notifications-live.js` is the only notification owner.
+Legacy `docs/player-account-live.js` must not be loaded by the effective runtime.
 
-`docs/player-bookings-live.js` is now the dedicated live My Bookings owner.
+## Active milestone: player account/product review
 
-`docs/player-booking-detail-live.js` is now the dedicated live booking-detail lifecycle owner. `booking-detail.html` must not be owned by legacy `player-live.js` or `player-booking-refund.js` in the effective runtime.
+Implemented but awaiting manual acceptance:
 
-## Active milestone: player booking lifecycle
-
-The current work moved from initial booking creation into a complete player-side lifecycle review:
-
-1. My Bookings
-2. booking detail
-3. reschedule
-4. cancellation
-5. refund state
-6. payment receipt/history linkage
-7. lifecycle notifications
-
-### Implemented in the current milestone
-
-- `docs/player-bookings-live.js` loads `/bookings/me` and real booking details from the API and renders Upcoming / Past / Cancelled groups.
-- `docs/player-booking-detail-live.js` hydrates booking, venue, court, payment and refund data from live APIs.
-- cancellation now uses the real `/bookings/{id}/cancel` endpoint and requests a refund through the real payment endpoint when required.
-- a real player reschedule API was added at `/bookings/{id}/reschedule` in `backend/app/api/reschedules.py`.
-- reschedule revalidates live availability/pricing, moves the stored booking slots, retains blocking status, and creates a `booking_rescheduled` notification.
-- price-adjusted rescheduling is intentionally rejected for now if the new booking total differs from the already-paid amount. Do not silently change a paid booking total without implementing a payment adjustment workflow.
-- booking quote/create validation now has the same Windows-safe Pakistan UTC+05:00 fallback used by availability.
-
-### QA added
-
-- `backend/tests/test_player_booking_lifecycle.py` covers confirm → reschedule → old/new slot availability → cancellation → refund → lifecycle notifications/payment history.
-- `qa/player_booking_lifecycle_browser.mjs` covers My Bookings → Manage Booking → live payment detail → reschedule → cancel → refund state → return to updated booking lists.
-- `.github/workflows/player-flow-ci.yml` now runs both the original player runtime browser QA and the lifecycle browser QA.
-- `backend/run_acceptance.ps1` includes ownership/lifecycle regression guards.
+- profile identity/contact now hydrates from `/auth/me` instead of the hard-coded Adeel Raza prototype;
+- Sign Out clears player auth/session state and returns to `auth-preview.html`;
+- Appearance uses the shared theme bridge and persisted theme;
+- Payment History has a dedicated API-only owner using `/payments/me` and no hard-coded sample transactions;
+- Wallet no longer invents a PKR 2,450 balance or fake top-ups. Because the backend has no wallet ledger/funding workflow yet, the screen explicitly reports that spendable wallet balance/top-up is not enabled, while showing real payment/refund activity from `/payments/me`;
+- Saved Players no longer seeds Sara Khan / Hamza Ali / Mariam Shah. A new browser starts empty and local saved-player persistence remains functional;
+- Favourite Venues and Help & Support remain local preference/product modules;
+- `qa/player_account_browser.mjs` covers live profile identity, empty saved-player state, appearance switching, live payment/refund history, truthful wallet state and logout;
+- Player Flow CI now runs runtime QA, booking lifecycle QA and player account QA, and guards against legacy account ownership/prototype data returning.
 
 ## Important verification status
 
-The connected chat environment can edit/read GitHub but cannot clone GitHub into its container because outbound GitHub DNS is blocked. Therefore new lifecycle code and QA may be committed before their GitHub Actions results are visible through the connector.
+The connected chat environment can edit/read GitHub but cannot clone GitHub into its container because outbound GitHub DNS is blocked. New QA can therefore be committed before its Actions results are visible through the connector.
 
 Always distinguish:
 
@@ -91,21 +62,13 @@ Always distinguish:
 - automated CI actually green;
 - user's Windows runtime manually accepted.
 
-For the lifecycle milestone, inspect the newest Backend CI and Player Flow CI runs first if available. Fix any failures before asking the user to review.
+## Next work after account acceptance
 
-## Next work after lifecycle acceptance
+After the account/product review is accepted:
 
-After My Bookings / detail / reschedule / cancellation / refund are manually accepted, continue the player product review through:
-
-- payment history and wallet;
-- saved players;
-- favourite venues consistency;
-- profile/account/auth/logout;
-- help/support;
-- full light/dark theme functional review;
-- final player regression.
-
-Then lock the player web runtime milestone and begin the venue/admin operational product.
+1. full light/dark functional and visual review across the complete player app;
+2. final player regression and milestone lock;
+3. begin venue/admin operational product review and implementation.
 
 ## Working style
 
