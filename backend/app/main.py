@@ -8,6 +8,7 @@ from app.api.admin_finance import router as admin_finance_router
 from app.api.admin_hq import router as admin_hq_router
 from app.api.admin_reports import router as admin_reports_router
 from app.api.auth import router as auth_router
+from app.api.booking_passes import router as booking_passes_router
 from app.api.bookings import router as bookings_router
 from app.api.cancellations import router as cancellations_router
 from app.api.notifications import router as notifications_router
@@ -58,6 +59,7 @@ app.add_middleware(
 app.include_router(router, prefix=settings.api_prefix)
 app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(policies_router, prefix=settings.api_prefix)
+app.include_router(booking_passes_router, prefix=settings.api_prefix)
 app.include_router(bookings_router, prefix=settings.api_prefix)
 app.include_router(cancellations_router, prefix=settings.api_prefix)
 app.include_router(reschedules_router, prefix=settings.api_prefix)
