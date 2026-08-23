@@ -3,6 +3,7 @@
   if(window.__SBPDeepRouteSmooth)return;
   window.__SBPDeepRouteSmooth=true;
 
+  const smoothPages=new Set(['booking-detail.html','review-booking.html','payment.html']);
   const style=document.createElement('style');
   style.textContent=`
     #sbpDeepLayer.sbp-preload-detail{opacity:0!important;transform:translateX(24px)!important;pointer-events:none!important}
@@ -19,11 +20,17 @@
     window.SBPDeepRoute=function(url,...args){
       let page='';
       try{page=new URL(url,location.href).pathname.split('/').pop()}catch{page=String(url||'').split('?')[0]}
-      if(page!=='booking-detail.html')return original.call(this,url,...args);
+      if(!smoothPages.has(page))return original.call(this,url,...args);
 
       const layer=document.getElementById('sbpDeepLayer');
       const frame=document.getElementById('sbpDeepFrame');
       if(!layer||!frame)return original.call(this,url,...args);
+
+      // When entering a deep screen from the main player shell, keep the current
+      // screen visible while the iframe loads. Once ready, reveal the completed
+      // page in one transition instead of exposing the iframe's initial paint.
+      const entering=!layer.classList.contains('on');
+      if(!entering)return original.call(this,url,...args);
 
       layer.classList.remove('sbp-reveal-detail');
       layer.classList.add('sbp-preload-detail');
@@ -40,7 +47,6 @@
         requestAnimationFrame(()=>requestAnimationFrame(reveal));
       },{once:true});
       const result=original.call(this,url,...args);
-      // Never strand navigation if a browser suppresses the expected load event.
       setTimeout(reveal,900);
       return result;
     };
