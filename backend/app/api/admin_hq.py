@@ -75,317 +75,132 @@ class RefundStatusRequest(BaseModel):
 
 
 @router.post("/venues")
-async def create_venue(
-    payload: VenueCreateRequest,
-    _: User = Depends(admin_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
+async def create_venue(payload: VenueCreateRequest, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)) -> dict:
     if payload.closing_time <= payload.opening_time:
         raise HTTPException(400, "Closing time must be after opening time")
-    venue = Venue(
-        name=payload.name.strip(),
-        city=payload.city.strip(),
-        address=payload.address.strip(),
-        latitude=payload.latitude,
-        longitude=payload.longitude,
-        description=payload.description.strip() if payload.description else None,
-        amenities=sorted(set(a.strip() for a in payload.amenities if a.strip())),
-        opening_time=payload.opening_time,
-        closing_time=payload.closing_time,
-        is_active=True,
-    )
-    db.add(venue)
-    await db.commit()
-    await db.refresh(venue)
+    venue = Venue(name=payload.name.strip(), city=payload.city.strip(), address=payload.address.strip(), latitude=payload.latitude, longitude=payload.longitude, description=payload.description.strip() if payload.description else None, amenities=sorted(set(a.strip() for a in payload.amenities if a.strip())), opening_time=payload.opening_time, closing_time=payload.closing_time, is_active=True)
+    db.add(venue); await db.commit(); await db.refresh(venue)
     return {"id": str(venue.id), "name": venue.name, "city": venue.city, "is_active": True}
 
 
-@router.post("/venues/{venue_id}/courts")
-async def create_court(
-    venue_id: UUID,
-    payload: CourtCreateRequest,
-    _: User = Depends(admin_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
+@router.delete("/venues/{venue_id}")
+async def delete_empty_venue(venue_id: UUID, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)) -> dict:
     venue = await db.get(Venue, venue_id)
-    if not venue:
-        raise HTTPException(404, "Venue not found")
+    if not venue: raise HTTPException(404, "Venue not found")
+    booking_count = await db.scalar(select(func.count()).select_from(Booking).where(Booking.venue_id == venue_id)) or 0
+    if booking_count: raise HTTPException(409, "Venue has booking history and cannot be deleted. Deactivate it instead.")
+    court_count = await db.scalar(select(func.count()).select_from(Court).where(Court.venue_id == venue_id)) or 0
+    assignment_count = await db.scalar(select(func.count()).select_from(UserVenueAssignment).where(UserVenueAssignment.venue_id == venue_id, UserVenueAssignment.is_active.is_(True))) or 0
+    if court_count or assignment_count: raise HTTPException(409, "Remove courts and staff assignments before deleting this venue.")
+    await db.delete(venue); await db.commit()
+    return {"id": str(venue_id), "deleted": True}
+
+
+@router.post("/venues/{venue_id}/courts")
+async def create_court(venue_id: UUID, payload: CourtCreateRequest, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)) -> dict:
+    venue = await db.get(Venue, venue_id)
+    if not venue: raise HTTPException(404, "Venue not found")
     existing = await db.scalar(select(Court).where(Court.venue_id == venue_id, Court.code == payload.code.strip()))
-    if existing:
-        raise HTTPException(409, "Court code already exists at this venue")
-    court = Court(
-        venue_id=venue_id,
-        code=payload.code.strip(),
-        name=payload.name.strip(),
-        court_type=payload.court_type.strip(),
-        capacity=payload.capacity,
-        is_indoor=payload.is_indoor,
-        status=CourtStatus.active,
-    )
-    db.add(court)
-    await db.commit()
-    await db.refresh(court)
+    if existing: raise HTTPException(409, "Court code already exists at this venue")
+    court = Court(venue_id=venue_id, code=payload.code.strip(), name=payload.name.strip(), court_type=payload.court_type.strip(), capacity=payload.capacity, is_indoor=payload.is_indoor, status=CourtStatus.active)
+    db.add(court); await db.commit(); await db.refresh(court)
     return {"id": str(court.id), "code": court.code, "name": court.name, "status": court.status.value}
 
 
+@router.delete("/courts/{court_id}")
+async def delete_unused_court(court_id: UUID, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)) -> dict:
+    court = await db.get(Court, court_id)
+    if not court: raise HTTPException(404, "Court not found")
+    booking_count = await db.scalar(select(func.count()).select_from(Booking).where(Booking.court_id == court_id)) or 0
+    if booking_count: raise HTTPException(409, "Court has booking history and cannot be deleted. Set it to Closed instead.")
+    await db.delete(court); await db.commit()
+    return {"id": str(court_id), "deleted": True}
+
+
 @router.get("/staff")
-async def list_staff(
-    _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)
-) -> list[dict]:
-    users = (
-        await db.scalars(
-            select(User)
-            .where(User.role.in_([UserRole.admin, UserRole.venue_manager, UserRole.venue_operator]))
-            .order_by(User.full_name)
-        )
-    ).all()
-    return [
-        {
-            "id": str(u.id),
-            "full_name": u.full_name,
-            "email": u.email,
-            "role": u.role.value,
-            "is_active": u.is_active,
-        }
-        for u in users
-    ]
+async def list_staff(_: User = Depends(admin_user), db: AsyncSession = Depends(get_db)) -> list[dict]:
+    users = (await db.scalars(select(User).where(User.role.in_([UserRole.admin, UserRole.venue_manager, UserRole.venue_operator])).order_by(User.full_name))).all()
+    return [{"id":str(u.id),"full_name":u.full_name,"email":u.email,"role":u.role.value,"is_active":u.is_active} for u in users]
 
 
 @router.post("/staff")
-async def create_staff(
-    payload: StaffCreateRequest,
-    _: User = Depends(admin_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    if payload.role not in {UserRole.admin, UserRole.venue_manager, UserRole.venue_operator}:
-        raise HTTPException(400, "Staff role is required")
-    email = payload.email.strip().lower()
-    if "@" not in email or email.startswith("@") or email.endswith("@"):
-        raise HTTPException(400, "Invalid email address")
-    if await db.scalar(select(User.id).where(User.email == email)):
-        raise HTTPException(409, "Email is already in use")
-    user = User(
-        full_name=payload.full_name.strip(),
-        email=email,
-        password_hash=hash_password(payload.password),
-        role=payload.role,
-        is_active=True,
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    return {"id": str(user.id), "full_name": user.full_name, "role": user.role.value}
+async def create_staff(payload: StaffCreateRequest, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)) -> dict:
+    if payload.role not in {UserRole.admin,UserRole.venue_manager,UserRole.venue_operator}: raise HTTPException(400,"Staff role is required")
+    email=payload.email.strip().lower()
+    if "@" not in email or email.startswith("@") or email.endswith("@"): raise HTTPException(400,"Invalid email address")
+    if await db.scalar(select(User.id).where(User.email==email)): raise HTTPException(409,"Email is already in use")
+    user=User(full_name=payload.full_name.strip(),email=email,password_hash=hash_password(payload.password),role=payload.role,is_active=True); db.add(user); await db.commit(); await db.refresh(user)
+    return {"id":str(user.id),"full_name":user.full_name,"role":user.role.value}
 
 
 @router.get("/staff-assignments")
-async def list_assignments(
-    venue_id: UUID | None = Query(default=None),
-    _: User = Depends(admin_user),
-    db: AsyncSession = Depends(get_db),
-) -> list[dict]:
-    stmt = (
-        select(UserVenueAssignment, User, Venue)
-        .join(User, User.id == UserVenueAssignment.user_id)
-        .join(Venue, Venue.id == UserVenueAssignment.venue_id)
-        .where(UserVenueAssignment.is_active.is_(True))
-        .order_by(Venue.city, Venue.name, User.full_name)
-    )
-    if venue_id:
-        stmt = stmt.where(UserVenueAssignment.venue_id == venue_id)
-    rows = (await db.execute(stmt)).all()
-    return [
-        {
-            "id": str(a.id),
-            "user_id": str(u.id),
-            "user_name": u.full_name,
-            "user_email": u.email,
-            "venue_id": str(v.id),
-            "venue_name": v.name,
-            "role": a.role.value,
-        }
-        for a, u, v in rows
-    ]
+async def list_assignments(venue_id: UUID|None=Query(default=None), _:User=Depends(admin_user), db:AsyncSession=Depends(get_db))->list[dict]:
+    stmt=select(UserVenueAssignment,User,Venue).join(User,User.id==UserVenueAssignment.user_id).join(Venue,Venue.id==UserVenueAssignment.venue_id).where(UserVenueAssignment.is_active.is_(True)).order_by(Venue.city,Venue.name,User.full_name)
+    if venue_id: stmt=stmt.where(UserVenueAssignment.venue_id==venue_id)
+    rows=(await db.execute(stmt)).all()
+    return [{"id":str(a.id),"user_id":str(u.id),"user_name":u.full_name,"user_email":u.email,"venue_id":str(v.id),"venue_name":v.name,"role":a.role.value} for a,u,v in rows]
 
 
 @router.post("/staff-assignments")
-async def assign_staff(
-    payload: StaffAssignmentRequest,
-    _: User = Depends(admin_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    user = await db.get(User, payload.user_id)
-    venue = await db.get(Venue, payload.venue_id)
-    if not user or not venue:
-        raise HTTPException(404, "User or venue not found")
-    expected_role = UserRole.venue_manager if payload.role == VenueAssignmentRole.manager else UserRole.venue_operator
-    if user.role != expected_role:
-        raise HTTPException(400, f"User must have role {expected_role.value}")
-    assignment = await db.scalar(
-        select(UserVenueAssignment).where(
-            UserVenueAssignment.user_id == user.id,
-            UserVenueAssignment.venue_id == venue.id,
-        )
-    )
-    if assignment:
-        assignment.role = payload.role
-        assignment.is_active = True
-    else:
-        assignment = UserVenueAssignment(user_id=user.id, venue_id=venue.id, role=payload.role, is_active=True)
-        db.add(assignment)
-    await db.commit()
-    await db.refresh(assignment)
-    return {"id": str(assignment.id), "is_active": True, "role": assignment.role.value}
+async def assign_staff(payload:StaffAssignmentRequest,_:User=Depends(admin_user),db:AsyncSession=Depends(get_db))->dict:
+    user=await db.get(User,payload.user_id); venue=await db.get(Venue,payload.venue_id)
+    if not user or not venue: raise HTTPException(404,"User or venue not found")
+    expected=UserRole.venue_manager if payload.role==VenueAssignmentRole.manager else UserRole.venue_operator
+    if user.role!=expected: raise HTTPException(400,f"User must have role {expected.value}")
+    assignment=await db.scalar(select(UserVenueAssignment).where(UserVenueAssignment.user_id==user.id,UserVenueAssignment.venue_id==venue.id))
+    if assignment: assignment.role=payload.role; assignment.is_active=True
+    else: assignment=UserVenueAssignment(user_id=user.id,venue_id=venue.id,role=payload.role,is_active=True); db.add(assignment)
+    await db.commit(); await db.refresh(assignment); return {"id":str(assignment.id),"is_active":True,"role":assignment.role.value}
 
 
 @router.delete("/staff-assignments/{assignment_id}")
-async def deactivate_assignment(
-    assignment_id: UUID,
-    _: User = Depends(admin_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    assignment = await db.get(UserVenueAssignment, assignment_id)
-    if not assignment:
-        raise HTTPException(404, "Assignment not found")
-    assignment.is_active = False
-    await db.commit()
-    return {"id": str(assignment.id), "is_active": False}
+async def deactivate_assignment(assignment_id:UUID,_:User=Depends(admin_user),db:AsyncSession=Depends(get_db))->dict:
+    assignment=await db.get(UserVenueAssignment,assignment_id)
+    if not assignment: raise HTTPException(404,"Assignment not found")
+    assignment.is_active=False; await db.commit(); return {"id":str(assignment.id),"is_active":False}
 
 
 @router.get("/policies")
-async def list_policies(
-    _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)
-) -> list[dict]:
-    policies = (await db.scalars(select(PolicyVersion).order_by(PolicyVersion.effective_from.desc()))).all()
-    return [
-        {
-            "id": str(p.id),
-            "version": p.version,
-            "title": p.title,
-            "effective_from": p.effective_from.isoformat(),
-            "is_active": p.is_active,
-        }
-        for p in policies
-    ]
+async def list_policies(_:User=Depends(admin_user),db:AsyncSession=Depends(get_db))->list[dict]:
+    policies=(await db.scalars(select(PolicyVersion).order_by(PolicyVersion.effective_from.desc()))).all(); return [{"id":str(p.id),"version":p.version,"title":p.title,"effective_from":p.effective_from.isoformat(),"is_active":p.is_active} for p in policies]
 
 
 @router.post("/policies/publish")
-async def publish_policy(
-    payload: PolicyPublishRequest,
-    _: User = Depends(admin_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    if await db.scalar(select(PolicyVersion.id).where(PolicyVersion.version == payload.version)):
-        raise HTTPException(409, "Policy version already exists")
-    await db.execute(update(PolicyVersion).values(is_active=False))
-    policy = PolicyVersion(
-        version=payload.version.strip(),
-        title=payload.title.strip(),
-        body=payload.body.strip(),
-        effective_from=payload.effective_from or datetime.now(timezone.utc),
-        is_active=True,
-    )
-    db.add(policy)
-    await db.commit()
-    await db.refresh(policy)
-    return {"id": str(policy.id), "version": policy.version, "is_active": True}
+async def publish_policy(payload:PolicyPublishRequest,_:User=Depends(admin_user),db:AsyncSession=Depends(get_db))->dict:
+    if await db.scalar(select(PolicyVersion.id).where(PolicyVersion.version==payload.version)): raise HTTPException(409,"Policy version already exists")
+    await db.execute(update(PolicyVersion).values(is_active=False)); policy=PolicyVersion(version=payload.version.strip(),title=payload.title.strip(),body=payload.body.strip(),effective_from=payload.effective_from or datetime.now(timezone.utc),is_active=True); db.add(policy); await db.commit(); await db.refresh(policy); return {"id":str(policy.id),"version":policy.version,"is_active":True}
 
 
 @router.get("/bookings")
-async def admin_booking_search(
-    venue_id: UUID | None = None,
-    booking_date: date | None = None,
-    status: BookingStatus | None = None,
-    q: str | None = None,
-    _: User = Depends(admin_user),
-    db: AsyncSession = Depends(get_db),
-) -> list[dict]:
-    stmt = select(Booking).order_by(Booking.created_at.desc()).limit(500)
-    if venue_id:
-        stmt = stmt.where(Booking.venue_id == venue_id)
-    if booking_date:
-        stmt = stmt.where(Booking.booking_date == booking_date)
-    if status:
-        stmt = stmt.where(Booking.status == status)
-    if q:
-        stmt = stmt.where(Booking.booking_code.ilike(f"%{q.strip()}%"))
-    rows = (await db.scalars(stmt)).all()
-    return [
-        {
-            "id": str(b.id),
-            "booking_code": b.booking_code,
-            "venue_id": str(b.venue_id),
-            "court_id": str(b.court_id),
-            "date": b.booking_date.isoformat(),
-            "status": b.status.value,
-            "total": f"{b.total_amount:.2f}",
-            "currency": b.currency,
-        }
-        for b in rows
-    ]
+async def admin_booking_search(venue_id:UUID|None=None,booking_date:date|None=None,status:BookingStatus|None=None,q:str|None=None,_:User=Depends(admin_user),db:AsyncSession=Depends(get_db))->list[dict]:
+    stmt=select(Booking).order_by(Booking.created_at.desc()).limit(500)
+    if venue_id: stmt=stmt.where(Booking.venue_id==venue_id)
+    if booking_date: stmt=stmt.where(Booking.booking_date==booking_date)
+    if status: stmt=stmt.where(Booking.status==status)
+    if q: stmt=stmt.where(Booking.booking_code.ilike(f"%{q.strip()}%"))
+    rows=(await db.scalars(stmt)).all(); return [{"id":str(b.id),"booking_code":b.booking_code,"venue_id":str(b.venue_id),"court_id":str(b.court_id),"date":b.booking_date.isoformat(),"status":b.status.value,"total":f"{b.total_amount:.2f}","currency":b.currency} for b in rows]
 
 
 @router.get("/refunds")
-async def admin_refunds(
-    status: RefundStatus | None = None,
-    _: User = Depends(admin_user),
-    db: AsyncSession = Depends(get_db),
-) -> list[dict]:
-    stmt = select(Refund).order_by(Refund.created_at.desc()).limit(500)
-    if status:
-        stmt = stmt.where(Refund.status == status)
-    rows = (await db.scalars(stmt)).all()
-    return [
-        {
-            "id": str(r.id),
-            "booking_id": str(r.booking_id),
-            "payment_id": str(r.payment_id),
-            "amount": f"{r.amount:.2f}",
-            "currency": r.currency,
-            "status": r.status.value,
-            "reason": r.reason,
-            "provider_reference": r.provider_reference,
-        }
-        for r in rows
-    ]
+async def admin_refunds(status:RefundStatus|None=None,_:User=Depends(admin_user),db:AsyncSession=Depends(get_db))->list[dict]:
+    stmt=select(Refund).order_by(Refund.created_at.desc()).limit(500)
+    if status: stmt=stmt.where(Refund.status==status)
+    rows=(await db.scalars(stmt)).all(); return [{"id":str(r.id),"booking_id":str(r.booking_id),"payment_id":str(r.payment_id),"amount":f"{r.amount:.2f}","currency":r.currency,"status":r.status.value,"reason":r.reason,"provider_reference":r.provider_reference} for r in rows]
 
 
 @router.patch("/refunds/{refund_id}")
-async def update_refund_status(
-    refund_id: UUID,
-    payload: RefundStatusRequest,
-    _: User = Depends(admin_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    refund = await db.get(Refund, refund_id)
-    if not refund:
-        raise HTTPException(404, "Refund not found")
-    refund.status = payload.status
-    if payload.provider_reference:
-        refund.provider_reference = payload.provider_reference
-    if payload.status == RefundStatus.completed:
-        payment = await db.get(Payment, refund.payment_id)
-        if payment:
-            payment.status = PaymentStatus.refunded if refund.amount >= payment.amount else PaymentStatus.partially_refunded
-    await db.commit()
-    return {"id": str(refund.id), "status": refund.status.value}
+async def update_refund_status(refund_id:UUID,payload:RefundStatusRequest,_:User=Depends(admin_user),db:AsyncSession=Depends(get_db))->dict:
+    refund=await db.get(Refund,refund_id)
+    if not refund: raise HTTPException(404,"Refund not found")
+    refund.status=payload.status
+    if payload.provider_reference: refund.provider_reference=payload.provider_reference
+    if payload.status==RefundStatus.completed:
+        payment=await db.get(Payment,refund.payment_id)
+        if payment: payment.status=PaymentStatus.refunded if refund.amount>=payment.amount else PaymentStatus.partially_refunded
+    await db.commit(); return {"id":str(refund.id),"status":refund.status.value}
 
 
 @router.get("/dashboard")
-async def admin_dashboard(
-    _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)
-) -> dict:
-    venue_count = await db.scalar(select(func.count()).select_from(Venue)) or 0
-    court_count = await db.scalar(select(func.count()).select_from(Court)) or 0
-    player_count = await db.scalar(select(func.count()).select_from(User).where(User.role == UserRole.player)) or 0
-    confirmed = await db.scalar(select(func.count()).select_from(Booking).where(Booking.status == BookingStatus.confirmed)) or 0
-    paid_total = await db.scalar(select(func.coalesce(func.sum(Payment.amount), 0)).where(Payment.status == PaymentStatus.paid)) or Decimal("0")
-    pending_refunds = await db.scalar(select(func.count()).select_from(Refund).where(Refund.status.in_([RefundStatus.requested, RefundStatus.processing]))) or 0
-    return {
-        "venues": venue_count,
-        "courts": court_count,
-        "players": player_count,
-        "confirmed_bookings": confirmed,
-        "paid_revenue": f"{Decimal(paid_total):.2f}",
-        "pending_refunds": pending_refunds,
-        "currency": "PKR",
-    }
+async def admin_dashboard(_:User=Depends(admin_user),db:AsyncSession=Depends(get_db))->dict:
+    venue_count=await db.scalar(select(func.count()).select_from(Venue)) or 0; court_count=await db.scalar(select(func.count()).select_from(Court)) or 0; player_count=await db.scalar(select(func.count()).select_from(User).where(User.role==UserRole.player)) or 0; confirmed=await db.scalar(select(func.count()).select_from(Booking).where(Booking.status==BookingStatus.confirmed)) or 0; paid_total=await db.scalar(select(func.coalesce(func.sum(Payment.amount),0)).where(Payment.status==PaymentStatus.paid)) or Decimal("0"); pending=await db.scalar(select(func.count()).select_from(Refund).where(Refund.status.in_([RefundStatus.requested,RefundStatus.processing]))) or 0
+    return {"venues":venue_count,"courts":court_count,"players":player_count,"confirmed_bookings":confirmed,"paid_revenue":f"{Decimal(paid_total):.2f}","pending_refunds":pending,"currency":"PKR"}
