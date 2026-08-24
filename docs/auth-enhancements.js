@@ -2,6 +2,16 @@
   'use strict';
   if(window.__SBPAuthEnhancements)return;window.__SBPAuthEnhancements=true;
   const API=()=>(localStorage.getItem('sbpPadelApiBase')||'http://127.0.0.1:8000/api/v1').replace(/\/$/,'');
+
+  // The Android shell opens auth-preview.html on every cold start. If this
+  // WebView already has a saved access token, hand control straight back to
+  // the player app. index/player-live will validate the token with /auth/me
+  // and return here only if it has expired or is invalid.
+  if(localStorage.getItem('sbpPadelAccessToken')){
+    location.replace('./');
+    return;
+  }
+
   const phone=document.querySelector('.phone');
   const signin=document.getElementById('signin');
   const signup=document.getElementById('signup');
