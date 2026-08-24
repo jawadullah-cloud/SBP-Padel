@@ -26,6 +26,8 @@ public class MainActivity extends Activity {
     private static final String PREFS = "sbp_padel_android";
     private static final String KEY_HOST = "laptop_ip";
     private static final int FILE_CHOOSER_REQUEST = 501;
+
+    private FrameLayout root;
     private WebView webView;
     private ValueCallback<Uri[]> fileChooserCallback;
 
@@ -36,13 +38,18 @@ public class MainActivity extends Activity {
         getWindow().setNavigationBarColor(Color.BLACK);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
+        root = new FrameLayout(this);
+        root.setBackgroundColor(Color.rgb(6, 16, 18));
+        root.setClipToPadding(true);
+
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(6, 16, 18));
-        webView.setClipToPadding(true);
         webView.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
-        setContentView(webView);
+        root.addView(webView);
+        setContentView(root);
+
         configureSystemUi();
         configureWebView();
 
@@ -57,50 +64,57 @@ public class MainActivity extends Activity {
 
     private void configureSystemUi() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Android 15 / targetSdk 35 is edge-to-edge by default. Own the
-            // insets explicitly so player content never sits under the status
-            // bar and the IME physically reduces the usable WebView area.
+            // targetSdk 35 is edge-to-edge on Android 15. Apply system insets to
+            // the native container, not WebView padding, so the DOM viewport is
+            // physically below the status/cutout area and above the IME.
             getWindow().setDecorFitsSystemWindows(false);
             WindowInsetsController controller = getWindow().getInsetsController();
             if (controller != null) {
                 controller.hide(WindowInsets.Type.navigationBars());
-                controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                controller.setSystemBarsBehavior(
+                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
             }
-            webView.setOnApplyWindowInsetsListener((view, insets) -> {
-                android.graphics.Insets status = insets.getInsets(WindowInsets.Type.statusBars());
+
+            root.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets status = insets.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars());
                 android.graphics.Insets cutout = insets.getInsets(WindowInsets.Type.displayCutout());
                 android.graphics.Insets ime = insets.getInsets(WindowInsets.Type.ime());
                 boolean imeVisible = insets.isVisible(WindowInsets.Type.ime());
+
                 int left = Math.max(status.left, cutout.left);
-                int top = Math.max(status.top, cutout.top) + dp(6);
+                int top = Math.max(status.top, cutout.top) + dp(4);
                 int right = Math.max(status.right, cutout.right);
                 int bottom = imeVisible ? ime.bottom : 0;
                 view.setPadding(left, top, right, bottom);
 
-                final float cssIme = bottom / getResources().getDisplayMetrics().density;
                 view.post(() -> {
                     if (webView == null) return;
                     webView.evaluateJavascript(
-                            "document.documentElement.style.setProperty('--sbp-native-ime','" + cssIme + "px');" +
-                            "document.documentElement.classList.toggle('sbp-keyboard-open'," + (imeVisible ? "true" : "false") + ");" +
-                            (imeVisible ? "window.SBPAndroidRevealFocused&&window.SBPAndroidRevealFocused();" : ""),
+                            "document.documentElement.classList.toggle('sbp-keyboard-open'," +
+                                    (imeVisible ? "true" : "false") + ");" +
+                            (imeVisible
+                                    ? "setTimeout(function(){window.SBPAndroidRevealFocused&&window.SBPAndroidRevealFocused()},40);" +
+                                      "setTimeout(function(){window.SBPAndroidRevealFocused&&window.SBPAndroidRevealFocused()},220);"
+                                    : ""),
                             null);
                 });
                 return insets;
             });
-            webView.requestApplyInsets();
+            root.requestApplyInsets();
         } else {
             getWindow().getDecorView().setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                             | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                             | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-            webView.setOnApplyWindowInsetsListener((view, insets) -> {
-                int top = insets.getSystemWindowInsetTop() + dp(6);
-                view.setPadding(insets.getSystemWindowInsetLeft(), top,
-                        insets.getSystemWindowInsetRight(), 0);
+            root.setOnApplyWindowInsetsListener((view, insets) -> {
+                view.setPadding(
+                        insets.getSystemWindowInsetLeft(),
+                        insets.getSystemWindowInsetTop() + dp(4),
+                        insets.getSystemWindowInsetRight(),
+                        0);
                 return insets;
             });
-            webView.requestApplyInsets();
+            root.requestApplyInsets();
         }
     }
 
@@ -120,7 +134,10 @@ public class MainActivity extends Activity {
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
-            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+            public boolean onShowFileChooser(
+                    WebView webView,
+                    ValueCallback<Uri[]> filePathCallback,
+                    FileChooserParams fileChooserParams) {
                 if (fileChooserCallback != null) fileChooserCallback.onReceiveValue(null);
                 fileChooserCallback = filePathCallback;
                 Intent intent = fileChooserParams.createIntent();
@@ -131,7 +148,10 @@ public class MainActivity extends Activity {
                     return true;
                 } catch (Exception error) {
                     fileChooserCallback = null;
-                    Toast.makeText(MainActivity.this, "No photo picker is available on this device.", Toast.LENGTH_LONG).show();
+                    Toast.makeText(
+                            MainActivity.this,
+                            "No photo picker is available on this device.",
+                            Toast.LENGTH_LONG).show();
                     return false;
                 }
             }
@@ -142,12 +162,14 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 rehideNavigationBar();
-                view.requestApplyInsets();
+                root.requestApplyInsets();
             }
 
             @Override
-            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                Toast.makeText(MainActivity.this,
+            public void onReceivedError(
+                    WebView view, int errorCode, String description, String failingUrl) {
+                Toast.makeText(
+                        MainActivity.this,
                         "Could not reach the SBP Padel player server: " + description,
                         Toast.LENGTH_LONG).show();
             }
@@ -159,7 +181,8 @@ public class MainActivity extends Activity {
             WindowInsetsController controller = getWindow().getInsetsController();
             if (controller != null) {
                 controller.hide(WindowInsets.Type.navigationBars());
-                controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                controller.setSystemBarsBehavior(
+                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
             }
         } else {
             getWindow().getDecorView().setSystemUiVisibility(
@@ -172,7 +195,10 @@ public class MainActivity extends Activity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) rehideNavigationBar();
+        if (hasFocus) {
+            rehideNavigationBar();
+            root.requestApplyInsets();
+        }
     }
 
     @Override
@@ -192,17 +218,29 @@ public class MainActivity extends Activity {
         int pad = dp(20);
         FrameLayout holder = new FrameLayout(this);
         holder.setPadding(pad, 0, pad, 0);
-        holder.addView(input, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        holder.addView(
+                input,
+                new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT));
 
         new AlertDialog.Builder(this)
                 .setTitle("Connect to SBP Padel development server")
-                .setMessage("Enter the laptop IPv4 address shown by run_player_lan.ps1. The phone and laptop must be on the same Wi-Fi network.")
+                .setMessage(
+                        "Enter the laptop IPv4 address shown by run_player_lan.ps1. " +
+                        "The phone and laptop must be on the same Wi-Fi network.")
                 .setView(holder)
                 .setCancelable(false)
                 .setPositiveButton("CONNECT", (dialog, which) -> {
                     String host = input.getText().toString().trim();
-                    if (host.isEmpty()) { showHostDialog(); return; }
-                    getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_HOST, host).apply();
+                    if (host.isEmpty()) {
+                        showHostDialog();
+                        return;
+                    }
+                    getSharedPreferences(PREFS, MODE_PRIVATE)
+                            .edit()
+                            .putString(KEY_HOST, host)
+                            .apply();
                     loadPlayer(host);
                 })
                 .show();
