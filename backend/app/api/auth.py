@@ -1,14 +1,44 @@
+import hashlib
+import hmac
+import secrets
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
+from jose import JWTError, jwt
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.core.email import send_email
 from app.core.security import create_access_token, current_user, hash_password, verify_password
 from app.db.session import get_db
 from app.models.domain import User, UserProfile, UserRole
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def validate_password_policy(password: str) -> str:
+    checks = [
+        (len(password) >= 8, "at least 8 characters"),
+        (any(char.islower() for char in password), "a lowercase letter"),
+        (any(char.isupper() for char in password), "an uppercase letter"),
+        (any(char.isdigit() for char in password), "a number"),
+        (any(not char.isalnum() for char in password), "a special character"),
+    ]
+    missing = [label for ok, label in checks if not ok]
+    if missing:
+        raise HTTPException(400, "Password must include " + ", ".join(missing))
+    return password
+
+
+def _otp_hash(code: str) -> str:
+    return hmac.new(settings.jwt_secret.encode(), code.encode(), hashlib.sha256).hexdigest()
+
+
+def _password_fingerprint(password_hash: str | None) -> str:
+    return hashlib.sha256((password_hash or "").encode()).hexdigest()
 
 
 class RegisterRequest(BaseModel):
@@ -25,6 +55,16 @@ class LoginRequest(BaseModel):
 
 class AvatarRequest(BaseModel):
     avatar_data_url: str = Field(min_length=20, max_length=500_000)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+
+
+class ResetPasswordRequest(BaseModel):
+    challenge: str
+    otp: str = Field(min_length=6, max_length=6)
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 async def authenticate(identifier: str, password: str, db: AsyncSession) -> User:
@@ -46,6 +86,7 @@ async def avatar_for(user_id, db: AsyncSession) -> str | None:
 
 @router.post("/register")
 async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> dict:
+    validate_password_policy(payload.password)
     if not payload.email and not payload.phone:
         raise HTTPException(400, "Email or phone is required")
     if payload.email and "@" not in payload.email:
@@ -94,6 +135,75 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> di
             "avatar_data_url": await avatar_for(user.id, db),
         },
     }
+
+
+@router.post("/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)) -> dict:
+    email = payload.email.strip().lower()
+    user = await db.scalar(select(User).where(User.email == email))
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    expires = datetime.now(timezone.utc) + timedelta(minutes=settings.password_reset_minutes)
+    challenge_payload = {
+        "purpose": "password_reset",
+        "sub": str(user.id) if user else "missing",
+        "email": email,
+        "otp_hash": _otp_hash(code),
+        "pwd": _password_fingerprint(user.password_hash if user else secrets.token_hex(16)),
+        "exp": expires,
+    }
+    challenge = jwt.encode(
+        challenge_payload, settings.jwt_secret, algorithm=settings.jwt_algorithm
+    )
+    delivered = False
+    if user and user.email:
+        delivered = await send_email(
+            user.email,
+            "SBP Padel password reset code",
+            (
+                f"Your SBP Padel password reset code is: {code}\n\n"
+                f"This code expires in {settings.password_reset_minutes} minutes. "
+                "If you did not request this reset, you can ignore this email."
+            ),
+        )
+    return {
+        "message": "If that email is registered, a reset code has been sent.",
+        "challenge": challenge,
+        "expires_in_minutes": settings.password_reset_minutes,
+        "delivery": "email" if delivered else ("development-console" if settings.environment == "development" and user else "email"),
+    }
+
+
+@router.post("/reset-password")
+async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)) -> dict:
+    validate_password_policy(payload.new_password)
+    try:
+        data = jwt.decode(
+            payload.challenge, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
+        )
+    except JWTError:
+        raise HTTPException(400, "Reset code has expired or is invalid")
+    if data.get("purpose") != "password_reset":
+        raise HTTPException(400, "Invalid password reset challenge")
+    if not hmac.compare_digest(str(data.get("otp_hash", "")), _otp_hash(payload.otp)):
+        raise HTTPException(400, "Incorrect reset code")
+    user_id = data.get("sub")
+    if not user_id or user_id == "missing":
+        raise HTTPException(400, "Incorrect reset code")
+    try:
+        from uuid import UUID
+
+        user = await db.get(User, UUID(user_id))
+    except ValueError:
+        user = None
+    if not user or user.email != str(data.get("email", "")).lower():
+        raise HTTPException(400, "Reset code has expired or is invalid")
+    if not hmac.compare_digest(
+        str(data.get("pwd", "")), _password_fingerprint(user.password_hash)
+    ):
+        raise HTTPException(400, "This reset code has already been used")
+    user.password_hash = hash_password(payload.new_password)
+    await db.commit()
+    return {"message": "Password updated successfully"}
 
 
 @router.post("/token")
