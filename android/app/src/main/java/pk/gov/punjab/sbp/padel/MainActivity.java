@@ -38,6 +38,7 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(6, 16, 18));
+        webView.setClipToPadding(true);
         webView.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
@@ -50,21 +51,56 @@ public class MainActivity extends Activity {
         else loadPlayer(host.trim());
     }
 
+    private int dp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
     private void configureSystemUi() {
-        // Let Android own the status-bar safe area. This keeps WebView content
-        // below the phone's top bar and allows ADJUST_RESIZE to work with IME.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            getWindow().setDecorFitsSystemWindows(true);
+            // Android 15 / targetSdk 35 is edge-to-edge by default. Own the
+            // insets explicitly so player content never sits under the status
+            // bar and the IME physically reduces the usable WebView area.
+            getWindow().setDecorFitsSystemWindows(false);
             WindowInsetsController controller = getWindow().getInsetsController();
             if (controller != null) {
                 controller.hide(WindowInsets.Type.navigationBars());
                 controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
             }
+            webView.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets status = insets.getInsets(WindowInsets.Type.statusBars());
+                android.graphics.Insets cutout = insets.getInsets(WindowInsets.Type.displayCutout());
+                android.graphics.Insets ime = insets.getInsets(WindowInsets.Type.ime());
+                boolean imeVisible = insets.isVisible(WindowInsets.Type.ime());
+                int left = Math.max(status.left, cutout.left);
+                int top = Math.max(status.top, cutout.top) + dp(6);
+                int right = Math.max(status.right, cutout.right);
+                int bottom = imeVisible ? ime.bottom : 0;
+                view.setPadding(left, top, right, bottom);
+
+                final float cssIme = bottom / getResources().getDisplayMetrics().density;
+                view.post(() -> {
+                    if (webView == null) return;
+                    webView.evaluateJavascript(
+                            "document.documentElement.style.setProperty('--sbp-native-ime','" + cssIme + "px');" +
+                            "document.documentElement.classList.toggle('sbp-keyboard-open'," + (imeVisible ? "true" : "false") + ");" +
+                            (imeVisible ? "window.SBPAndroidRevealFocused&&window.SBPAndroidRevealFocused();" : ""),
+                            null);
+                });
+                return insets;
+            });
+            webView.requestApplyInsets();
         } else {
             getWindow().getDecorView().setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                             | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                             | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+            webView.setOnApplyWindowInsetsListener((view, insets) -> {
+                int top = insets.getSystemWindowInsetTop() + dp(6);
+                view.setPadding(insets.getSystemWindowInsetLeft(), top,
+                        insets.getSystemWindowInsetRight(), 0);
+                return insets;
+            });
+            webView.requestApplyInsets();
         }
     }
 
@@ -106,6 +142,7 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 rehideNavigationBar();
+                view.requestApplyInsets();
             }
 
             @Override
@@ -152,7 +189,7 @@ public class MainActivity extends Activity {
         input.setHint("Example: 192.168.1.25");
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        int pad = (int) (20 * getResources().getDisplayMetrics().density);
+        int pad = dp(20);
         FrameLayout holder = new FrameLayout(this);
         holder.setPadding(pad, 0, pad, 0);
         holder.addView(input, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
