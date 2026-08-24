@@ -5,10 +5,12 @@ on:
     branches: [backend-v1-dev]
     paths:
       - 'admin/**'
+      - 'run_admin_dev.ps1'
       - '.github/workflows/admin-ci.yml'
   pull_request:
     paths:
       - 'admin/**'
+      - 'run_admin_dev.ps1'
       - '.github/workflows/admin-ci.yml'
 
 jobs:
