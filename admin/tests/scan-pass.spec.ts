@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 
 const QR_DATA='iVBORw0KGgoAAAANSUhEUgAAASIAAAEiAQAAAAB1xeIbAAABh0lEQVR4nO2awW2EMBBF38RIOYKUAlKK6SAlpTVcSjqw76CfA2Z3s5GSXFgIjE/GepK/0Ogz84WJ31d6+gMETjnllFNO7Z2yupq668ty0m+q6xRUlCRl0ABoIEiS9JV6vK5TUKXWuL3nemJmzfa6jkw1d89K3co3OvUDFWT9Y288KbXUfSuggMX8gihwO3TtVf0hqGRmZl09tJ5pbnO21nVoaq77a40rdZi+Vv1+1R+Bsr40QDGDdsR6JoPSYP2muo5NVb+fq70VFj+eBQQBk3vOA6iYa0OvoR0v9h98tlqTQpcFraSBIKIkYq7DrYa9qv/f1Ow5BmGE0oxGm1GazWYy4rCNrjNQN33OYjBToyiAEkbbStcZKG4jM8LtLubFkdxzVqHqu685ZpCkkSXRrM7v735daskxSR2YdUHXRHP/6v8ndZ9jUvv7yZRex+UbsFf1x6LmUCdZHXOt34muI1L3OabSW8aigJhfvM9Zk/rW58QclgErg39rV6TM/41yyimnnDoF9QkOH7b6T0xNtwAAAABJRU5ErkJggg==';
+const VENUE={id:'venue-1',name:'QA Venue',city:'Lahore',role:'operator'};
+
+async function stubVenue(page:any){await page.route('http://127.0.0.1:8000/api/v1/operations/my-venues',(route:any)=>route.fulfill({json:[VENUE]}))}
 
 test('camera opens and fallback decoder validates QR without BarcodeDetector',async({page})=>{
  let validatedPayload:any=null;
@@ -19,7 +22,7 @@ test('camera opens and fallback decoder validates QR without BarcodeDetector',as
    return canvas.captureStream(10);
   };
  },{qr:QR_DATA});
- await page.route('http://127.0.0.1:8000/api/v1/operations/my-venues',route=>route.fulfill({json:[{id:'venue-1',name:'QA Venue',city:'Lahore',role:'operator'}]}));
+ await stubVenue(page);
  await page.route('http://127.0.0.1:8000/api/v1/operations/pass/validate',async route=>{validatedPayload=route.request().postDataJSON();await route.fulfill({json:{valid:false,reason:'QA pass decoded',reason_code:'qa_decoded'}})});
  await page.goto('/scan-pass');
  await page.getByRole('button',{name:'START CAMERA SCANNER'}).click();
@@ -37,9 +40,22 @@ test('camera errors expose browser error names',async({page})=>{
   Object.defineProperty(navigator,'mediaDevices',{value:mediaDevices,configurable:true});
   mediaDevices.getUserMedia=async()=>{throw new DOMException('Camera is busy','NotReadableError')};
  });
- await page.route('http://127.0.0.1:8000/api/v1/operations/my-venues',route=>route.fulfill({json:[{id:'venue-1',name:'QA Venue',city:'Lahore',role:'operator'}]}));
+ await stubVenue(page);
  await page.goto('/scan-pass');
  await page.getByRole('button',{name:'START CAMERA SCANNER'}).click();
- await expect(page.getByText(/NotReadableError: Camera is busy/)).toBeVisible();
+ await expect(page.getByText(/NotReadableError: Camera is busy/).first()).toBeVisible();
  await expect(page.getByText('CAMERA OFF')).toBeVisible();
+});
+
+test('manual Booking ID validation remains available with camera off',async({page})=>{
+ let validatedPayload:any=null;
+ await page.addInitScript(()=>localStorage.setItem('sbp_padel_ops_token','qa-token'));
+ await stubVenue(page);
+ await page.route('http://127.0.0.1:8000/api/v1/operations/pass/validate',async route=>{validatedPayload=route.request().postDataJSON();await route.fulfill({json:{valid:false,reason:'Manual lookup reached backend',reason_code:'qa_manual'}})});
+ await page.goto('/scan-pass');
+ await page.getByPlaceholder('Booking ID, UUID or scanned pass value').fill('BOOK-MANUAL-001');
+ await page.getByRole('button',{name:'VALIDATE'}).click();
+ await expect(page.getByText('Manual lookup reached backend')).toBeVisible();
+ await expect(page.getByText('CAMERA OFF')).toBeVisible();
+ expect(validatedPayload).toEqual({venue_id:'venue-1',pass_value:'BOOK-MANUAL-001'});
 });
