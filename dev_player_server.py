@@ -19,6 +19,7 @@ COMMON_SCRIPTS = [
     "navigation-fix.js",
     "deep-route-smooth.js",
     "review-entry.js",
+    "back-icons.js",
 ]
 PAGE_SCRIPTS = {
     "index.html": [
@@ -41,7 +42,7 @@ PAGE_SCRIPTS = {
     "payment-history.html": ["player-payment-history-live.js"],
     "wallet.html": ["player-wallet-live.js"],
     "digital-pass.html": ["digital-pass-live.js"],
-    "auth-preview.html": ["player-live.js"],
+    "auth-preview.html": ["player-live.js", "auth-enhancements.js"],
     "booking-detail.html": ["player-booking-detail-live.js"],
 }
 
