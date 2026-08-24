@@ -36,6 +36,15 @@
     return match.id;
   }
 
+  async function blobToDataUrl(blob){
+    return await new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(reader.result);
+      reader.onerror=()=>reject(new Error('Could not read QR image'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
   async function load(attempt=0){
     const auth=token();
     if(!auth){
@@ -46,20 +55,19 @@
     qr.innerHTML='<span>Loading QR…</span>';
     try{
       const id=await resolveBookingUuid(auth);
-      const res=await fetch(`${API}/bookings/pass/${encodeURIComponent(id)}/qr?_=${Date.now()}`,{
-        headers:{Authorization:`Bearer ${auth}`,Accept:'image/svg+xml'},cache:'no-store'
+      const res=await fetch(`${API}/bookings/pass/${encodeURIComponent(id)}/qr?format=png&_=${Date.now()}`,{
+        headers:{Authorization:`Bearer ${auth}`,Accept:'image/png'},cache:'no-store'
       });
-      const text=await res.text();
-      if(!res.ok)throw new Error(`QR request failed (${res.status})${text?`: ${text.slice(0,90)}`:''}`);
-      if(!/<svg[\s>]/i.test(text))throw new Error('QR endpoint did not return SVG');
-
-      // Data URLs are more reliable than blob: URLs across Android System WebView versions.
+      if(!res.ok){const text=await res.text();throw new Error(`QR request failed (${res.status})${text?`: ${text.slice(0,90)}`:''}`)}
+      const blob=await res.blob();
+      if(!blob.type.includes('png'))throw new Error(`QR endpoint returned ${blob.type||'unknown content type'}`);
+      const src=await blobToDataUrl(blob);
       const img=document.createElement('img');
       img.alt=`QR code for booking ${storedCode()||id}`;
-      img.style.cssText='width:100%;height:100%;display:block;object-fit:contain;background:#fff';
+      img.style.cssText='width:100%;height:100%;display:block;object-fit:contain;image-rendering:pixelated;background:#fff';
       img.onload=()=>{qr.dataset.sbpQrReady='1'};
       img.onerror=()=>fail('QR image failed to render');
-      img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(text);
+      img.src=src;
       qr.innerHTML='';
       qr.appendChild(img);
     }catch(err){
