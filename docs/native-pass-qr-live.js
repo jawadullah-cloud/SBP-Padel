@@ -2,15 +2,16 @@
   'use strict';
   if(window.__SBPNativePassQrLive)return;window.__SBPNativePassQrLive=true;
 
-  const API=(localStorage.getItem('sbpPadelApiBase')||'http://127.0.0.1:8000/api/v1').replace(/\/$/,'');
   let inFlight=false,lastKey='';
+  const qrTarget=()=>document.querySelector('#sbpNativePanel .npQr,#pass .qr');
+  const currentApi=()=>(localStorage.getItem('sbpPadelApiBase')||'http://127.0.0.1:8000/api/v1').replace(/\/$/,'');
 
   async function hydrate(){
-    const qr=document.querySelector('#sbpNativePanel .npQr');
+    const qr=qrTarget();
     if(!qr||inFlight)return;
     const bookingUuid=localStorage.getItem('sbpPadelSelectedBookingId')||localStorage.getItem('sbpPadelBookingUuid')||'';
     const token=localStorage.getItem('sbpPadelAccessToken')||'';
-    const key=`${bookingUuid}|${token.slice(-8)}`;
+    const key=`${bookingUuid}|${token.slice(-8)}|${currentApi()}`;
     if(qr.dataset.sbpQrReady==='1'&&lastKey===key)return;
     lastKey=key;
     qr.dataset.sbpQrReady='0';
@@ -23,33 +24,53 @@
     if(!bookingUuid||!token){qr.textContent='QR unavailable';return}
     inFlight=true;
     try{
-      const res=await fetch(`${API}/bookings/pass/${encodeURIComponent(bookingUuid)}/qr?_=${Date.now()}`,{
+      const res=await fetch(`${currentApi()}/bookings/pass/${encodeURIComponent(bookingUuid)}/qr?_=${Date.now()}`,{
         headers:{Authorization:`Bearer ${token}`},cache:'no-store'
       });
       const svg=await res.text();
       if(!res.ok)throw new Error(`QR request failed (${res.status}): ${svg.slice(0,120)}`);
       if(!/<svg[\s>]/i.test(svg))throw new Error('QR endpoint did not return SVG');
-      const current=document.querySelector('#sbpNativePanel .npQr');
+      const current=qrTarget();
       if(!current)return;
-      current.innerHTML=svg;
-      const el=current.querySelector('svg');
-      if(el){el.setAttribute('width','100%');el.setAttribute('height','100%');el.style.display='block';el.style.background='#fff'}
+
+      // Android System WebView is more reliable rendering the returned SVG as
+      // an image than adopting remote SVG markup into the live document.
+      const encoded=btoa(unescape(encodeURIComponent(svg)));
+      const image=document.createElement('img');
+      image.alt='Booking QR code';
+      image.src=`data:image/svg+xml;base64,${encoded}`;
+      image.style.cssText='display:block;width:100%;height:100%;object-fit:contain;background:#fff';
+      current.replaceChildren(image);
       current.dataset.sbpQrReady='1';
     }catch(err){
       console.error('SBP native digital pass QR:',err);
-      const current=document.querySelector('#sbpNativePanel .npQr');
+      const current=qrTarget();
       if(current){current.textContent='QR unavailable';current.dataset.sbpQrReady='0'}
     }finally{inFlight=false}
   }
 
-  // The deep router renders the native pass synchronously from the click that
-  // opens PASS. Schedule exactly one hydration after that render; do not watch
-  // DOM mutations because the QR renderer itself changes the DOM.
-  document.addEventListener('click',e=>{
-    const trigger=e.target.closest?.('[data-live-pass],#viewPass');
-    if(!trigger)return;
+  function scheduleHydrate(){
     setTimeout(hydrate,40);
+    setTimeout(hydrate,180);
+    setTimeout(hydrate,500);
+  }
+
+  document.addEventListener('click',e=>{
+    const trigger=e.target.closest?.('[data-live-pass],#viewPass,[data-nav="pass"]');
+    if(trigger)scheduleHydrate();
   },true);
+  window.addEventListener('pageshow',scheduleHydrate);
+  window.addEventListener('popstate',scheduleHydrate);
+
+  // Navigation/rendering in the player can replace the pass panel without a
+  // full page navigation. A short bounded probe catches that Android path
+  // without leaving a permanent DOM observer running.
+  let probes=0;
+  const probe=setInterval(()=>{
+    probes+=1;
+    if(qrTarget())hydrate();
+    if(probes>=20)clearInterval(probe);
+  },250);
 
   window.SBPHydrateNativePassQR=hydrate;
 })();
