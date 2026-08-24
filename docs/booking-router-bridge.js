@@ -37,6 +37,35 @@
     location.href='index.html?open=bookings';
   }
 
+  function openFreshBookingPass(){
+    const createdBookingId=localStorage.getItem('sbpPadelBookingUuid')||'';
+    if(createdBookingId){
+      localStorage.setItem('sbpPadelSelectedBookingId',createdBookingId);
+      localStorage.removeItem('sbpPadelPassQrReady');
+    }
+
+    // Reuse the exact in-app pass implementation that is already proven from
+    // My Bookings. Do not route confirmation through standalone digital-pass.html,
+    // which has a separate renderer and was leaving the prototype square visible.
+    if(window.parent&&window.parent!==window){
+      const p=window.parent;
+      try{
+        if(typeof p.SBPDeepRoute==='function')p.SBPDeepRoute('index.html?open=pass');
+        setTimeout(()=>{
+          if(typeof p.SBPNavigate==='function')p.SBPNavigate('pass');
+          if(typeof p.SBPHydrateNativePassQR==='function')p.SBPHydrateNativePassQR();
+        },360);
+        return;
+      }catch{}
+    }
+    if(typeof window.SBPNavigate==='function'){
+      window.SBPNavigate('pass');
+      setTimeout(()=>window.SBPHydrateNativePassQR?.(),0);
+      return;
+    }
+    location.href='index.html?open=pass';
+  }
+
   function syncVisibleCourtToSession(){
     if(!mainPage)return;
     let session={};
@@ -74,9 +103,6 @@
   }
 
   if(path==='payment-success.html'){
-    // The booking flow stores the freshly-created UUID as sbpPadelBookingUuid.
-    // Promote it to the same selected-booking key used by the proven
-    // My Bookings -> Pass path before the user can open the confirmation pass.
     const createdBookingId=localStorage.getItem('sbpPadelBookingUuid')||'';
     if(createdBookingId){
       localStorage.setItem('sbpPadelSelectedBookingId',createdBookingId);
@@ -93,11 +119,8 @@
     const successTarget=e.target.closest?.('#viewPass,#backHome');
     if(path==='payment-success.html'&&successTarget){
       e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
-      if(successTarget.id==='viewPass'){
-        const createdBookingId=localStorage.getItem('sbpPadelBookingUuid')||'';
-        if(createdBookingId)localStorage.setItem('sbpPadelSelectedBookingId',createdBookingId);
-        route('digital-pass.html');
-      }else openBookings();
+      if(successTarget.id==='viewPass')openFreshBookingPass();
+      else openBookings();
       return;
     }
 
