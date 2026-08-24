@@ -12,10 +12,18 @@ if (-not (Test-Path .\.env)) {
     if (Test-Path .\.env.example) {
         Copy-Item .\.env.example .\.env
         Write-Host 'Created backend\.env from backend\.env.example.' -ForegroundColor Green
-        Write-Host 'Add SMTP_USERNAME, SMTP_PASSWORD and SMTP_FROM_EMAIL there to enable real email OTP delivery.' -ForegroundColor Yellow
+        Write-Host 'Add SMTP credentials there to enable real email OTP delivery.' -ForegroundColor Yellow
     } else {
         throw 'backend\.env.example is missing.'
     }
+}
+
+# Existing local .env files predate newer optional settings. Add safe blank keys
+# without replacing any secrets the developer has already configured.
+$localEnv = Get-Content .\.env -Raw
+if ($localEnv -notmatch '(?m)^GOOGLE_CLIENT_ID=') {
+    Add-Content .\.env "`r`n# Google Sign-In OAuth 2.0 Web Client ID`r`nGOOGLE_CLIENT_ID=`r`n"
+    Write-Host 'Added GOOGLE_CLIENT_ID placeholder to backend\.env.' -ForegroundColor Yellow
 }
 
 function Get-SbpLanIp {
