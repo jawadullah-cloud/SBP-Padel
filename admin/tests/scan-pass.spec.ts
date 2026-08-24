@@ -5,6 +5,8 @@ const VENUE={id:'venue-1',name:'QA Venue',city:'Lahore',role:'operator'};
 
 async function stubVenue(page:any){await page.route('http://127.0.0.1:8000/api/v1/operations/my-venues',(route:any)=>route.fulfill({json:[VENUE]}))}
 
+async function stubValidation(page:any,reason:string,capture:(payload:any)=>void){await page.route('http://127.0.0.1:8000/api/v1/operations/pass/validate',async(route:any)=>{capture(route.request().postDataJSON());await route.fulfill({json:{valid:false,reason,reason_code:'qa_decoded'}})})}
+
 test('camera opens and fallback decoder validates QR without BarcodeDetector',async({page})=>{
  let validatedPayload:any=null;
  await page.addInitScript(({qr})=>{
@@ -23,13 +25,27 @@ test('camera opens and fallback decoder validates QR without BarcodeDetector',as
   };
  },{qr:QR_DATA});
  await stubVenue(page);
- await page.route('http://127.0.0.1:8000/api/v1/operations/pass/validate',async route=>{validatedPayload=route.request().postDataJSON();await route.fulfill({json:{valid:false,reason:'QA pass decoded',reason_code:'qa_decoded'}})});
+ await stubValidation(page,'QA pass decoded',payload=>validatedPayload=payload);
  await page.goto('/scan-pass');
  await page.getByRole('button',{name:'START CAMERA SCANNER'}).click();
  await expect(page.getByText('CAMERA LIVE')).toBeVisible();
- await expect(page.getByText('Camera live. Using compatible QR decoder fallback.')).toBeVisible();
+ await expect(page.getByText(/Camera live\. Hold the QR inside the guide/)).toBeVisible();
  await expect(page.getByPlaceholder('Booking ID, UUID or scanned pass value')).toHaveValue('BOOK-TEST-001',{timeout:10000});
  await expect(page.getByText('QA pass decoded')).toBeVisible();
+ expect(validatedPayload).toEqual({venue_id:'venue-1',pass_value:'BOOK-TEST-001'});
+});
+
+test('uploaded QR image decodes and validates without camera or BarcodeDetector',async({page})=>{
+ let validatedPayload:any=null;
+ await page.addInitScript(()=>{localStorage.setItem('sbp_padel_ops_token','qa-token');Object.defineProperty(window,'BarcodeDetector',{value:undefined,configurable:true})});
+ await stubVenue(page);
+ await stubValidation(page,'Uploaded QR reached backend',payload=>validatedPayload=payload);
+ await page.goto('/scan-pass');
+ const file=Buffer.from(QR_DATA,'base64');
+ await page.locator('input[type=file]').setInputFiles({name:'pass.png',mimeType:'image/png',buffer:file});
+ await expect(page.getByPlaceholder('Booking ID, UUID or scanned pass value')).toHaveValue('BOOK-TEST-001',{timeout:10000});
+ await expect(page.getByText('Uploaded QR reached backend')).toBeVisible();
+ await expect(page.getByText('CAMERA OFF')).toBeVisible();
  expect(validatedPayload).toEqual({venue_id:'venue-1',pass_value:'BOOK-TEST-001'});
 });
 
@@ -51,7 +67,7 @@ test('manual Booking ID validation remains available with camera off',async({pag
  let validatedPayload:any=null;
  await page.addInitScript(()=>localStorage.setItem('sbp_padel_ops_token','qa-token'));
  await stubVenue(page);
- await page.route('http://127.0.0.1:8000/api/v1/operations/pass/validate',async route=>{validatedPayload=route.request().postDataJSON();await route.fulfill({json:{valid:false,reason:'Manual lookup reached backend',reason_code:'qa_manual'}})});
+ await stubValidation(page,'Manual lookup reached backend',payload=>validatedPayload=payload);
  await page.goto('/scan-pass');
  await page.getByPlaceholder('Booking ID, UUID or scanned pass value').fill('BOOK-MANUAL-001');
  await page.getByRole('button',{name:'VALIDATE'}).click();
