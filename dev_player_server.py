@@ -13,7 +13,6 @@ HOST = os.environ.get("SBP_PLAYER_HOST", "127.0.0.1")
 PORT = int(os.environ.get("SBP_PLAYER_PORT", "5173"))
 
 COMMON_SCRIPTS = [
-    "mobile-runtime.js",
     "theme-bridge.js",
     "dev-runtime.js",
     "native-transitions.js",
@@ -100,6 +99,13 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
         if target.suffix.lower() == ".html" and target.is_file():
             html = target.read_text(encoding="utf-8")
             page = target.name
+
+            # Mobile/API bootstrap must run before any page-owned runtime such as
+            # auth-preview.html's explicit player-live.js include.
+            mobile_bootstrap = '<script src="mobile-runtime.js?dev=1"></script>'
+            if 'src="mobile-runtime.js' not in html and "src='mobile-runtime.js" not in html:
+                html = html.replace("</head>", mobile_bootstrap + "</head>")
+
             scripts: list[str] = []
             for name in [*COMMON_SCRIPTS, *PAGE_SCRIPTS.get(page, [])]:
                 if name not in scripts and f'src="{name}' not in html and f"src='{name}" not in html:
