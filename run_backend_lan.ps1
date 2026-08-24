@@ -6,6 +6,18 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 Set-Location backend
 
+# Keep development secrets local. The tracked .env.example is safe to pull;
+# this launcher creates backend\.env on first run and Git ignores that file.
+if (-not (Test-Path .\.env)) {
+    if (Test-Path .\.env.example) {
+        Copy-Item .\.env.example .\.env
+        Write-Host 'Created backend\.env from backend\.env.example.' -ForegroundColor Green
+        Write-Host 'Add SMTP_USERNAME, SMTP_PASSWORD and SMTP_FROM_EMAIL there to enable real email OTP delivery.' -ForegroundColor Yellow
+    } else {
+        throw 'backend\.env.example is missing.'
+    }
+}
+
 function Get-SbpLanIp {
     if ($LanIp) { return $LanIp.Trim() }
 
