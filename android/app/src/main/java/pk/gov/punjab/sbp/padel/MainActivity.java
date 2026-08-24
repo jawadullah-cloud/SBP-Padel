@@ -178,12 +178,8 @@ public class MainActivity extends Activity {
                         && uri.getPort() == 5173) {
                     return false;
                 }
-                try {
-                    startActivity(new Intent(Intent.ACTION_VIEW, uri));
-                    return true;
-                } catch (Exception ignored) {
-                    return false;
-                }
+                openExternalUri(uri);
+                return true;
             }
 
             @Override
@@ -208,6 +204,35 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void googleSignIn(String webClientId) {
             runOnUiThread(() -> startGoogleSignIn(webClientId));
+        }
+
+        @JavascriptInterface
+        public void openExternal(String rawUrl) {
+            runOnUiThread(() -> {
+                try {
+                    Uri uri = Uri.parse(rawUrl == null ? "" : rawUrl.trim());
+                    String scheme = uri.getScheme();
+                    if (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme)) {
+                        Toast.makeText(MainActivity.this, "Unsupported external link.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    openExternalUri(uri);
+                } catch (Exception error) {
+                    Toast.makeText(MainActivity.this, "Could not open this link.", Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+    }
+
+    private void openExternalUri(Uri uri) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+            startActivity(intent);
+        } catch (Exception error) {
+            Toast.makeText(
+                    MainActivity.this,
+                    "No app is available to open this link.",
+                    Toast.LENGTH_LONG).show();
         }
     }
 
