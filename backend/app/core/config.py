@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     access_token_minutes: int = 60 * 24 * 7
     service_fee: int = 100
     slot_hold_minutes: int = 10
+    password_reset_minutes: int = 10
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from_email: str | None = None
+    smtp_starttls: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",
