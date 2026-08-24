@@ -1,0 +1,54 @@
+/* Real-device vertical layout. Only active in the Android/native mobile runtime. */
+html.sbp-native-mobile{--sbp-nav-h:68px;--sbp-head-h:56px}
+
+/* The desktop prototype was composed around an ~800px phone. On taller Android
+   screens, let primary player surfaces use the additional real viewport rather
+   than leaving a large dead zone above the bottom navigation. */
+html.sbp-native-mobile .app>.screen{min-height:0}
+html.sbp-native-mobile .app>.screen.active{display:block}
+
+html.sbp-native-mobile #home{display:flex!important;flex-direction:column}
+html.sbp-native-mobile #home .homeHero{flex:0 0 clamp(310px,42vh,390px)!important;height:auto!important}
+html.sbp-native-mobile #home .homeContent{flex:1 0 auto;display:flex;flex-direction:column;padding-bottom:18px!important}
+html.sbp-native-mobile #home .homeFeature{margin-top:auto!important}
+html.sbp-native-mobile #home .homeFeatureVisual{height:clamp(132px,18vh,175px)!important}
+
+html.sbp-native-mobile #venues{display:flex!important;flex-direction:column}
+html.sbp-native-mobile #venues .content.tight{flex:1 0 auto;display:flex;flex-direction:column;padding-bottom:18px!important}
+html.sbp-native-mobile #venues .sbpVenueCard{flex:0 0 auto}
+html.sbp-native-mobile #venues .venueLargeImage{height:clamp(180px,25vh,245px)!important}
+html.sbp-native-mobile #venues .coming{margin-top:auto!important}
+
+html.sbp-native-mobile #nishtar{display:flex!important;flex-direction:column}
+html.sbp-native-mobile #nishtar .venueRefHero,
+html.sbp-native-mobile #nishtar .venueHero{flex:0 0 clamp(235px,31vh,305px)!important;height:auto!important}
+html.sbp-native-mobile #nishtar .venueRefBody,
+html.sbp-native-mobile #nishtar>.content{flex:1 0 auto;padding-bottom:20px!important}
+
+html.sbp-native-mobile #bookings{display:flex!important;flex-direction:column}
+html.sbp-native-mobile #bookings .bkWrap,
+html.sbp-native-mobile #bookings>.content{flex:1 0 auto;min-height:100%!important;padding-bottom:18px!important}
+html.sbp-native-mobile #bookings .bkHero{min-height:clamp(112px,15vh,145px)!important}
+
+html.sbp-native-mobile #profile{display:flex!important;flex-direction:column}
+html.sbp-native-mobile #profile>.content{flex:1 0 auto;display:flex;flex-direction:column;padding-bottom:18px!important}
+html.sbp-native-mobile #profile .menu{flex:1 0 auto;display:flex;flex-direction:column}
+html.sbp-native-mobile #profile .menu>button{flex:1 1 48px;min-height:48px;max-height:62px}
+
+html.sbp-native-mobile #select,
+html.sbp-native-mobile #time,
+html.sbp-native-mobile #pass{display:flex!important;flex-direction:column}
+html.sbp-native-mobile #select>.bookingRef,
+html.sbp-native-mobile #time>.bookingRef,
+html.sbp-native-mobile #pass>.content{flex:1 0 auto;min-height:100%;padding-bottom:18px!important}
+
+/* On very tall phones, add breathing room inside existing sections rather than
+   concentrating the entire screen in the top two-thirds. */
+@media (min-height:850px){
+  html.sbp-native-mobile #home .titleRow{margin-top:20px!important}
+  html.sbp-native-mobile #home .quick{gap:10px!important}
+  html.sbp-native-mobile #home .quick button{padding-top:14px!important;padding-bottom:14px!important}
+  html.sbp-native-mobile #venues .venueLargeCopy{padding:16px!important}
+  html.sbp-native-mobile #nishtar .venueRefSection{margin-top:18px!important}
+  html.sbp-native-mobile #bookings .bkCard{margin-bottom:12px!important}
+}
