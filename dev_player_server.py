@@ -107,6 +107,14 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
             if 'src="mobile-runtime.js' not in html and "src='mobile-runtime.js" not in html:
                 html = html.replace("</head>", mobile_bootstrap + "</head>")
 
+            # Only the main player shell needs the tall-device distribution layer.
+            # Checkout/review pages keep their already-accepted full-height layout.
+            if page == "index.html" and 'native-tall-layout.css' not in html:
+                html = html.replace(
+                    "</head>",
+                    '<link rel="stylesheet" href="native-tall-layout.css?dev=1"></head>',
+                )
+
             scripts: list[str] = []
             for name in [*COMMON_SCRIPTS, *PAGE_SCRIPTS.get(page, [])]:
                 if name not in scripts and f'src="{name}' not in html and f"src='{name}" not in html:
