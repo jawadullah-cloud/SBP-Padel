@@ -4,14 +4,16 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 import mimetypes
+import os
 import subprocess
 
 ROOT = Path(__file__).resolve().parent / "docs"
 REPO_ROOT = ROOT.parent
-HOST = "127.0.0.1"
-PORT = 5173
+HOST = os.environ.get("SBP_PLAYER_HOST", "127.0.0.1")
+PORT = int(os.environ.get("SBP_PLAYER_PORT", "5173"))
 
 COMMON_SCRIPTS = [
+    "mobile-runtime.js",
     "theme-bridge.js",
     "dev-runtime.js",
     "native-transitions.js",
@@ -136,7 +138,10 @@ console.info('[SBP-Padel dev build]',window.__SBP_DEV_BUILD__,location.pathname)
 def main() -> None:
     build = current_build_id()
     server = ThreadingHTTPServer((HOST, PORT), NoCacheHandler)
-    print(f"SBP Padel cache-free player dev server: http://{HOST}:{PORT}")
+    display_host = "127.0.0.1" if HOST == "0.0.0.0" else HOST
+    print(f"SBP Padel cache-free player dev server: http://{display_host}:{PORT}")
+    if HOST == "0.0.0.0":
+        print("LAN mode enabled: the player preview is reachable from devices on the same network.")
     print(f"Repository build: {build}")
     print("HTML/JS/CSS are always served with Cache-Control: no-store.")
     print("Legacy service workers are disabled and automatically removed in local development.")
