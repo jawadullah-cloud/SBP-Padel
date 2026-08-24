@@ -5,6 +5,7 @@
   let inFlight=false,lastKey='';
   const qrTarget=()=>document.querySelector('#sbpNativePanel .npQr,#pass .qr');
   const currentApi=()=>(localStorage.getItem('sbpPadelApiBase')||'http://127.0.0.1:8000/api/v1').replace(/\/$/,'');
+  async function blobToDataUrl(blob){return await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read QR image'));r.readAsDataURL(blob)})}
 
   async function hydrate(){
     const qr=qrTarget();
@@ -24,53 +25,29 @@
     if(!bookingUuid||!token){qr.textContent='QR unavailable';return}
     inFlight=true;
     try{
-      const res=await fetch(`${currentApi()}/bookings/pass/${encodeURIComponent(bookingUuid)}/qr?_=${Date.now()}`,{
-        headers:{Authorization:`Bearer ${token}`},cache:'no-store'
+      const res=await fetch(`${currentApi()}/bookings/pass/${encodeURIComponent(bookingUuid)}/qr?format=png&_=${Date.now()}`,{
+        headers:{Authorization:`Bearer ${token}`,Accept:'image/png'},cache:'no-store'
       });
-      const svg=await res.text();
-      if(!res.ok)throw new Error(`QR request failed (${res.status}): ${svg.slice(0,120)}`);
-      if(!/<svg[\s>]/i.test(svg))throw new Error('QR endpoint did not return SVG');
-      const current=qrTarget();
-      if(!current)return;
-
-      // Android System WebView is more reliable rendering the returned SVG as
-      // an image than adopting remote SVG markup into the live document.
-      const encoded=btoa(unescape(encodeURIComponent(svg)));
+      if(!res.ok){const text=await res.text();throw new Error(`QR request failed (${res.status}): ${text.slice(0,120)}`)}
+      const blob=await res.blob();
+      if(!blob.type.includes('png'))throw new Error('QR endpoint did not return PNG');
+      const current=qrTarget();if(!current)return;
       const image=document.createElement('img');
       image.alt='Booking QR code';
-      image.src=`data:image/svg+xml;base64,${encoded}`;
-      image.style.cssText='display:block;width:100%;height:100%;object-fit:contain;background:#fff';
+      image.src=await blobToDataUrl(blob);
+      image.style.cssText='display:block;width:100%;height:100%;object-fit:contain;image-rendering:pixelated;background:#fff';
       current.replaceChildren(image);
       current.dataset.sbpQrReady='1';
     }catch(err){
       console.error('SBP native digital pass QR:',err);
-      const current=qrTarget();
-      if(current){current.textContent='QR unavailable';current.dataset.sbpQrReady='0'}
+      const current=qrTarget();if(current){current.textContent='QR unavailable';current.dataset.sbpQrReady='0'}
     }finally{inFlight=false}
   }
 
-  function scheduleHydrate(){
-    setTimeout(hydrate,40);
-    setTimeout(hydrate,180);
-    setTimeout(hydrate,500);
-  }
-
-  document.addEventListener('click',e=>{
-    const trigger=e.target.closest?.('[data-live-pass],#viewPass,[data-nav="pass"]');
-    if(trigger)scheduleHydrate();
-  },true);
+  function scheduleHydrate(){setTimeout(hydrate,40);setTimeout(hydrate,180);setTimeout(hydrate,500)}
+  document.addEventListener('click',e=>{const trigger=e.target.closest?.('[data-live-pass],#viewPass,[data-nav="pass"]');if(trigger)scheduleHydrate()},true);
   window.addEventListener('pageshow',scheduleHydrate);
   window.addEventListener('popstate',scheduleHydrate);
-
-  // Navigation/rendering in the player can replace the pass panel without a
-  // full page navigation. A short bounded probe catches that Android path
-  // without leaving a permanent DOM observer running.
-  let probes=0;
-  const probe=setInterval(()=>{
-    probes+=1;
-    if(qrTarget())hydrate();
-    if(probes>=20)clearInterval(probe);
-  },250);
-
+  let probes=0;const probe=setInterval(()=>{probes+=1;if(qrTarget())hydrate();if(probes>=20)clearInterval(probe)},250);
   window.SBPHydrateNativePassQR=hydrate;
 })();
