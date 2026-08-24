@@ -7,11 +7,24 @@ html.sbp-native-mobile{--sbp-nav-h:68px;--sbp-head-h:56px}
 html.sbp-native-mobile .app>.screen{min-height:0}
 html.sbp-native-mobile .app>.screen.active{display:block}
 
-html.sbp-native-mobile #home{display:flex!important;flex-direction:column}
-html.sbp-native-mobile #home .homeHero{flex:0 0 clamp(310px,42vh,390px)!important;height:auto!important}
-html.sbp-native-mobile #home .homeContent{flex:1 0 auto;display:flex;flex-direction:column;padding-bottom:18px!important}
-html.sbp-native-mobile #home .homeFeature{margin-top:auto!important}
-html.sbp-native-mobile #home .homeFeatureVisual{height:clamp(132px,18vh,175px)!important}
+/* Home is intentionally normal document flow. A previous flex distribution
+   stretched the hero and pushed the featured venue underneath the fixed nav. */
+html.sbp-native-mobile #home{display:block!important}
+html.sbp-native-mobile #home .homeHero{
+  height:clamp(310px,36vh,350px)!important;
+  min-height:310px!important;
+  max-height:350px!important;
+  flex:none!important;
+  background-size:cover!important;
+  background-position:62% 52%!important;
+}
+html.sbp-native-mobile #home .homeContent{
+  display:block!important;
+  min-height:0!important;
+  padding-bottom:28px!important;
+}
+html.sbp-native-mobile #home .homeFeature{margin-top:0!important;margin-bottom:0!important}
+html.sbp-native-mobile #home .homeFeatureVisual{height:clamp(132px,16vh,160px)!important}
 
 html.sbp-native-mobile #venues{display:flex!important;flex-direction:column}
 html.sbp-native-mobile #venues .content.tight{flex:1 0 auto;display:flex;flex-direction:column;padding-bottom:18px!important}
@@ -43,11 +56,12 @@ html.sbp-native-mobile #time>.bookingRef,
 html.sbp-native-mobile #pass>.content{flex:1 0 auto;min-height:100%;padding-bottom:18px!important}
 
 /* On very tall phones, add breathing room inside existing sections rather than
-   concentrating the entire screen in the top two-thirds. */
+   concentrating the entire screen in the top two-thirds. Home stays compact
+   enough to keep its featured card fully scrollable above the bottom nav. */
 @media (min-height:850px){
-  html.sbp-native-mobile #home .titleRow{margin-top:20px!important}
+  html.sbp-native-mobile #home .titleRow{margin-top:16px!important}
   html.sbp-native-mobile #home .quick{gap:10px!important}
-  html.sbp-native-mobile #home .quick button{padding-top:14px!important;padding-bottom:14px!important}
+  html.sbp-native-mobile #home .quick button{padding-top:12px!important;padding-bottom:12px!important}
   html.sbp-native-mobile #venues .venueLargeCopy{padding:16px!important}
   html.sbp-native-mobile #nishtar .venueRefSection{margin-top:18px!important}
   html.sbp-native-mobile #bookings .bkCard{margin-bottom:12px!important}
