@@ -6,6 +6,10 @@ on:
     paths:
       - 'android/**'
       - 'docs/mobile-runtime.js'
+      - 'docs/digital-pass-live.js'
+      - 'docs/player-venues-live.js'
+      - 'docs/player-profile-live.js'
+      - 'docs/player-bookings-live.js'
       - 'dev_player_server.py'
       - 'run_backend_lan.ps1'
       - 'run_player_lan.ps1'
@@ -31,6 +35,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Restore development signing key
+        working-directory: android
+        run: base64 --decode dev-signing-key.b64 > dev-signing.keystore
       - name: Build debug APK
         working-directory: android
         run: gradle :app:assembleDebug
