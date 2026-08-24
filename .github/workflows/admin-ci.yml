@@ -12,7 +12,7 @@ on:
       - '.github/workflows/admin-ci.yml'
 
 jobs:
-  build:
+  build-and-scan-pass-runtime:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,3 +30,16 @@ jobs:
         run: npm install
       - name: Build
         run: npm run build
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start admin runtime
+        run: |
+          npm run dev -- --hostname 127.0.0.1 > /tmp/sbp-padel-admin.log 2>&1 &
+          for i in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/sbp-padel-admin.log
+          exit 1
+      - name: Scan Pass browser runtime QA
+        run: npm run test:scan-pass -- --project=chromium
