@@ -13,8 +13,10 @@ import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -22,14 +24,26 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.tasks.Task;
+
+import org.json.JSONObject;
+
 public class MainActivity extends Activity {
     private static final String PREFS = "sbp_padel_android";
     private static final String KEY_HOST = "laptop_ip";
     private static final int FILE_CHOOSER_REQUEST = 501;
+    private static final int GOOGLE_SIGN_IN_REQUEST = 502;
 
     private FrameLayout root;
     private WebView webView;
     private ValueCallback<Uri[]> fileChooserCallback;
+    private GoogleSignInClient googleSignInClient;
+    private String playerHost = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,9 +78,6 @@ public class MainActivity extends Activity {
 
     private void configureSystemUi() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // targetSdk 35 is edge-to-edge on Android 15. Apply system insets to
-            // the native container, not WebView padding, so the DOM viewport is
-            // physically below the status/cutout area and above the IME.
             getWindow().setDecorFitsSystemWindows(false);
             WindowInsetsController controller = getWindow().getInsetsController();
             if (controller != null) {
@@ -131,6 +142,7 @@ public class MainActivity extends Activity {
         settings.setTextZoom(100);
         webView.setVerticalScrollBarEnabled(false);
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        webView.addJavascriptInterface(new AndroidBridge(), "SBPAndroid");
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -159,6 +171,22 @@ public class MainActivity extends Activity {
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                Uri uri = request.getUrl();
+                if ("http".equalsIgnoreCase(uri.getScheme())
+                        && playerHost.equalsIgnoreCase(uri.getHost())
+                        && uri.getPort() == 5173) {
+                    return false;
+                }
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                    return true;
+                } catch (Exception ignored) {
+                    return false;
+                }
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 rehideNavigationBar();
@@ -174,6 +202,42 @@ public class MainActivity extends Activity {
                         Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    public class AndroidBridge {
+        @JavascriptInterface
+        public void googleSignIn(String webClientId) {
+            runOnUiThread(() -> startGoogleSignIn(webClientId));
+        }
+    }
+
+    private void startGoogleSignIn(String webClientId) {
+        if (webClientId == null || webClientId.trim().isEmpty()) {
+            sendGoogleError("Google sign-in is not configured.");
+            return;
+        }
+        GoogleSignInOptions options = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(webClientId.trim())
+                .requestEmail()
+                .build();
+        googleSignInClient = GoogleSignIn.getClient(this, options);
+        startActivityForResult(googleSignInClient.getSignInIntent(), GOOGLE_SIGN_IN_REQUEST);
+    }
+
+    private void sendGoogleCredential(String credential) {
+        if (webView == null) return;
+        String encoded = JSONObject.quote(credential);
+        webView.post(() -> webView.evaluateJavascript(
+                "window.SBPGoogleNativeResult&&window.SBPGoogleNativeResult(" + encoded + ")",
+                null));
+    }
+
+    private void sendGoogleError(String message) {
+        if (webView == null) return;
+        String encoded = JSONObject.quote(message);
+        webView.post(() -> webView.evaluateJavascript(
+                "window.SBPGoogleNativeError&&window.SBPGoogleNativeError(" + encoded + ")",
+                null));
     }
 
     private void rehideNavigationBar() {
@@ -204,6 +268,25 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == GOOGLE_SIGN_IN_REQUEST) {
+            Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
+            try {
+                GoogleSignInAccount account = task.getResult(ApiException.class);
+                String credential = account != null ? account.getIdToken() : null;
+                if (credential == null || credential.isEmpty()) {
+                    sendGoogleError("Google did not return an identity token.");
+                } else {
+                    sendGoogleCredential(credential);
+                }
+            } catch (ApiException error) {
+                if (error.getStatusCode() == 12501) {
+                    sendGoogleError("Google sign-in was cancelled.");
+                } else {
+                    sendGoogleError("Google sign-in failed (code " + error.getStatusCode() + ").");
+                }
+            }
+            return;
+        }
         if (requestCode != FILE_CHOOSER_REQUEST || fileChooserCallback == null) return;
         Uri[] result = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
         fileChooserCallback.onReceiveValue(result);
@@ -247,6 +330,7 @@ public class MainActivity extends Activity {
     }
 
     private void loadPlayer(String host) {
+        playerHost = host;
         String api = "http://" + host + ":8000/api/v1";
         String url = "http://" + host + ":5173/auth-preview.html?api=" + api;
         webView.loadUrl(url);
