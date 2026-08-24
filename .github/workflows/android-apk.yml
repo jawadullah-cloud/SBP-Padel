@@ -41,6 +41,19 @@ jobs:
       - name: Verify development signing key
         working-directory: android
         run: keytool -list -keystore dev-signing.keystore -storepass sbppadeldev -alias sbppadeldev
+      - name: Print development signing SHA-1
+        working-directory: android
+        shell: bash
+        run: |
+          echo '============================================================'
+          echo 'SBP PADEL ANDROID DEVELOPMENT SIGNING SHA-1'
+          keytool -list -v \
+            -keystore dev-signing.keystore \
+            -storepass sbppadeldev \
+            -alias sbppadeldev | grep 'SHA1:'
+          echo 'Package name: pk.gov.punjab.sbp.padel'
+          echo 'Use this SHA-1 when creating the Android OAuth client.'
+          echo '============================================================'
       - name: Build debug APK
         working-directory: android
         run: gradle :app:assembleDebug --stacktrace
