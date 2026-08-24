@@ -74,6 +74,14 @@
   }
 
   if(path==='payment-success.html'){
+    // The booking flow stores the freshly-created UUID as sbpPadelBookingUuid.
+    // Promote it to the same selected-booking key used by the proven
+    // My Bookings -> Pass path before the user can open the confirmation pass.
+    const createdBookingId=localStorage.getItem('sbpPadelBookingUuid')||'';
+    if(createdBookingId){
+      localStorage.setItem('sbpPadelSelectedBookingId',createdBookingId);
+      localStorage.removeItem('sbpPadelPassQrReady');
+    }
     const bookings=document.getElementById('backHome');
     if(bookings){
       bookings.textContent='MY BOOKINGS';
@@ -85,8 +93,11 @@
     const successTarget=e.target.closest?.('#viewPass,#backHome');
     if(path==='payment-success.html'&&successTarget){
       e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
-      if(successTarget.id==='viewPass')route('digital-pass.html');
-      else openBookings();
+      if(successTarget.id==='viewPass'){
+        const createdBookingId=localStorage.getItem('sbpPadelBookingUuid')||'';
+        if(createdBookingId)localStorage.setItem('sbpPadelSelectedBookingId',createdBookingId);
+        route('digital-pass.html');
+      }else openBookings();
       return;
     }
 
