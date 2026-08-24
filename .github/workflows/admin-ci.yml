@@ -42,4 +42,4 @@ jobs:
           cat /tmp/sbp-padel-admin.log
           exit 1
       - name: Scan Pass browser runtime QA
-        run: npm run test:scan-pass -- --project=chromium
+        run: npm run test:scan-pass
