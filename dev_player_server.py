@@ -20,6 +20,7 @@ COMMON_SCRIPTS = [
     "deep-route-smooth.js",
     "review-entry.js",
     "back-icons.js",
+    "app-branding.js",
 ]
 PAGE_SCRIPTS = {
     "index.html": [
@@ -102,14 +103,10 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
             html = target.read_text(encoding="utf-8")
             page = target.name
 
-            # Mobile/API bootstrap must run before any page-owned runtime such as
-            # auth-preview.html's explicit player-live.js include.
             mobile_bootstrap = '<script src="mobile-runtime.js?dev=1"></script>'
             if 'src="mobile-runtime.js' not in html and "src='mobile-runtime.js" not in html:
                 html = html.replace("</head>", mobile_bootstrap + "</head>")
 
-            # Only the main player shell needs the tall-device distribution layer.
-            # Checkout/review pages keep their already-accepted full-height layout.
             if page == "index.html" and 'native-tall-layout.css' not in html:
                 html = html.replace(
                     "</head>",
