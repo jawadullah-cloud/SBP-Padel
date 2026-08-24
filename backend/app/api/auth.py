@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.email import send_email
+from app.core.google_auth import verify_google_id_token
 from app.core.security import create_access_token, current_user, hash_password, verify_password
 from app.db.session import get_db
 from app.models.domain import User, UserProfile, UserRole
@@ -53,6 +54,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class GoogleLoginRequest(BaseModel):
+    credential: str = Field(min_length=50, max_length=5000)
+
+
 class AvatarRequest(BaseModel):
     avatar_data_url: str = Field(min_length=20, max_length=500_000)
 
@@ -84,6 +89,21 @@ async def avatar_for(user_id, db: AsyncSession) -> str | None:
     return profile.avatar_data_url if profile else None
 
 
+async def auth_response(user: User, db: AsyncSession) -> dict:
+    return {
+        "access_token": create_access_token(user.id, user.role.value),
+        "token_type": "bearer",
+        "user": {
+            "id": str(user.id),
+            "full_name": user.full_name,
+            "email": user.email,
+            "phone": user.phone,
+            "role": user.role.value,
+            "avatar_data_url": await avatar_for(user.id, db),
+        },
+    }
+
+
 @router.post("/register")
 async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> dict:
     validate_password_policy(payload.password)
@@ -109,32 +129,48 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    return {
-        "access_token": create_access_token(user.id, user.role.value),
-        "token_type": "bearer",
-        "user": {
-            "id": str(user.id),
-            "full_name": user.full_name,
-            "email": user.email,
-            "phone": user.phone,
-            "avatar_data_url": None,
-        },
-    }
+    return await auth_response(user, db)
 
 
 @router.post("/login")
 async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> dict:
     user = await authenticate(payload.identifier, payload.password, db)
+    return await auth_response(user, db)
+
+
+@router.get("/google/config")
+async def google_config() -> dict:
     return {
-        "access_token": create_access_token(user.id, user.role.value),
-        "token_type": "bearer",
-        "user": {
-            "id": str(user.id),
-            "full_name": user.full_name,
-            "role": user.role.value,
-            "avatar_data_url": await avatar_for(user.id, db),
-        },
+        "enabled": bool(settings.google_client_id),
+        "client_id": settings.google_client_id if settings.google_client_id else None,
     }
+
+
+@router.post("/google")
+async def google_login(payload: GoogleLoginRequest, db: AsyncSession = Depends(get_db)) -> dict:
+    claims = await verify_google_id_token(payload.credential)
+    email = claims["email"]
+    user = await db.scalar(select(User).where(User.email == email))
+    if user is not None:
+        if not user.is_active:
+            raise HTTPException(403, "This SBP Padel account is disabled")
+        if user.role != UserRole.player:
+            raise HTTPException(403, "Google sign-in is available for player accounts only")
+        if not user.full_name.strip() and claims.get("name"):
+            user.full_name = claims["name"][:150]
+            await db.commit()
+    else:
+        user = User(
+            full_name=(claims.get("name") or email.split("@", 1)[0])[:150],
+            email=email,
+            phone=None,
+            password_hash=None,
+            role=UserRole.player,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    return await auth_response(user, db)
 
 
 @router.post("/forgot-password")
