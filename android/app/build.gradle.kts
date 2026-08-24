@@ -19,8 +19,8 @@ android {
         applicationId = "pk.gov.punjab.sbp.padel"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.6-debug"
+        versionCode = 7
+        versionName = "0.7-debug"
     }
 
     buildTypes {
