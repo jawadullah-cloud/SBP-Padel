@@ -12,9 +12,6 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-
 public class MainActivity extends Activity {
     private static final String PREFS = "sbp_padel_android";
     private static final String KEY_HOST = "laptop_ip";
@@ -59,7 +56,7 @@ public class MainActivity extends Activity {
         final EditText input = new EditText(this);
         input.setHint("Example: 192.168.1.25");
         input.setSingleLine(true);
-        input.setInputType(InputType.TYPE_CLASS_PHONE);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         int pad = (int) (20 * getResources().getDisplayMetrics().density);
         FrameLayout holder = new FrameLayout(this);
         holder.setPadding(pad, 0, pad, 0);
@@ -86,8 +83,7 @@ public class MainActivity extends Activity {
 
     private void loadPlayer(String host) {
         String api = "http://" + host + ":8000/api/v1";
-        String url = "http://" + host + ":5173/auth-preview.html?api="
-                + URLEncoder.encode(api, StandardCharsets.UTF_8);
+        String url = "http://" + host + ":5173/auth-preview.html?api=" + api;
         webView.loadUrl(url);
     }
 
