@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 Set-Location admin
-if (-not (Test-Path node_modules)) {
+if (-not (Test-Path node_modules) -or -not (Test-Path node_modules/jsqr)) {
     npm install
 }
 Write-Host "Starting SBP Padel admin at http://127.0.0.1:3000" -ForegroundColor Green
