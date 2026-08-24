@@ -17,6 +17,7 @@
     style.textContent=`
       html.sbp-native-mobile,html.sbp-native-mobile body{width:100%;height:100%;min-height:100%;margin:0;overflow:hidden;background:var(--bg,#061012)!important}
       html.sbp-native-mobile body{overscroll-behavior:none}
+      html.sbp-native-mobile #sbpDevBuild{display:none!important}
       html.sbp-native-mobile .stage{width:100%;height:100dvh;min-height:100dvh;padding:0!important;display:block!important;background:var(--bg,#061012)!important}
       html.sbp-native-mobile .phone{width:100%!important;max-width:none!important;height:100dvh!important;min-height:0!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;overflow:hidden!important;background:var(--bg,#061012)!important}
       html.sbp-native-mobile .phone>.status{display:none!important}
