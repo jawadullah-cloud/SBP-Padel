@@ -25,6 +25,7 @@ PAGE_SCRIPTS = {
     "index.html": [
         "booking-router-bridge.js",
         "player-venues-live.js",
+        "favourites-migration.js",
         "player-profile-live.js",
         "profile-modules.js",
         "notifications-live.js",
@@ -42,7 +43,7 @@ PAGE_SCRIPTS = {
     "payment-history.html": ["player-payment-history-live.js"],
     "wallet.html": ["player-wallet-live.js"],
     "digital-pass.html": ["digital-pass-live.js"],
-    "auth-preview.html": ["player-live.js", "auth-enhancements.js", "google-auth.js"],
+    "auth-preview.html": ["player-live.js", "auth-enhancements.js", "google-auth-disabled.js"],
     "booking-detail.html": ["player-booking-detail-live.js"],
 }
 
