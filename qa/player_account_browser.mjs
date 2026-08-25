@@ -27,7 +27,7 @@ await page.addInitScript(()=>{
   localStorage.removeItem('sbpPadelTheme');
 });
 const assert=(c,m)=>{if(!c)throw new Error(m)};
-const waitDeepDismissed=()=>page.waitForFunction(()=>!document.getElementById('sbpDeepLayer')?.classList.contains('on'));
+const waitDeepDismissed=()=>page.waitForFunction(()=>{const l=document.getElementById('sbpDeepLayer');return l&&!l.classList.contains('on')&&!l.classList.contains('leaving')});
 try{
   await page.goto(`${base}/index.html`,{waitUntil:'networkidle'});
   await page.locator('nav [data-nav="profile"]').click();
