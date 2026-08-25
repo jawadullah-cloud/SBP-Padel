@@ -33,13 +33,14 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('sbp_padel_hq_token', 'hq-route-test-token'));
   await page.route('**/api/v1/admin/venues', route => route.fulfill({ json: venues }));
   await page.route('**/api/v1/admin/venues/*/courts', route => route.fulfill({ json: [] }));
+  await page.route('**/api/v1/admin/venues/*/images?*', route => route.fulfill({ json: [] }));
   await page.route('**/api/v1/admin/staff', route => route.fulfill({ json: [] }));
   await page.route('**/api/v1/admin/staff-assignments', route => route.fulfill({ json: [] }));
   await page.route('**/api/v1/admin/pricing-rules?*', route => route.fulfill({ json: [] }));
 });
 
 for (const venue of venues) {
-  test(`preserves ${venue.city} venue context from directory to profile and back`, async ({ page }) => {
+  test(`preserves ${venue.city} venue context across directory, profile, manage and gallery`, async ({ page }) => {
     await page.goto('/hq/provisioning');
     const tile = page.locator('.hqVenueTile').filter({ hasText: venue.name });
     await expect(tile).toBeVisible();
@@ -60,6 +61,11 @@ for (const venue of venues) {
     await backToManage.click();
     await expect(page).toHaveURL(new RegExp(`/hq/provisioning/manage\\?venue=${venue.id}$`));
     await expect(page.getByRole('heading', { name: venue.name, exact: true }).first()).toBeVisible();
-    await expect(page.getByRole('link', { name: 'FACILITY PHOTOS' })).toHaveAttribute('href', `/hq/provisioning/gallery?venue=${venue.id}`);
+
+    const photos = page.getByRole('link', { name: 'FACILITY PHOTOS' });
+    await expect(photos).toHaveAttribute('href', `/hq/provisioning/gallery?venue=${venue.id}`);
+    await photos.click();
+    await expect(page).toHaveURL(new RegExp(`/hq/provisioning/gallery\\?venue=${venue.id}$`));
+    await expect(page.getByRole('link', { name: /VENUE MANAGEMENT/ })).toHaveAttribute('href', `/hq/provisioning/manage?venue=${venue.id}`);
   });
 }
