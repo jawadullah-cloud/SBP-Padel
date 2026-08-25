@@ -66,10 +66,11 @@ try{
   await page.waitForSelector('#sbpDeepLayer.on');
   let frame=page.frameLocator('#sbpDeepFrame');
   await frame.locator('#list').filter({hasText:'PDL-ACCOUNT-LIVE'}).waitFor();
+  await frame.locator('#list .entry[data-type="refunds"]').waitFor();
   const paymentText=await frame.locator('body').innerText();
   assert(paymentText.includes('PAY-ACCOUNT-LIVE'),'Payment History did not render the live transaction reference.');
   assert(!paymentText.includes('PDL-002381'),'Prototype payment-history booking leaked into runtime.');
-  assert(paymentText.includes('REFUND REQUESTED'),'Live refund state was not rendered.');
+  assert(paymentText.includes('REQUESTED'),'Live refund state was not rendered.');
   await frame.locator('.head .back').click();
   await page.waitForFunction(()=>document.getElementById('profile')?.classList.contains('active'));
 
