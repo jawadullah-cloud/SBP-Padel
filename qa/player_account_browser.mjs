@@ -21,6 +21,8 @@ await page.route('http://127.0.0.1:8000/api/v1/**',async route=>{
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
 });
 await page.addInitScript(()=>{
+  if(sessionStorage.getItem('sbpAccountQaSeeded'))return;
+  sessionStorage.setItem('sbpAccountQaSeeded','1');
   localStorage.setItem('sbpPadelAccessToken','qa-token');
   localStorage.setItem('sbpPadelUser',JSON.stringify({full_name:'Old Prototype Name'}));
   localStorage.removeItem('sbpPadelSavedPlayers');
