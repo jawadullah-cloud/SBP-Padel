@@ -169,30 +169,36 @@ try {
   await page.locator('#time .slotRow:not(.booked)').last().click();
   await page.locator('#time .bookingBottom .primary').click();
   await page.waitForSelector('#sbpDeepLayer.on');
-  const deep=page.frameLocator('#sbpDeepFrame');
+  let deep=page.frameLocator('#sbpDeepFrame');
   await deep.locator('#livePolicyAccept').waitFor();
-  await deep.locator('#livePolicyAccept').check();
-  await deep.locator('#toPayment').click();
-  await deep.locator('#payButton').waitFor();
 
-  // Exact Android regression: 5 → 4 → 3 → 4 → 5, then verify time remains scrollable/actionable.
-  await deep.locator('[data-sbp-step="4"]').click();
+  // Exact Android regression begins at step 5 Review. Use the real Review back button,
+  // then the main-app step controls: 5 → 4 → 3 → 4 → 5.
+  await deep.locator('.head .back').click();
   await page.waitForFunction(()=>document.getElementById('time')?.classList.contains('active'));
   await page.locator('#time [data-sbp-step="3"]').click();
   await page.waitForFunction(()=>document.getElementById('select')?.classList.contains('active'));
   await page.locator('#select [data-sbp-step="4"]').click();
   await page.waitForFunction(()=>document.getElementById('time')?.classList.contains('active'));
   await page.waitForSelector('#time .slotRow');
-  const beforeScroll=await page.locator('#time').evaluate(el=>el.scrollTop);
-  await page.locator('#time').evaluate(el=>{el.scrollTop=Math.min(el.scrollHeight,el.scrollTop+180)});
-  const afterScroll=await page.locator('#time').evaluate(el=>el.scrollTop);
-  assert(afterScroll>=beforeScroll,'Time screen stopped scrolling after repeated booking-step navigation.');
-  if(await page.locator('#time .slotRow.selected').count()===0)await page.locator('#time .slotRow:not(.booked)').last().click();
+  const scrollable=await page.locator('#time').evaluate(el=>el.scrollHeight>el.clientHeight);
+  if(scrollable){
+    const beforeScroll=await page.locator('#time').evaluate(el=>el.scrollTop);
+    await page.locator('#time').evaluate(el=>{el.scrollTop=Math.min(el.scrollHeight-el.clientHeight,el.scrollTop+180)});
+    const afterScroll=await page.locator('#time').evaluate(el=>el.scrollTop);
+    assert(afterScroll>beforeScroll,'Time screen stopped scrolling after repeated booking-step navigation.');
+  }
+  if(await page.locator('#time .slotRow.chosen').count()===0)await page.locator('#time .slotRow:not(.booked)').last().click();
   await page.locator('#time .bookingBottom .primary').click();
   await page.waitForSelector('#sbpDeepLayer.on');
-  const reviewAgain=page.frameLocator('#sbpDeepFrame');
-  await reviewAgain.locator('#livePolicyAccept').waitFor();
-  assert(await reviewAgain.locator('#toPayment').isVisible(),'Review was not actionable after 5→4→3→4→5 navigation stress.');
+  deep=page.frameLocator('#sbpDeepFrame');
+  await deep.locator('#livePolicyAccept').waitFor();
+  assert(await deep.locator('#toPayment').isVisible(),'Review was not actionable after 5→4→3→4→5 navigation stress.');
+
+  // Complete the ordinary review → payment transition too.
+  await deep.locator('#livePolicyAccept').check();
+  await deep.locator('#toPayment').click();
+  await deep.locator('#payButton').waitFor();
 
   console.log(`Player runtime browser QA passed on build ${build}, including 5→4→3→4→5 stress navigation.`);
 } finally {
