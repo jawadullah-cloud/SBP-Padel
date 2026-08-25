@@ -13,6 +13,7 @@ from app.models.operations import BookingCheckIn, BlockType, UserVenueAssignment
 
 router = APIRouter(prefix="/operations", tags=["venue operations"])
 OPERATIONS_ROLES = {UserRole.admin, UserRole.venue_manager, UserRole.venue_operator}
+ACTIVE_CHECKIN_STATUSES = {BookingStatus.confirmed, BookingStatus.rescheduled}
 
 
 class BlockRequest(BaseModel):
@@ -146,8 +147,8 @@ async def check_in_booking(
     if not booking:
         raise HTTPException(404, "Booking not found")
     await ensure_venue_access(user, booking.venue_id, db)
-    if booking.status != BookingStatus.confirmed:
-        raise HTTPException(409, "Only confirmed bookings can be checked in")
+    if booking.status not in ACTIVE_CHECKIN_STATUSES:
+        raise HTTPException(409, "Only confirmed or rescheduled bookings can be checked in")
     existing = await db.scalar(select(BookingCheckIn).where(BookingCheckIn.booking_id == booking.id))
     if existing:
         return {"booking_id": str(booking.id), "checked_in": True, "checked_in_at": existing.checked_in_at.isoformat()}
