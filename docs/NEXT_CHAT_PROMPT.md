@@ -12,31 +12,48 @@ Continue active development of **SBP-Padel** from `backend-v1-dev` in `jawadulla
 This is a mature continuation, not a new project.
 
 ## Current priority — manual HQ product review
-The HQ architecture was consolidated on 25 Aug 2026 and now needs user manual review. Do not reopen accepted player or venue-operations workflows unless a concrete regression is reproduced.
+The HQ architecture and shell were consolidated/refined on 25 Aug 2026 and now need user manual review. Do not reopen accepted player or venue-operations workflows unless a concrete regression is reproduced.
 
 ### Current HQ ownership
 - `/hq`: central dashboard plus cross-venue Bookings, Staff Accounts, Policies and Refund workflow.
 - `/hq/provisioning`: searchable Venue Directory and Create New Venue.
 - `/hq/provisioning/manage?venue=<id>`: courts, Bookable Hours & Pricing, venue staff assignment, activation/deactivation and safe cleanup.
-- `/hq/reports`: venue performance, current-month default period, summary metrics.
-- `/hq/finance`: payment/refund/net collection summary and reconciliation batches, current-month default period.
+- `/hq/reports`: venue performance with local current-month default period and summary metrics.
+- `/hq/finance`: payment/refund/net collection summary and reconciliation batches with local current-month default period.
 - `/hq/audit`: audit log with text and actor-role filters.
-- `HQTools.tsx`: shared HQ navigation/sign-out.
+- `HQTools.tsx`: shared left-side HQ navigation/sign-out on dedicated HQ routes.
+- `admin/app/hq-shell.css`: HQ shell, dashboard action panels and responsive behavior.
+
+The former floating HQ toolbar is intentionally removed. Do not reintroduce it. HQ uses the left sidebar as its primary navigation. Venue-operation-only Players/Scan Pass links are intentionally excluded from HQ.
 
 The former duplicate venue/pricing ownership was removed from HQ Home. Create venue staff accounts centrally under Staff, then assign managers/operators inside the selected venue's management page.
 
+### HQ Home purpose
+The dashboard now surfaces more than static metrics:
+- province-wide venue/court/player/confirmed-booking/paid-revenue/refund metrics;
+- recent booking activity;
+- pending-refund attention;
+- audit oversight;
+- venue-network status;
+- navigational cards to Venue Directory, Reports, Finance and Audit.
+
+Money values are displayed as whole PKR amounts with thousands separators where appropriate.
+
+### Date-handling decision
+Reports and Finance must derive initial dates in local calendar time. Do not use `Date.toISOString()` for month-start/current-date defaults because Pakistan-local midnight can become the prior UTC date.
+
 ### HQ manual-review flow
 After pulling/restarting the admin portal, test in this order:
-1. HQ login and Overview metrics/navigation.
-2. Venue Directory search/create and per-venue management.
-3. Cross-venue Bookings filters/search.
-4. Staff account creation, then venue assignment in Venue Directory.
-5. Policy publishing/history.
-6. Refund requested → processing → completed workflow using suitable test data.
-7. Reports date filtering and summary totals.
-8. Finance date filtering and reconciliation generation.
-9. Audit search/role filtering.
-10. Shared HQ navigation and sign-out from dedicated routes.
+1. HQ login and Overview dashboard: sidebar, metrics, recent booking activity, attention panel and shortcut cards.
+2. Bookings filters/search and displayed money/status formatting.
+3. Staff account creation/listing.
+4. Policy publishing/history.
+5. Refund requested → processing → completed workflow using suitable test data.
+6. Venue Directory search/create and per-venue management, including shared sidebar state.
+7. Reports: confirm the default start date is the 1st of the current local month, run custom periods and verify summary totals.
+8. Finance: confirm the same local-date behavior, refresh summary and generate reconciliation.
+9. Audit: search, actor-role filter and refresh.
+10. Navigate between dedicated routes only through the shared HQ sidebar and test sign-out.
 
 Do not mark HQ manually accepted until the user completes this review.
 
