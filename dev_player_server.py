@@ -14,6 +14,7 @@ PORT = int(os.environ.get("SBP_PLAYER_PORT", "5173"))
 
 COMMON_SCRIPTS = [
     "runtime-api.js",
+    "venue-cover-runtime.js",
     "booking-participants-live.js",
     "theme-bridge.js",
     "dev-runtime.js",
