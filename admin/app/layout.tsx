@@ -4,6 +4,7 @@ import './players-ui.css';
 import './scan-pass.css';
 import './hq-provisioning.css';
 import './hq-shell.css';
+import './account-control.css';
 import type { Metadata } from 'next';
 import PlayersSidebarLink from './PlayersSidebarLink';
 import StaffAccountControl from './StaffAccountControl';
