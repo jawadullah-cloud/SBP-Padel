@@ -1,72 +1,49 @@
-# Google Sign-In setup
+# Google Sign-In — deferred integration notes
 
-SBP-Padel supports Google sign-in for player accounts in both the browser player and Android APK.
+Google sign-in is **not currently an active player-facing feature** in SBP-Padel. The player login screen must not show a **Continue with Google** option until the complete browser/Android OAuth configuration is intentionally enabled, tested and manually accepted.
 
-## Account behavior
+The backend contains Google-token verification scaffolding and automated tests so the integration can be completed later without redesigning account identity. That backend capability does not mean the feature is enabled in the current product UI.
+
+## Intended account behavior when enabled later
 
 - Google must return a verified email address.
-- If that email already belongs to an SBP-Padel player, Google signs into the same account.
-- If the email is new, one player account is created automatically.
-- Google sign-in cannot be used to enter admin, venue-manager or venue-operator accounts.
+- If that email already belongs to an SBP-Padel player, Google should sign into the same account.
+- If the email is new, one player account may be created automatically.
+- Google sign-in must never grant admin, venue-manager or venue-operator access.
 - The backend verifies the Google ID token audience against `GOOGLE_CLIENT_ID` before issuing an SBP-Padel access token.
 
-## Google Cloud configuration
+## Configuration required before enabling
 
 Create one Google Cloud project for SBP-Padel and configure the OAuth consent screen.
 
-### 1. Web OAuth client
+### Web OAuth client
 
-Create an OAuth 2.0 Client ID of type **Web application**.
-
-For local browser testing add these authorized JavaScript origins:
+Create an OAuth 2.0 Client ID of type **Web application**. For local browser testing, authorized JavaScript origins would include:
 
 - `http://localhost:5173`
 - `http://127.0.0.1:5173`
 
-Copy the resulting Web Client ID into the local backend file:
+The resulting Web Client ID belongs in backend configuration as `GOOGLE_CLIENT_ID`. The client ID is public configuration; a client secret must not be placed in player JavaScript or the Android app.
 
-```env
-GOOGLE_CLIENT_ID=xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
-```
+### Android OAuth client
 
-The client ID is public configuration; the client secret is not required by this sign-in design and must not be added to the player JavaScript or Android app.
-
-### 2. Android OAuth client
-
-Create an OAuth 2.0 Client ID of type **Android** in the same Google Cloud project.
-
-Use package name:
+Create an OAuth 2.0 Client ID of type **Android** in the same Google Cloud project using package name:
 
 ```text
 pk.gov.punjab.sbp.padel
 ```
 
-For the current stable development APK, obtain the SHA-1 from the repository development keystore after pulling:
+Register the signing-certificate identity for the APK/AAB being tested or released. Production must use the final release signing certificate rather than a development signing identity.
 
-```powershell
-keytool -list -v -keystore android\dev-signing.keystore -alias sbppadeldev -storepass sbppadeldev -keypass sbppadeldev | Select-String "SHA1"
-```
+## Re-enablement gate
 
-Enter that SHA-1 when creating the Android OAuth client.
+Do not restore the Google login button merely because backend code exists. Re-enable it only after all of the following are true:
 
-The Android app still requests its ID token for the **Web Client ID** stored in `GOOGLE_CLIENT_ID`. The separate Android client registers the package/signing-certificate identity with the same Google Cloud project.
+1. Google Cloud OAuth consent and client configuration are complete.
+2. Browser and native Android sign-in both exchange a verified Google ID token successfully.
+3. Existing-player account linking and new-player creation are covered by backend QA.
+4. Staff/admin accounts are proven inaccessible through Google player login.
+5. Android/WebView lifecycle and cancellation/error states are tested.
+6. The user manually accepts the visible Google sign-in flow.
 
-## Runtime
-
-Restart the backend after changing `.env`:
-
-```powershell
-.\run_backend_lan.ps1
-```
-
-Restart the player LAN server after pulling player JavaScript changes:
-
-```powershell
-.\run_player_lan.ps1
-```
-
-Native Google sign-in requires Android APK `0.6-debug` or later because Google authentication is intentionally handled outside WebView using Google Play Services.
-
-## Production
-
-Before release, create a production Android OAuth client using the final release package/signing certificate SHA-1 (and SHA-256 where requested by Google). Do not reuse the development signing identity for the production APK/AAB.
+Until that gate is completed, email/mobile + password and password recovery remain the active player authentication methods.
