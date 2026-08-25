@@ -56,10 +56,11 @@ async def validate_pass(
     await ensure_venue_access(user, payload.venue_id, db)
     booking = await find_booking(payload.pass_value, db)
     if not booking:
-        return {"valid": False, "reason": "Booking not found", "reason_code": "not_found"}
+        return {"valid": False, "can_check_in": False, "reason": "Booking not found", "reason_code": "not_found"}
     if booking.venue_id != payload.venue_id:
         return {
             "valid": False,
+            "can_check_in": False,
             "reason": "This pass belongs to a different venue",
             "reason_code": "wrong_venue",
         }
@@ -101,11 +102,20 @@ async def validate_pass(
             reason = "This booking date has passed"
             reason_code = "past_date"
     elif checkin:
-        reason = "Player is already checked in"
+        reason = "Player is already checked in for this booking"
         reason_code = "already_checked_in"
 
+    can_check_in = valid and checkin is None
+    slot_rows = [
+        {
+            "start_time": slot.start_time.isoformat(timespec="minutes"),
+            "end_time": slot.end_time.isoformat(timespec="minutes"),
+        }
+        for slot in slots
+    ]
     return {
         "valid": valid,
+        "can_check_in": can_check_in,
         "reason": reason,
         "reason_code": reason_code,
         "booking": {
@@ -124,13 +134,9 @@ async def validate_pass(
                 "email": player.email if player else None,
                 "phone": player.phone if player else None,
             },
-            "slots": [
-                {
-                    "start_time": slot.start_time.isoformat(timespec="minutes"),
-                    "end_time": slot.end_time.isoformat(timespec="minutes"),
-                }
-                for slot in slots
-            ],
+            "slots": slot_rows,
+            "slot_count": len(slot_rows),
+            "duration_hours": len(slot_rows),
             "payment_status": payment.status.value if payment else None,
             "payment_method": payment.method if payment else None,
             "checked_in": checkin is not None,
