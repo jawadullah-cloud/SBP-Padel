@@ -1,83 +1,37 @@
 (()=>{
   'use strict';
-  if(window.__SBPDigitalPassLive)return;
-  window.__SBPDigitalPassLive=true;
-
-  const API=(localStorage.getItem('sbpPadelApiBase')||'http://127.0.0.1:8000/api/v1').replace(/\/$/,'');
+  if(window.__SBPDigitalPassLive)return;window.__SBPDigitalPassLive=true;
   const token=()=>localStorage.getItem('sbpPadelAccessToken')||'';
+  const apiBase=()=>window.SBPApiBase?.()||(localStorage.getItem('sbpPadelApiBase')||'').replace(/\/$/,'');
   const storedUuid=()=>localStorage.getItem('sbpPadelSelectedBookingId')||localStorage.getItem('sbpPadelBookingUuid')||'';
-  const storedCode=()=>localStorage.getItem('sbpPadelBookingId')||'';
-  const qr=document.querySelector('.qr');
-  if(!qr)return;
-  const uuidRe=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-  function fail(message){
-    qr.classList.add('qrError');
-    qr.dataset.sbpQrReady='0';
-    qr.innerHTML=`<span>${String(message||'QR unavailable').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</span>`;
+  const qr=document.querySelector('.qr');if(!qr)return;
+  let activePromise=null,lastBooking='';
+  const fmtTime=t=>{const [h,m]=String(t||'00:00').split(':').map(Number);return new Date(2000,0,1,h,m||0).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})};
+  const fmtDate=iso=>new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short',year:'numeric'}).toUpperCase();
+  const set=(id,val)=>{const el=document.getElementById(id);if(el&&val!=null)el.textContent=val};
+  async function json(path){const res=await fetch(`${apiBase()}${path}`,{headers:{Authorization:`Bearer ${token()}`,Accept:'application/json'},cache:'no-store'});let body=null;try{body=await res.json()}catch{}if(!res.ok)throw new Error(body?.detail||`Request failed (${res.status})`);return body}
+  async function blobToDataUrl(blob){return await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read QR image'));r.readAsDataURL(blob)})}
+  function showError(message){qr.dataset.sbpQrReady='0';qr.classList.add('qrError');qr.replaceChildren(Object.assign(document.createElement('span'),{textContent:message}))}
+  async function hydrate(force=false){
+    const id=storedUuid(),auth=token();if(!id||!auth){showError('QR unavailable');return}
+    if(!force&&id===lastBooking&&qr.dataset.sbpQrReady==='1')return;
+    if(activePromise)return activePromise;
+    lastBooking=id;qr.classList.remove('qrError');qr.dataset.sbpQrReady='0';qr.innerHTML='<span>Loading pass…</span>';
+    activePromise=(async()=>{
+      try{
+        const [b,participants,venues]=await Promise.all([json(`/bookings/${encodeURIComponent(id)}?_=${Date.now()}`),json(`/bookings/${encodeURIComponent(id)}/participants?_=${Date.now()}`),json('/venues')]);
+        const venue=(venues||[]).find(v=>v.id===b.venue_id);const vd=venue?await json(`/venues/${venue.id}`):null;const court=vd?.courts?.find(c=>c.id===b.court_id);
+        set('venue',(venue?.name||vd?.name||'SBP Padel').toUpperCase());set('court',(court?.name||'Court').toUpperCase());set('date',fmtDate(b.date));
+        if(b.slots?.length)set('time',`${fmtTime(b.slots[0].start_time)} – ${fmtTime(b.slots[b.slots.length-1].end_time)}`);set('bookingId',b.booking_code);
+        const count=Number(participants?.player_count||1);set('players',`${count} registered player${count===1?'':'s'}`);localStorage.setItem('sbpPadelBookingId',b.booking_code||'');
+        const res=await fetch(`${apiBase()}/bookings/pass/${encodeURIComponent(id)}/qr?format=png&_=${Date.now()}`,{headers:{Authorization:`Bearer ${auth}`,Accept:'image/png'},cache:'no-store'});if(!res.ok)throw new Error(`QR request failed (${res.status})`);const blob=await res.blob();if(!blob.type.includes('png'))throw new Error('QR endpoint did not return an image');
+        const img=document.createElement('img');img.alt=`QR code for booking ${b.booking_code}`;img.style.cssText='width:100%;height:100%;display:block;object-fit:contain;image-rendering:pixelated;background:#fff';img.src=await blobToDataUrl(blob);img.onload=()=>{qr.dataset.sbpQrReady='1'};img.onerror=()=>showError('QR image failed to render');qr.replaceChildren(img);
+      }catch(err){console.error('SBP digital pass:',err);showError(err?.message||'Pass unavailable')}finally{activePromise=null}
+    })();return activePromise;
   }
-
-  async function json(path,auth){
-    const res=await fetch(`${API}${path}`,{headers:{Authorization:`Bearer ${auth}`,Accept:'application/json'},cache:'no-store'});
-    let body=null;try{body=await res.json()}catch{}
-    if(!res.ok)throw new Error(typeof body?.detail==='string'?body.detail:`Request failed (${res.status})`);
-    return body;
-  }
-
-  async function resolveBookingUuid(auth){
-    const direct=storedUuid();
-    if(uuidRe.test(direct))return direct;
-    const code=storedCode();
-    if(!code)throw new Error('Booking identifier is missing');
-    const rows=await json(`/bookings/me?_=${Date.now()}`,auth);
-    const match=Array.isArray(rows)?rows.find(row=>row?.booking_code===code):null;
-    if(!match?.id||!uuidRe.test(match.id))throw new Error(`Could not resolve booking ${code}`);
-    localStorage.setItem('sbpPadelSelectedBookingId',match.id);
-    return match.id;
-  }
-
-  async function blobToDataUrl(blob){
-    return await new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onload=()=>resolve(reader.result);
-      reader.onerror=()=>reject(new Error('Could not read QR image'));
-      reader.readAsDataURL(blob);
-    });
-  }
-
-  async function load(attempt=0){
-    const auth=token();
-    if(!auth){
-      if(attempt<3){setTimeout(()=>load(attempt+1),180);return}
-      fail('QR unavailable: sign-in token missing');return;
-    }
-    qr.classList.remove('qrError');
-    qr.innerHTML='<span>Loading QR…</span>';
-    try{
-      const id=await resolveBookingUuid(auth);
-      const res=await fetch(`${API}/bookings/pass/${encodeURIComponent(id)}/qr?format=png&_=${Date.now()}`,{
-        headers:{Authorization:`Bearer ${auth}`,Accept:'image/png'},cache:'no-store'
-      });
-      if(!res.ok){const text=await res.text();throw new Error(`QR request failed (${res.status})${text?`: ${text.slice(0,90)}`:''}`)}
-      const blob=await res.blob();
-      if(!blob.type.includes('png'))throw new Error(`QR endpoint returned ${blob.type||'unknown content type'}`);
-      const src=await blobToDataUrl(blob);
-      const img=document.createElement('img');
-      img.alt=`QR code for booking ${storedCode()||id}`;
-      img.style.cssText='width:100%;height:100%;display:block;object-fit:contain;image-rendering:pixelated;background:#fff';
-      img.onload=()=>{qr.dataset.sbpQrReady='1'};
-      img.onerror=()=>fail('QR image failed to render');
-      img.src=src;
-      qr.innerHTML='';
-      qr.appendChild(img);
-    }catch(err){
-      console.error('SBP digital pass QR:',err);
-      if(attempt<2){setTimeout(()=>load(attempt+1),300);return}
-      fail(`QR unavailable: ${err?.message||'unknown error'}`);
-    }
-  }
-
-  window.addEventListener('pageshow',()=>load(0));
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')load(0)});
-  load(0);
+  const go=url=>location.replace(url);
+  const back=document.querySelector('.head .back');if(back)back.onclick=e=>{e.preventDefault();go('index.html?open=bookings')};
+  document.querySelector('.actions .home')?.addEventListener('click',e=>{e.preventDefault();go('index.html?open=home')},true);
+  document.querySelector('.actions .bookings')?.addEventListener('click',e=>{e.preventDefault();go('index.html?open=bookings')},true);
+  hydrate();window.addEventListener('pageshow',()=>hydrate(false));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')hydrate(false)});
 })();
