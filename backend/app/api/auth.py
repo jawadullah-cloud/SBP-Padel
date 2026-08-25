@@ -81,6 +81,8 @@ async def authenticate(identifier: str, password: str, db: AsyncSession) -> User
     )
     if not user or not verify_password(password, user.password_hash):
         raise HTTPException(401, "Invalid login credentials")
+    if not user.is_active:
+        raise HTTPException(403, "This SBP Padel account is disabled")
     return user
 
 
