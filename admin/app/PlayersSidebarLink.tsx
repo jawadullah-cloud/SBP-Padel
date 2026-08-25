@@ -10,7 +10,7 @@ export default function PlayersSidebarLink(){
 
   useEffect(()=>{
     setHost(null);
-    if(pathname==='/players'||pathname==='/scan-pass')return;
+    if(pathname==='/players'||pathname==='/scan-pass'||pathname.startsWith('/hq'))return;
 
     const findHost=()=>{
       const nav=document.querySelector('.sidebar .nav');
