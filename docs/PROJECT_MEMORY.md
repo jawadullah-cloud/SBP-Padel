@@ -13,7 +13,9 @@ Repository state, actual runtime behavior, completed CI and explicit manual acce
 HQ and venue operations remain separate products.
 
 ## Player milestone — manually accepted 25–26 Aug 2026
-Accepted: login persistence/recovery, venue discovery/favourites/directions, themes, Date → Court → Time → Review → Payment → Confirmation, stable repeated navigation, live player/additional-player count, consecutive multi-slot booking as one session, wallet hidden while disabled, backend confirmation/pass, booking-level QR/check-in, live My Bookings without prototype/layout flash, Android system back, venue gallery/cover propagation, native Android location, Near Me filtering and nearby-aware Next Available. Google sign-in remains intentionally deferred.
+Accepted: login persistence/recovery, venue discovery/favourites/directions, themes, Date → Court → Time → Review → Payment → Confirmation, stable repeated navigation, live player/additional-player count, consecutive multi-slot booking as one session, wallet hidden while disabled, backend confirmation/pass, booking-level QR/check-in, live My Bookings without prototype/layout flash, Android system back, venue gallery/cover propagation, native Android location, Near Me filtering and nearby-aware Next Available.
+
+**Google sign-in remains intentionally deferred.** The player login screen must not advertise Google sign-in until the complete browser/native OAuth flow is intentionally enabled, tested and manually accepted. `docs/GOOGLE_SIGNIN.md` is a deferred-integration note, not a statement that the feature is active. Player Flow CI has an architecture guard that fails if `Continue with Google` returns to `docs/auth-preview.html`.
 
 ### Player runtime ownership
 `review-entry.js` booking state; `review-native.js` review/payment handoff; `player-venues-live.js` venue detail and real facility gallery; `player-discovery-live.js` dynamic venue discovery, native-location ranking and live Next Available; `discovery-tools.js` visible Find Your Court search/filter controls; `venue-cover-runtime.js` shared venue cover propagation; `player-bookings-live.js` My Bookings; `player-booking-detail-live.js` detail/reschedule/cancel/refund; `digital-pass-live.js` pass; `booking-success-live.js` confirmation; `player-profile-live.js` profile/auth; `notifications-live.js` notifications; `profile-modules.js` Saved Players/Favourites/Help; `theme-bridge.js` theme; `android-back.js` + MainActivity native back/location bridge.
@@ -39,14 +41,26 @@ Consecutive selected slots form one booking session and one pass. Player count i
 
 Rescheduling currently requires the replacement session to have the same total price; price-adjusted rescheduling remains a future enhancement.
 
+**Rescheduled bookings remain active bookings.** A paid booking with status `rescheduled` must remain valid for venue pass/QR validation and check-in on its replacement date. `operations.py` and `operations_passes.py` share this behavior through explicit active-status sets, and targeted backend regression QA covers pay → reschedule → validate pass → operator check-in.
+
 ## Refund governance
 HQ Refunds is a decision screen, not a bare queue. Each refund request is a compact single-row summary by default and expands on click. Expanded review must expose booking code, player/contact, venue/court, date and all slots, amount/payment reference, cancellation reason/timing, check-in/utilization state and the 12-hour rule before an admin processes/rejects a refund. Completed refund processing updates payment status.
 
 ## HQ bookings
 HQ Bookings follows the same compact-review pattern: each booking is collapsed by default with booking code, venue, date, semantic status and amount. Expanding a row retrieves/shows detailed player/contact, court, all slots, duration, payment, check-in/utilization, pricing, cancellation/refund context, creation time and UUID. Booking statuses use semantic colors: green for positive/complete, amber for pending/rescheduled, red for cancelled/failed/rejected, neutral for non-action states.
 
-## Venue operations — manually accepted
-Accepted: manager/operator venue assignment, Court Schedule, booking search/detail, check-in, closures, court status, front-desk booking, payments/refunds, pricing/bookable hours, reports, player registration/search. Pricing rules define the visible booking schedule. General Bookings sorts by creation activity; Court Schedule is chronological.
+## Venue operations — manually accepted baseline; unattended hardening pending manual review
+The previously reviewed baseline remains accepted: manager/operator venue assignment, Court Schedule, booking search/detail, check-in, closures, court status, front-desk booking, payments/refunds, pricing/bookable hours, reports, player registration/search. Pricing rules define the visible booking schedule. General Bookings sorts by creation activity; Court Schedule is chronological.
+
+An unattended 26 Aug hardening pass added objective safeguards that require morning manual review but do not redesign the accepted UI:
+- operations login no longer embeds/prefills the development manager email/password;
+- the selected venue is authoritative during multi-venue operations: slower responses from a previously selected venue are discarded instead of overwriting the current venue;
+- changing venue clears venue-scoped transient state, including selected booking, front-desk player/court/slots/quote/payment reference, closure court and pricing court;
+- operator versus manager controls remain role-scoped: operators can view pricing/closures/courts but cannot mutate manager-only settings;
+- confirmed and rescheduled paid bookings are both eligible for pass validation/check-in;
+- `admin/tests/operations.spec.ts` covers blank staff credentials, stale-response rejection, role-scoped controls, My Account visibility and venue-switch clearing.
+
+Do not mark this new hardening pass manually accepted until it is reviewed on the running operations UI.
 
 ## HQ architecture
 HQ Home owns overview, cross-venue bookings, policies and refund decisions. Staff credential/lifecycle management is a dedicated `/hq/staff` route. Dedicated network routes include `/hq/provisioning`, per-venue management/profile, `/hq/reports`, `/hq/finance`, and `/hq/audit`.
@@ -69,7 +83,7 @@ HQ staff management lives at `/hq/staff`. Staff creation uses a generated tempor
 
 HQ admins can reset the password of any admin, venue manager or venue operator through `PATCH /admin/staff/{user_id}/password`; passwords are re-hashed server-side. Reset UX also provides Generate/Copy and keeps the newly chosen password visible client-side after success until dismissed/leave. Existing Disable/Reactivate/Delete lifecycle actions remain available. Authentication rejects inactive accounts. Permanent staff deletion is allowed only when there is no operational/audit/assignment history; otherwise disable the account to preserve accountability. An HQ admin cannot disable/delete their own current account.
 
-**Self-service password changes:** authenticated HQ admins, venue managers and venue operators can change their own password through **My Account**. `admin/app/StaffAccountControl.tsx` chooses the active HQ or operations token and calls `POST /auth/change-password`. The user must supply the current password, a new password and matching confirmation. The backend verifies the current hash, applies the shared password policy, rejects reuse of the same password and stores only the new hash. HQ Reset Password remains the administrative recovery path. Targeted backend regression QA now explicitly covers venue-manager and venue-operator accounts: wrong current password rejection, password-policy rejection, successful change, old-password login failure, new-password login success, and subsequent separate HQ admin reset.
+**Self-service password changes:** authenticated HQ admins, venue managers and venue operators can change their own password through **My Account**. `admin/app/StaffAccountControl.tsx` chooses the active HQ or operations token and calls `POST /auth/change-password`. The user must supply the current password, a new password and matching confirmation. The backend verifies the current hash, applies the shared password policy, rejects reuse of the same password and stores only the new hash. HQ Reset Password remains the administrative recovery path. Targeted backend regression QA explicitly covers venue-manager and venue-operator accounts: wrong current password rejection, password-policy rejection, successful change, old-password login failure, new-password login success, and subsequent separate HQ admin reset.
 
 ### HQ venue action alignment — manually accepted 26 Aug 2026
 The follow-up pass for Venue Management header actions, Facility Photos placement and Venue Directory card action sizing was manually reviewed and accepted. The global floating profile shortcut remains removed. Keep page toolbar actions aligned and Facility Photos inside the established page action region; do not reintroduce the earlier floating/stacked action behavior.
@@ -84,9 +98,17 @@ Gallery reorder must avoid the `VenueImage` unique-position collision: persist r
 
 Safe venue cleanup: unused courts may be deleted; courts with booking history preserved/closed; pricing rules disabled; staff assignments removable without deleting accounts; venues deactivate/reactivate; permanent venue deletion requires no booking history, courts or active staff assignments.
 
+## Production readiness
+`docs/LAUNCH_READINESS.md` is the durable production-readiness checklist. Important blockers that should not be disguised as completed product work include the real online payment provider, production database/migrations/backups, domains/HTTPS/CORS, SMTP, production secrets, Android release signing/distribution, and optionally object storage before image scale grows.
+
+The player online payment path currently uses provider `unconfigured`; development simulator endpoints are deliberately unavailable outside development. Do not call player online payments production-ready until a real provider, callbacks/idempotency, reconciliation, failure handling and refund execution are integrated.
+
+Production runtime must not use the repository default JWT secret. `validate_runtime_settings()` now rejects the default `change-this-in-production` value outside `development`/`test`, with backend regression coverage. Development behavior remains unchanged.
+
 ## Backend ownership
 - `operations.py`: venue bookings/check-in/blocks.
 - `operations_management.py`: venue-side front desk, pricing, finance/refunds/reports.
+- `operations_passes.py`: venue pass/QR validation; confirmed and rescheduled active bookings are valid candidates.
 - `admin.py`, `admin_hq.py`, `admin_finance.py`, `admin_reports.py`: core HQ and editable venue profile APIs.
 - `admin_governance.py`: detailed refund review, staff lifecycle, password reset and role-permission summaries.
 - `account.py`: authenticated self-service password change.
