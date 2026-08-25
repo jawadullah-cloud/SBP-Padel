@@ -13,6 +13,16 @@ def auth(client: TestClient, email: str, password: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
+def same_instant(left: str, right: str) -> bool:
+    def normalize(value: str) -> datetime:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return parsed
+        return parsed.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+
+    return normalize(left) == normalize(right)
+
+
 def test_paid_pass_validates_and_check_in_is_idempotent(monkeypatch) -> None:
     with TestClient(app) as client:
         manager = auth(client, "manager@sbppadel.local", "PadelManager2026!")
@@ -82,7 +92,7 @@ def test_paid_pass_validates_and_check_in_is_idempotent(monkeypatch) -> None:
             json={},
         )
         assert checked_again.status_code == 200, checked_again.text
-        assert checked_again.json()["checked_in_at"] == checked_at
+        assert same_instant(checked_again.json()["checked_in_at"], checked_at)
 
         revalidated = client.post(
             "/api/v1/operations/pass/validate",
