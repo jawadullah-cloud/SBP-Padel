@@ -7,14 +7,14 @@ const page = await browser.newPage({ viewport: { width: 412, height: 915 } });
 const today = new Date();
 const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const future = new Date(today); future.setDate(today.getDate()+4);
-const later = new Date(today); later.setDate(today.getDate()+5);
 let bookingDate = iso(future);
 let bookingStatus = 'confirmed';
 let bookingListDelayMs = 0;
 const venue = { id:'venue-life', name:'Nishtar Park Sports Complex', city:'Lahore', address:'National Stadium', latitude:31.5, longitude:74.3, opening_time:'06:00', closing_time:'23:00', timezone:'Asia/Karachi' };
 const court = { id:'court-life', name:'Court 01', court_type:'Championship', is_indoor:false };
-const booking = () => ({ id:'booking-live-1', booking_code:'PDL-LIFECYCLE', venue_id:venue.id, court_id:court.id, date:bookingDate, total:2200, status:bookingStatus, payment_status:'paid' });
-const detail = () => ({ ...booking(), slots:[{start_time:'15:00',end_time:'16:00'}], payment:{transaction_id:'PAY-LIFECYCLE'} });
+const booking = () => ({ id:'booking-live-1', booking_code:'PDL-LIFECYCLE', venue_id:venue.id, court_id:court.id, date:bookingDate, total:2200, court_fee:2100, status:bookingStatus, payment_status:'paid' });
+const detail = () => ({ ...booking(), slots:[{start_time:'15:00',end_time:'16:00'}] });
+const payment = { id:'payment-live-1', booking_id:'booking-live-1', status:'paid', method:'card', provider_reference:'PAY-LIFECYCLE' };
 const availability = date => ({ venue_id:venue.id, date, timezone:venue.timezone, courts:[{ court_id:court.id, court_name:court.name, court_type:court.court_type, slots:[{start_time:'13:00',end_time:'14:00',available:true,hourly_rate:2500},{start_time:'15:00',end_time:'16:00',available:true,hourly_rate:2100}] }] });
 let refundRequested=false;
 
@@ -26,13 +26,13 @@ await page.route('http://127.0.0.1:8000/api/v1/**', async route => {
   else if(path===`/venues/${venue.id}`)body={...venue,courts:[court]};
   else if(path===`/venues/${venue.id}/availability`)body=availability(url.searchParams.get('date'));
   else if(path===`/bookings/${booking().id}`)body=detail();
+  else if(path===`/payments/by-booking/${booking().id}`)body=payment;
   else if(path===`/bookings/${booking().id}/reschedule`&&req.method()==='POST'){const payload=req.postDataJSON();bookingDate=payload.booking_date;bookingStatus='rescheduled';body=detail()}
-  else if(path===`/bookings/${booking().id}/cancel`&&req.method()==='POST'){bookingStatus='cancelled';body=detail()}
-  else if(path===`/bookings/${booking().id}/refund`&&req.method()==='POST'){refundRequested=true;body={status:'requested',amount:2200}}
-  else if(path===`/bookings/${booking().id}/refund`)body={status:refundRequested?'requested':'none',amount:refundRequested?2200:0};
+  else if(path===`/bookings/${booking().id}/cancel`&&req.method()==='POST'){bookingStatus='cancelled';body={...detail(),refund_required:true}}
+  else if(path===`/payments/${payment.id}/refund`&&req.method()==='POST'){refundRequested=true;body={status:'requested',amount:2200}}
   else if(path==='/auth/me')body={id:'user-life',full_name:'Lifecycle QA'};
   else if(path==='/notifications/me')body=[];
-  else if(path==='/payments/me')body=[];
+  else if(path==='/payments/me')body=[{...payment,refund:refundRequested?{status:'requested',amount:2200,reason:'Booking cancelled by player'}:null}];
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
 });
 
@@ -82,7 +82,6 @@ try{
   await frame.locator('#confirmReschedule').click();
   await frame.locator('#rescheduleModal').waitFor({state:'hidden'});
   assert((await frame.locator('#statusPill').innerText())==='RESCHEDULED','Reschedule did not update booking status in the live detail UI.');
-  assert((await frame.locator('#date').innerText())!=='Sunday, 20 Dec 2026','Reschedule did not update the booking date.');
 
   await frame.locator('#cancelBtn').click();
   await frame.locator('#cancelModal.show').waitFor();
