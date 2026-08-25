@@ -14,6 +14,28 @@ router=APIRouter(prefix='/admin',tags=['central administration'])
 admin_user=require_roles(UserRole.admin)
 class ActiveRequest(BaseModel): is_active:bool
 
+@router.get('/bookings/{booking_id}/detail')
+async def booking_detail(booking_id:UUID,_:User=Depends(admin_user),db:AsyncSession=Depends(get_db))->dict:
+    b=await db.get(Booking,booking_id)
+    if not b: raise HTTPException(404,'Booking not found')
+    player=await db.get(User,b.user_id); venue=await db.get(Venue,b.venue_id); court=await db.get(Court,b.court_id)
+    slots=(await db.scalars(select(BookingSlot).where(BookingSlot.booking_id==b.id).order_by(BookingSlot.start_time))).all()
+    payment=await db.scalar(select(Payment).where(Payment.booking_id==b.id).order_by(Payment.created_at.desc()))
+    checkin=await db.scalar(select(BookingCheckIn).where(BookingCheckIn.booking_id==b.id))
+    refund=await db.scalar(select(Refund).where(Refund.booking_id==b.id).order_by(Refund.created_at.desc()))
+    return {
+      'id':str(b.id),'booking_code':b.booking_code,'status':b.status.value,'date':b.booking_date.isoformat(),
+      'created_at':b.created_at.isoformat(),'venue':{'id':str(b.venue_id),'name':venue.name if venue else None,'city':venue.city if venue else None},
+      'court':{'id':str(b.court_id),'name':court.name if court else None,'code':court.code if court else None,'type':court.court_type if court else None},
+      'player':{'id':str(b.user_id),'name':player.full_name if player else None,'email':player.email if player else None,'phone':player.phone if player else None},
+      'slots':[{'start':s.start_time.isoformat(timespec='minutes'),'end':s.end_time.isoformat(timespec='minutes'),'rate':f'{s.rate_snapshot:.2f}'} for s in slots],
+      'pricing':{'court_fee':f'{b.court_fee:.2f}','service_fee':f'{b.service_fee:.2f}','total':f'{b.total_amount:.2f}','currency':b.currency},
+      'payment':None if not payment else {'status':payment.status.value,'method':payment.method,'provider':payment.provider,'reference':payment.provider_reference,'amount':f'{payment.amount:.2f}'},
+      'check_in':None if not checkin else {'checked_in_at':checkin.checked_in_at.isoformat(),'method':checkin.method},
+      'cancellation':None if not b.cancelled_at else {'cancelled_at':b.cancelled_at.isoformat(),'reason':b.cancellation_reason},
+      'refund':None if not refund else {'id':str(refund.id),'status':refund.status.value,'amount':f'{refund.amount:.2f}','reason':refund.reason},
+    }
+
 @router.get('/refunds-detailed')
 async def detailed_refunds(_:User=Depends(admin_user),db:AsyncSession=Depends(get_db))->list[dict]:
     refunds=(await db.scalars(select(Refund).order_by(Refund.created_at.desc()).limit(500))).all(); out=[]
