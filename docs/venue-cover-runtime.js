@@ -7,9 +7,9 @@ function currentVenueId(){try{return JSON.parse(localStorage.getItem('sbpPadelBo
 async function venues(){if(!venuesPromise)venuesPromise=fetch(`${apiBase()}/venues?_=${Date.now()}`,{cache:'no-store'}).then(r=>r.ok?r.json():[]).catch(()=>[]);return venuesPromise}
 async function venueByName(name){const key=String(name||'').trim().toLowerCase();if(!key)return null;return (await venues()).find(v=>String(v.name||'').trim().toLowerCase()===key)||null}
 async function cover(id){if(!id)return'';if(cache.has(id))return cache.get(id);try{const v=(await venues()).find(x=>String(x.id)===String(id));if(v?.cover_image_data_url){cache.set(id,v.cover_image_data_url);return v.cover_image_data_url}const r=await fetch(`${apiBase()}/venues/${encodeURIComponent(id)}?_=${Date.now()}`,{cache:'no-store'}),d=await r.json();const url=r.ok?(d.cover_image_data_url||''):'';cache.set(id,url);return url}catch{cache.set(id,'');return''}}
-async function apply(el,id){if(!el||!id)return;el.dataset.sbpCoverApplied=String(id);const url=await cover(id);if(!url||!el.isConnected||el.dataset.sbpCoverApplied!==String(id))return;el.style.setProperty('background-image',`linear-gradient(180deg,rgba(2,12,9,.12),rgba(2,12,9,.48)),url("${url.replace(/"/g,'%22')}")`,'important');el.style.setProperty('background-size','cover','important');el.style.setProperty('background-position','center','important');el.style.setProperty('background-repeat','no-repeat','important');el.classList.add('sbpRealVenueCover')}
-async function applyByName(el,name){const v=await venueByName(name);if(v)apply(el,v.id)}
-function ensureStrip(host){if(!host)return null;let strip=host.querySelector(':scope > .sbpVenueCoverStrip');if(strip)return strip;strip=document.createElement('div');strip.className='sbpVenueCoverStrip';strip.style.cssText='height:92px;margin:-1px -1px 12px;border-radius:15px 15px 10px 10px;background:linear-gradient(145deg,#07120f,#123a2a 52%,#1b5572);background-size:cover;background-position:center;';host.prepend(strip);return strip}
+function neutralizePrototype(el){if(!el)return;el.classList.add('sbpRealVenueCover');el.querySelectorAll?.('.courtVisual,.miniCourt').forEach(x=>x.style.setProperty('display','none','important'))}
+async function apply(el,id){if(!el||!id)return;el.dataset.sbpCoverApplied=String(id);const url=await cover(id);if(!url||!el.isConnected||el.dataset.sbpCoverApplied!==String(id))return;neutralizePrototype(el);el.style.setProperty('background-image',`linear-gradient(180deg,rgba(2,12,9,.12),rgba(2,12,9,.48)),url("${url.replace(/"/g,'%22')}")`,'important');el.style.setProperty('background-size','cover','important');el.style.setProperty('background-position','center','important');el.style.setProperty('background-repeat','no-repeat','important')}
+function ensureStrip(host){if(!host)return null;let strip=host.querySelector(':scope > .sbpVenueCoverStrip');if(strip)return strip;strip=document.createElement('div');strip.className='sbpVenueCoverStrip';strip.style.cssText='height:92px;margin:-1px -1px 12px;border-radius:15px 15px 10px 10px;background:linear-gradient(145deg,#07120f,#123a2a 52%,#1b5572);background-size:cover;background-position:center;pointer-events:none;';host.prepend(strip);return strip}
 function applyCurrentToPageSurfaces(root=document){const id=currentVenueId();if(!id)return;
  root.querySelectorAll?.('#reviewNative .rnHero').forEach(el=>apply(el,id));
  root.querySelectorAll?.('.summary').forEach(host=>{if(host.querySelector('#venue'))apply(ensureStrip(host),id)});
@@ -25,7 +25,7 @@ function scan(root=document){
  root.querySelectorAll?.('.bkCard[data-sbp-venue]').forEach(card=>apply(card.querySelector('.bkHero'),card.dataset.sbpVenue));
  applyCurrentToPageSurfaces(document);applyNamedSurfaces(document);
 }
-function schedule(){clearTimeout(scanTimer);scanTimer=setTimeout(()=>scan(),45)}
+function schedule(){clearTimeout(scanTimer);scanTimer=setTimeout(()=>scan(),120)}
 const observer=new MutationObserver(schedule);observer.observe(document.documentElement,{childList:true,subtree:true,characterData:true});
 document.readyState==='loading'?document.addEventListener('DOMContentLoaded',scan):scan();window.addEventListener('pageshow',scan);window.addEventListener('sbp-venue-cover-refresh',()=>{venuesPromise=null;cache.clear();scan()});
 window.SBPVenueCover={cover,apply,scan,currentVenueId,venueByName};
