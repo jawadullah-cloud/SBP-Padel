@@ -8,6 +8,7 @@ from app.api.admin_finance import router as admin_finance_router
 from app.api.admin_hq import router as admin_hq_router
 from app.api.admin_reports import router as admin_reports_router
 from app.api.auth import router as auth_router
+from app.api.booking_participants import router as booking_participants_router
 from app.api.booking_passes import router as booking_passes_router
 from app.api.bookings import router as bookings_router
 from app.api.cancellations import router as cancellations_router
@@ -27,6 +28,7 @@ from app.core.config import settings
 from app.core.slot_locks import slot_locks
 from app.db.seed import seed_reference_data
 from app.db.session import SessionLocal, engine
+from app.models import booking_participants as booking_participant_models  # noqa: F401
 from app.models import operations as operations_models  # noqa: F401
 from app.models import platform as platform_models  # noqa: F401
 from app.models.domain import Base
@@ -45,7 +47,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.9.0",
+    version="0.10.0",
     description="Sports Board Punjab Padel booking and venue management API",
     lifespan=lifespan,
 )
@@ -62,6 +64,7 @@ app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(policies_router, prefix=settings.api_prefix)
 app.include_router(booking_passes_router, prefix=settings.api_prefix)
 app.include_router(bookings_router, prefix=settings.api_prefix)
+app.include_router(booking_participants_router, prefix=settings.api_prefix)
 app.include_router(cancellations_router, prefix=settings.api_prefix)
 app.include_router(reschedules_router, prefix=settings.api_prefix)
 # Player-specific static /payments routes must be registered before the generic
