@@ -14,7 +14,7 @@
   `;
   document.head.appendChild(style);
 
-  let installed=false;
+  let installed=false,transitionToken=0;
   function install(){
     if(installed||typeof window.SBPDeepRoute!=='function')return false;
     const original=window.SBPDeepRoute;
@@ -26,11 +26,21 @@
       if(!layer||!frame)return original.call(this,url,...args);
       const entering=!layer.classList.contains('on');
       if(!entering)return original.call(this,url,...args);
+      const token=++transitionToken;
       layer.classList.remove('sbp-reveal-detail');layer.classList.add('sbp-preload-detail');let revealed=false;
-      const reveal=()=>{if(revealed)return;revealed=true;layer.classList.remove('sbp-preload-detail','swapping');layer.classList.add('on','sbp-reveal-detail');requestAnimationFrame(()=>setTimeout(()=>layer.classList.remove('sbp-reveal-detail'),300))};
+      const reveal=()=>{
+        if(revealed||token!==transitionToken||layer.classList.contains('leaving'))return;
+        let currentPage='';try{currentPage=new URL(frame.src,location.href).pathname.split('/').pop()}catch{}
+        if(frame.src==='about:blank'||currentPage!==page)return;
+        revealed=true;layer.classList.remove('sbp-preload-detail','swapping');layer.classList.add('on','sbp-reveal-detail');requestAnimationFrame(()=>setTimeout(()=>{if(token===transitionToken)layer.classList.remove('sbp-reveal-detail')},300));
+      };
       frame.addEventListener('load',()=>{if(frame.src==='about:blank')return;requestAnimationFrame(()=>requestAnimationFrame(reveal))},{once:true});
       const result=original.call(this,url,...args);setTimeout(reveal,900);return result;
     };
+    const originalClose=window.SBPDeepClose;
+    if(typeof originalClose==='function')window.SBPDeepClose=function(...args){transitionToken++;return originalClose.apply(this,args)};
+    const originalBack=window.SBPDeepBack;
+    if(typeof originalBack==='function')window.SBPDeepBack=function(...args){transitionToken++;return originalBack.apply(this,args)};
     installed=true;return true;
   }
   if(!install()){let tries=0;const timer=setInterval(()=>{tries++;if(install()||tries>200)clearInterval(timer)},20)}
