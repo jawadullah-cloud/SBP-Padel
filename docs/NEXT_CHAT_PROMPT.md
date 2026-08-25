@@ -13,41 +13,84 @@ Before discussing or changing anything:
 
 1. Inspect the current HEAD of `backend-v1-dev`.
 2. Read this file completely.
-3. Read the durable repository documentation and implementation relevant to the current task.
-4. Inspect recent commits around HEAD.
-5. Treat repository state and actual runtime behavior as the source of truth.
+3. Read `docs/PROJECT_MEMORY.md` completely.
+4. Read the durable repository documentation and implementation relevant to the current task.
+5. Inspect recent commits around HEAD.
+6. Treat repository state and actual runtime behavior as the source of truth.
 
 This is a continuation of an existing project, not a new project.
 
-## Locked player web milestone
+## Current priority — HQ / central administration product review
 
-The user has manually accepted the player web runtime through the complete booking lifecycle, notifications, My Bookings/detail, reschedule/cancel/refund, account/profile/avatar, Wallet/Payment History, favourites, light/dark theme and smooth deep-route transitions including booking Review/Payment.
+The Android/player booking lifecycle and the venue/front-desk operations console have reached manually accepted milestones. The next product-review focus is **HQ / central administration**.
 
-Do not reopen player work without a concrete reproduced regression.
+Inspect the actual current HQ navigation and implementation before changing it. In particular compare:
+
+- `admin/app/hq/page.tsx` — older all-in-one HQ dashboard containing dashboard, venues, pricing, bookings, staff, policies and refunds;
+- `admin/app/hq/provisioning/page.tsx` — scalable Venue Directory / Create New Venue entry;
+- `admin/app/hq/provisioning/manage/page.tsx` — per-venue management;
+- `admin/app/hq/finance`;
+- `admin/app/hq/reports`;
+- `admin/app/hq/audit`;
+- the actual `/admin` backend endpoints and current admin navigation.
+
+The goal is to identify unfinished, duplicated or legacy HQ ownership and continue toward a coherent central-administration product **without disturbing the already accepted venue console**.
+
+Do not blindly delete the older all-in-one page. First establish what routes are actually reachable, what functionality is duplicated, and whether any capabilities exist only there.
+
+## Locked player milestone — manually accepted 25 Aug 2026
+
+The user manually tested and accepted the current installed Android/player runtime after the August booking-lifecycle stabilization.
+
+Accepted behavior includes:
+
+- login persistence and email password reset;
+- password visibility and password-combination feedback;
+- Google sign-in intentionally disabled/deferred because enabling Google Cloud billing is not desired;
+- API-driven venue discovery/detail, favourites and directions;
+- light/dark theme;
+- booking Date → Court → Time → Review → Payment → Confirmation;
+- repeated booking back/forward navigation without the Android WebView scroll freeze;
+- native Review Booking screen, including clickable steps 1–5 and working Review → Payment transition;
+- correct signed-in player and additional-player count;
+- consecutive multi-slot bookings represented as one continuous booking session;
+- wallet removed from checkout while the wallet feature is disabled;
+- live backend-owned confirmation and Digital Pass with no hard-coded prototype booking;
+- booking-level QR/check-in behavior: one QR covers the whole booked session; repeat scan reports already checked in;
+- My Bookings live backend data without the stale 22-Aug prototype flash;
+- stable My Bookings loading typography with its CSS preloaded;
+- Android system/edge-back integration in the updated native wrapper/APK.
+
+Do not reopen these player areas without a concrete reproduced regression.
 
 ### Player runtime ownership
 
-- `docs/review-entry.js` owns Venue → Date → Court → Time → Review → Payment → Confirmation.
-- `docs/player-venues-live.js` owns live player venue discovery and venue-detail rendering from `GET /venues` and `GET /venues/{id}`. Do not reintroduce hard-coded venue cards as effective runtime ownership.
+- `docs/review-entry.js` owns booking session/flow state.
+- `docs/review-native.js` owns the native Review Booking screen and Review → Payment handoff.
+- `docs/player-venues-live.js` owns live venue discovery/detail from `GET /venues` and `GET /venues/{id}`.
 - `docs/notifications-live.js` owns Notifications.
 - `docs/player-bookings-live.js` owns My Bookings.
-- `docs/player-booking-detail-live.js` owns booking detail / reschedule / cancellation / refund state.
-- `docs/player-profile-live.js` owns live profile/auth/menu/logout/avatar behavior.
-- `docs/player-payment-history-live.js` owns Payment History.
-- `docs/player-wallet-live.js` owns Wallet presentation/activity.
-- `docs/profile-modules.js` owns only Saved Players, Favourite Venues and Help & Support sub-screens plus favourite persistence.
+- `docs/player-booking-detail-live.js` owns booking detail/reschedule/cancel/refund.
+- `docs/booking-success-live.js` owns live confirmation.
+- `docs/digital-pass-live.js` owns live Digital Pass.
+- `docs/player-profile-live.js` owns profile/auth/menu/logout/avatar behavior.
+- `docs/profile-modules.js` owns only Saved Players, Favourite Venues and Help & Support plus favourite persistence.
 - `docs/theme-bridge.js` owns player theme state.
-- `docs/deep-route-smooth.js` owns preload/reveal transitions for booking detail and booking Review/Payment entry.
+- `docs/android-back.js` plus Android `MainActivity.java` own the Android system-back contract.
 
-Legacy `docs/player-account-live.js` must not be loaded by the effective runtime.
+Legacy/prototype data in `docs/index.html` must never become visible runtime booking/profile data. Keep initial My Bookings, confirmation and pass markup neutral/loading-only.
 
-### Player venue discovery decision
+## Booking model decision
 
-Player venue discovery must be API-driven. `GET /venues` returns active venues and `GET /venues/{id}` provides the selected facility/courts. Selecting a venue must update `sbpPadelBookingSessionV2` before Date/Court/Time. Newly activated/provisioned venues should appear without editing player HTML for each facility.
+Multiple selected slots are allowed only when consecutive and form **one booking session**.
 
-## Venue operations: manually accepted behavior
+Example: 18:00–19:00 plus 19:00–20:00 is one two-hour booking with one booking ID and one Digital Pass. Player count is independent from slot count.
 
-The user has manually accepted the current Next.js venue/front-desk console through the following areas:
+QR/check-in is booking-level. First valid scan checks in the booking session; subsequent scans show already checked in rather than granting another admission.
+
+## Venue operations — manually accepted behavior
+
+The user has manually accepted the current Next.js venue/front-desk console through:
 
 - manager/operator login and venue assignment;
 - Court Schedule by date/court;
@@ -71,64 +114,57 @@ Do not redesign or remove these accepted workflows without a concrete regression
 
 Pricing rules are also the booking schedule.
 
-- A one-hour slot exists for booking only when an active pricing rule covers that court/date/weekday/hour.
-- Example: a rule 18:00–20:00 exposes 18:00–19:00 and 19:00–20:00.
-- Hours without an active pricing rule are hidden completely from availability.
-- A normally bookable priced slot that is already occupied remains visible as `Booked` / unavailable.
-- Elapsed, administratively blocked or unpriced hours are not shown in the booking picker.
+- A one-hour slot exists only when an active pricing rule covers that court/date/weekday/hour.
+- Example: 18:00–20:00 exposes 18:00–19:00 and 19:00–20:00.
+- Hours without an active pricing rule are hidden.
+- A priced occupied slot remains visible as Booked/unavailable.
+- Elapsed, administratively blocked or unpriced hours are hidden.
 
-The availability behavior is enforced centrally by `backend/app/api/routes.py`, not only in the admin UI.
+The availability behavior is enforced centrally by `backend/app/api/routes.py`.
 
 ### Booking sorting
 
-- General **Bookings** is an activity/history view and is ordered by `Booking.created_at DESC`, newest-created booking first.
-- **Court Schedule** remains chronological by actual session time within each court/date.
+- General Bookings is activity/history and is ordered by `Booking.created_at DESC`.
+- Court Schedule remains chronological by actual session time.
 
 ### Front-desk booking completion
 
-After a successful staff-created booking, the console clears booking filters, reloads the full venue booking list, switches to **Bookings**, and opens the newly-created booking in the detail drawer.
+After a successful staff-created booking, clear booking filters, reload the full venue booking list, switch to Bookings, and open the newly created booking in the detail drawer.
 
 ## Venue operations backend
 
 `backend/app/api/operations.py` owns venue bookings/check-in/blocks and general venue access.
 
-`backend/app/api/operations_management.py` owns:
-
-- `GET /operations/players/search`;
-- `POST /operations/bookings/front-desk`;
-- `GET/POST/DELETE /operations/pricing-rules`;
-- `GET /operations/finance`;
-- `PATCH /operations/refunds/{refund_id}`;
-- `GET /operations/reports/summary`.
+`backend/app/api/operations_management.py` owns player search, front-desk booking, venue pricing, finance/refunds and reports.
 
 Venue-side player registration uses normal `UserRole.player` accounts with duplicate email/phone protection and a one-time temporary password for walk-in registration.
 
-## HQ / central administration
+## HQ / central administration decisions already retained
 
 HQ remains separate from venue operations.
 
-Current provisioning flow is intentionally scalable:
+Current scalable provisioning flow:
 
-1. `admin/app/hq/provisioning/page.tsx` is the **Venue Directory**. It lists/searches all venues and exposes **Create New Venue**.
+1. `admin/app/hq/provisioning/page.tsx` is the Venue Directory. It lists/searches venues and exposes Create New Venue.
 2. Selecting a venue opens `admin/app/hq/provisioning/manage/page.tsx?venue=<id>`.
-3. The venue-management screen owns courts, Bookable Hours & Pricing, staff assignment, activation/deactivation and safe cleanup.
+3. Venue management owns courts, Bookable Hours & Pricing, staff assignment, activation/deactivation and safe cleanup.
 
-Do not revert HQ Provision Venue to a single dropdown as the primary management flow.
+Do not revert provisioning to a single venue dropdown as the primary flow.
 
-Safe cleanup rules:
+Safe cleanup:
 
 - unused courts may be permanently deleted;
-- courts with booking history must be preserved and closed instead;
-- bookable-hours/pricing rules are disabled rather than hard-deleted;
-- venue staff assignments can be removed without deleting staff accounts;
+- courts with booking history are preserved and closed;
+- pricing rules are disabled rather than hard-deleted;
+- staff assignments can be removed without deleting staff accounts;
 - venues can be activated/deactivated;
-- only an empty venue with no booking history, no courts and no active staff assignments can be permanently deleted.
+- permanent venue deletion requires no booking history, no courts and no active staff assignments.
 
 ## Permissions retained
 
-- Venue operator: view venue data, search/register players, create front-desk bookings, check in players, view pricing, finance and reports.
-- Venue manager/admin: all operator abilities plus closures, court-status changes, pricing mutations and refund processing.
-- Central admin/HQ endpoints under `/admin` remain separate and are not replaced by venue operations APIs.
+- Venue operator: view venue data, search/register players, create front-desk bookings, check in, view pricing, finance and reports.
+- Venue manager/admin: operator abilities plus closures, court-status changes, pricing mutations and refund processing.
+- Central admin/HQ endpoints under `/admin` remain separate.
 
 ## Verification discipline
 
@@ -136,7 +172,7 @@ Always distinguish:
 
 - implementation committed;
 - automated CI actually green;
-- user's Windows runtime manually accepted.
+- user's runtime manually accepted.
 
 Do not claim behavior is fixed merely because code exists in Git.
 
@@ -146,4 +182,4 @@ Work autonomously through investigation → implementation → runtime/CI QA →
 
 Do not add speculative click interceptors, CSS patches or duplicate feature owners.
 
-When manual review is required, provide only the minimal PowerShell pull/restart commands and the exact flow to inspect.
+When manual review is required, provide only the minimal pull/restart commands and the exact flow to inspect.
