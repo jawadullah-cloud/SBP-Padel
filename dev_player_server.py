@@ -30,7 +30,7 @@ COMMON_SCRIPTS = [
     "app-branding.js",
 ]
 PAGE_SCRIPTS = {
-    "index.html": ["player-venues-live.js", "favourites-migration.js", "player-profile-live.js", "profile-modules.js", "notifications-live.js", "booking-date-more.js", "player-bookings-live.js", "discovery-tools.js", "bookings-search.js", "visual-live.js", "player-stability.js", "native-pass-qr-live.js"],
+    "index.html": ["player-venues-live.js", "player-discovery-live.js", "favourites-migration.js", "player-profile-live.js", "profile-modules.js", "notifications-live.js", "booking-date-more.js", "player-bookings-live.js", "discovery-tools.js", "bookings-search.js", "visual-live.js", "player-stability.js", "native-pass-qr-live.js"],
     "review-booking.html": ["review-players-live.js"],
     "payment.html": ["payment-methods-live.js"],
     "payment-success.html": ["booking-success-live.js"],
