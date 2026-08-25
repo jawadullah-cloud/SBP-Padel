@@ -21,6 +21,7 @@ COMMON_SCRIPTS = [
     "navigation-fix.js",
     "deep-route-smooth.js",
     "review-entry.js",
+    "review-native.js",
     "back-icons.js",
     "app-branding.js",
 ]
