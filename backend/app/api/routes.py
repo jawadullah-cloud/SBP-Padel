@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.domain import Booking, BookingSlot, BookingStatus, Court, CourtStatus, PricingRule, Venue
+from app.models.domain import Booking, BookingSlot, BookingStatus, Court, CourtStatus, PricingRule, Venue, VenueImage
 from app.models.operations import VenueBlock
 
 router = APIRouter()
@@ -24,9 +24,6 @@ def venue_timezone(venue: Venue):
     try:
         return ZoneInfo(name)
     except ZoneInfoNotFoundError:
-        # Windows Python installations may not have the IANA timezone database.
-        # Nishtar Park must still use Pakistan Standard Time rather than silently
-        # falling back to UTC, otherwise elapsed evening slots remain bookable.
         if name == "Asia/Karachi":
             return timezone(timedelta(hours=5), name="PKT")
         return timezone.utc
@@ -34,6 +31,16 @@ def venue_timezone(venue: Venue):
 
 def venue_now(venue: Venue) -> datetime:
     return datetime.now(venue_timezone(venue))
+
+
+async def venue_cover(db: AsyncSession, venue_id: UUID) -> str | None:
+    row = await db.scalar(
+        select(VenueImage)
+        .where(VenueImage.venue_id == venue_id)
+        .order_by(VenueImage.is_cover.desc(), VenueImage.position, VenueImage.created_at)
+        .limit(1)
+    )
+    return row.image_data_url if row else None
 
 
 def resolve_rate(rules: list[PricingRule], court: Court, slot_date: date, start_hour: int) -> Decimal | None:
@@ -70,7 +77,10 @@ async def list_venues(city: str | None = Query(default=None), q: str | None = Qu
     if q:
         stmt = stmt.where((Venue.name.ilike(f"%{q}%")) | (Venue.city.ilike(f"%{q}%")))
     venues = (await db.scalars(stmt)).all()
-    return [{"id": str(v.id), "name": v.name, "city": v.city, "address": v.address, "latitude": float(v.latitude), "longitude": float(v.longitude), "amenities": v.amenities, "opening_time": v.opening_time.isoformat(timespec="minutes"), "closing_time": v.closing_time.isoformat(timespec="minutes")} for v in venues]
+    result = []
+    for v in venues:
+        result.append({"id": str(v.id), "name": v.name, "city": v.city, "address": v.address, "latitude": float(v.latitude), "longitude": float(v.longitude), "amenities": v.amenities, "opening_time": v.opening_time.isoformat(timespec="minutes"), "closing_time": v.closing_time.isoformat(timespec="minutes"), "cover_image_data_url": await venue_cover(db, v.id)})
+    return result
 
 
 @router.get("/venues/{venue_id}", tags=["venues"])
@@ -79,7 +89,7 @@ async def get_venue(venue_id: UUID, db: AsyncSession = Depends(get_db)) -> dict:
     if not venue or not venue.is_active:
         raise HTTPException(status_code=404, detail="Venue not found")
     courts = (await db.scalars(select(Court).where(Court.venue_id == venue.id).order_by(Court.code))).all()
-    return {"id": str(venue.id), "name": venue.name, "city": venue.city, "address": venue.address, "description": venue.description, "latitude": float(venue.latitude), "longitude": float(venue.longitude), "timezone": venue.timezone, "amenities": venue.amenities, "opening_time": venue.opening_time.isoformat(timespec="minutes"), "closing_time": venue.closing_time.isoformat(timespec="minutes"), "courts": [{"id": str(c.id), "code": c.code, "name": c.name, "court_type": c.court_type, "capacity": c.capacity, "is_indoor": c.is_indoor, "status": c.status.value} for c in courts]}
+    return {"id": str(venue.id), "name": venue.name, "city": venue.city, "address": venue.address, "description": venue.description, "latitude": float(venue.latitude), "longitude": float(venue.longitude), "timezone": venue.timezone, "amenities": venue.amenities, "opening_time": venue.opening_time.isoformat(timespec="minutes"), "closing_time": venue.closing_time.isoformat(timespec="minutes"), "cover_image_data_url": await venue_cover(db, venue.id), "courts": [{"id": str(c.id), "code": c.code, "name": c.name, "court_type": c.court_type, "capacity": c.capacity, "is_indoor": c.is_indoor, "status": c.status.value} for c in courts]}
 
 
 @router.get("/venues/{venue_id}/availability", tags=["availability"])
@@ -115,13 +125,6 @@ async def venue_availability(venue_id: UUID, target_date: date = Query(alias="da
             if block or elapsed:
                 continue
             booked_slot = (court.id, hour) in booked_keys
-            slots.append({
-                "start_time": start_time.isoformat(timespec="minutes"),
-                "end_time": end_time.isoformat(timespec="minutes"),
-                "available": not booked_slot,
-                "hourly_rate": money(rate),
-                "currency": "PKR",
-                "unavailable_reason": "Booked" if booked_slot else None,
-            })
+            slots.append({"start_time": start_time.isoformat(timespec="minutes"), "end_time": end_time.isoformat(timespec="minutes"), "available": not booked_slot, "hourly_rate": money(rate), "currency": "PKR", "unavailable_reason": "Booked" if booked_slot else None})
         result.append({"court_id": str(court.id), "court_code": court.code, "court_name": court.name, "court_type": court.court_type, "slots": slots})
     return {"venue_id": str(venue.id), "venue_name": venue.name, "date": target_date.isoformat(), "timezone": venue.timezone, "courts": result}
