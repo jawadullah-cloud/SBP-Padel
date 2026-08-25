@@ -41,6 +41,16 @@ self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',event=>event.waitUntil((async()=>{await self.registration.unregister();await self.clients.claim();})()));
 """
 
+EARLY_RUNTIME_BOOTSTRAP = """<script>
+(()=>{try{
+  localStorage.removeItem('sbpPadelBookingDatePicker');
+  const host=location.hostname;if(!host)return;
+  const api=`${location.protocol}//${host}:8000/api/v1`;
+  localStorage.setItem('sbpPadelApiBase',api);
+  window.SBPApiBase=()=>`${location.protocol}//${location.hostname}:8000/api/v1`;
+}catch(e){console.warn('SBP early runtime bootstrap',e)}})();
+</script>"""
+
 
 def current_build_id() -> str:
     try:
@@ -106,6 +116,8 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
             html = target.read_text(encoding="utf-8")
             page = target.name
             html = mask_prototype_booking_content(page, html)
+            if 'SBP early runtime bootstrap' not in html:
+                html = html.replace("<head>", "<head>" + EARLY_RUNTIME_BOOTSTRAP, 1)
             mobile_bootstrap = '<script src="mobile-runtime.js?dev=1"></script>'
             if 'src="mobile-runtime.js' not in html and "src='mobile-runtime.js" not in html:
                 html = html.replace("</head>", mobile_bootstrap + "</head>")
