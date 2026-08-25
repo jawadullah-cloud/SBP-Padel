@@ -1,3 +1,4 @@
+"""Shared player cancellation/rescheduling eligibility policy."""
 from datetime import datetime,timedelta,timezone
 from zoneinfo import ZoneInfo,ZoneInfoNotFoundError
 from sqlalchemy import select
