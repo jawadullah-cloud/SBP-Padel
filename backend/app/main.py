@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.api.account import router as account_router
 from app.api.admin import router as admin_router
 from app.api.admin_finance import router as admin_finance_router
 from app.api.admin_governance import router as admin_governance_router
@@ -41,6 +42,6 @@ async def lifespan(app:FastAPI):
 app=FastAPI(title=settings.app_name,version="0.11.0",description="Sports Board Punjab Padel booking and venue management API",lifespan=lifespan)
 app.add_middleware(AdministrationAuditMiddleware)
 app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origin_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
-for r in [router,auth_router,policies_router,booking_passes_router,bookings_router,booking_participants_router,cancellations_router,reschedules_router,player_payments_router,payments_router,notifications_router,admin_router,admin_hq_router,admin_governance_router,admin_finance_router,admin_reports_router,venue_gallery_router,operations_router,operations_courts_router,operations_management_router,operations_passes_router,operations_players_router]: app.include_router(r,prefix=settings.api_prefix)
+for r in [router,auth_router,account_router,policies_router,booking_passes_router,bookings_router,booking_participants_router,cancellations_router,reschedules_router,player_payments_router,payments_router,notifications_router,admin_router,admin_hq_router,admin_governance_router,admin_finance_router,admin_reports_router,venue_gallery_router,operations_router,operations_courts_router,operations_management_router,operations_passes_router,operations_players_router]: app.include_router(r,prefix=settings.api_prefix)
 @app.get("/",include_in_schema=False)
 async def root()->dict:return {"service":settings.app_name,"api":settings.api_prefix,"docs":"/docs"}
