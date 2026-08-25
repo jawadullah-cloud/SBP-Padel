@@ -5,6 +5,9 @@ Continue `jawadullah-cloud/SBP-Padel` on `backend-v1-dev`. Inspect HEAD, read th
 ## Current accepted state — 26 Aug 2026
 Player discovery/location/gallery and the previously reviewed booking lifecycle are manually accepted. The latest HQ / Venue Directory / Venue Management pass is also generally manually accepted, including persistent HQ navigation, editable venue profiles and amenities, facility gallery, staff credential/lifecycle controls, manager/operator Change Password visibility, and the venue-action alignment pass. Do not reopen accepted behavior without a reproduced regression.
 
+## Player authentication UI invariant
+Google sign-in remains deferred and must not be advertised on the player login screen until a real Google authentication flow is intentionally implemented and accepted. The stale prototype `Continue with Google` button was removed again from `docs/auth-preview.html` on 26 Aug 2026. Password/email/mobile authentication and password recovery remain the active player authentication UI.
+
 ## Venue-context routing fix — completed
 A cross-venue navigation bug was found in **HQ → Venue Directory → Edit Profile & Amenities → Back to Venue Management**. The profile editor previously derived its venue context from client-side URL parsing/local component state, which could leave stale context when route query state changed.
 
