@@ -27,6 +27,7 @@ await page.addInitScript(()=>{
   localStorage.removeItem('sbpPadelTheme');
 });
 const assert=(c,m)=>{if(!c)throw new Error(m)};
+const waitDeepDismissed=()=>page.waitForFunction(()=>!document.getElementById('sbpDeepLayer')?.classList.contains('on'));
 try{
   await page.goto(`${base}/index.html`,{waitUntil:'networkidle'});
   await page.locator('nav [data-nav="profile"]').click();
@@ -72,6 +73,7 @@ try{
   assert(!paymentText.includes('PDL-002381'),'Prototype payment-history booking leaked into runtime.');
   assert(paymentText.includes('REQUESTED'),'Live refund state was not rendered.');
   await frame.locator('.head .back').click();
+  await waitDeepDismissed();
   await page.waitForFunction(()=>document.getElementById('profile')?.classList.contains('active'));
 
   await page.locator('#profile [data-profile-action="wallet"]').click();
@@ -83,6 +85,7 @@ try{
   assert(!walletText.includes('PKR 2,450'),'Prototype wallet balance leaked into runtime.');
   assert(!walletText.includes('Wallet top-up'),'Prototype wallet top-up leaked into runtime.');
   await frame.locator('.head .back').click();
+  await waitDeepDismissed();
   await page.waitForFunction(()=>document.getElementById('profile')?.classList.contains('active'));
 
   await page.locator('#profile [data-profile-action="logout"]').click();
