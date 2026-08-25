@@ -66,6 +66,7 @@ public class MainActivity extends Activity {
 
         configureSystemUi();
         configureWebView();
+        configureBackNavigation();
 
         String host = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_HOST, "");
         if (host == null || host.trim().isEmpty()) showHostDialog();
@@ -198,6 +199,29 @@ public class MainActivity extends Activity {
                         Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    private void configureBackNavigation() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                    this::handleBackNavigation);
+        }
+    }
+
+    private void handleBackNavigation() {
+        if (webView == null) {
+            finish();
+            return;
+        }
+        webView.evaluateJavascript(
+                "(function(){try{return !!(window.SBPHandleAndroidBack&&window.SBPHandleAndroidBack())}catch(e){return false}})()",
+                value -> runOnUiThread(() -> {
+                    boolean consumed = "true".equalsIgnoreCase(String.valueOf(value));
+                    if (consumed) return;
+                    if (webView.canGoBack()) webView.goBack();
+                    else finish();
+                }));
     }
 
     public class AndroidBridge {
@@ -363,7 +387,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return;
+        handleBackNavigation();
     }
 }
