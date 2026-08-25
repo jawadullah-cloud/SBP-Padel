@@ -78,10 +78,13 @@ await page.route('http://127.0.0.1:8000/api/v1/**', async route => {
 });
 
 await page.addInitScript(() => {
-  localStorage.setItem('sbpPadelAccessToken', 'qa-token');
-  localStorage.setItem('sbpPadelUser', JSON.stringify({ id: 'user-1', full_name: 'Runtime QA' }));
-  localStorage.setItem('sbpPadelBookingDatePicker', '2099-12-31');
-  localStorage.setItem('sbpPadelFavouriteNishtar', '0');
+  if (!localStorage.getItem('sbpRuntimeQaSeeded')) {
+    localStorage.setItem('sbpPadelAccessToken', 'qa-token');
+    localStorage.setItem('sbpPadelUser', JSON.stringify({ id: 'user-1', full_name: 'Runtime QA' }));
+    localStorage.setItem('sbpPadelBookingDatePicker', '2099-12-31');
+    localStorage.setItem('sbpPadelFavouriteNishtar', '0');
+    localStorage.setItem('sbpRuntimeQaSeeded', '1');
+  }
 });
 
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
