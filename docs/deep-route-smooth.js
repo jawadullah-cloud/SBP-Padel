@@ -10,6 +10,7 @@
     #sbpDeepLayer.sbp-reveal-detail{opacity:1!important;transform:none!important;transition:opacity .20s ease,transform .28s cubic-bezier(.2,.8,.2,1)!important}
     #sbpDeepLayer.sbp-preload-detail #sbpDeepFrame{opacity:0!important}
     #sbpDeepLayer.sbp-reveal-detail #sbpDeepFrame{opacity:1!important;transition:opacity .14s ease!important}
+    #sbpDeepLayer.leaving{pointer-events:none!important}
   `;
   document.head.appendChild(style);
 
@@ -21,41 +22,16 @@
       let page='';
       try{page=new URL(url,location.href).pathname.split('/').pop()}catch{page=String(url||'').split('?')[0]}
       if(!smoothPages.has(page))return original.call(this,url,...args);
-
-      const layer=document.getElementById('sbpDeepLayer');
-      const frame=document.getElementById('sbpDeepFrame');
+      const layer=document.getElementById('sbpDeepLayer'),frame=document.getElementById('sbpDeepFrame');
       if(!layer||!frame)return original.call(this,url,...args);
-
-      // When entering a deep screen from the main player shell, keep the current
-      // screen visible while the iframe loads. Once ready, reveal the completed
-      // page in one transition instead of exposing the iframe's initial paint.
       const entering=!layer.classList.contains('on');
       if(!entering)return original.call(this,url,...args);
-
-      layer.classList.remove('sbp-reveal-detail');
-      layer.classList.add('sbp-preload-detail');
-      let revealed=false;
-      const reveal=()=>{
-        if(revealed)return;
-        revealed=true;
-        layer.classList.remove('sbp-preload-detail','swapping');
-        layer.classList.add('on','sbp-reveal-detail');
-        requestAnimationFrame(()=>setTimeout(()=>layer.classList.remove('sbp-reveal-detail'),300));
-      };
-      frame.addEventListener('load',()=>{
-        if(frame.src==='about:blank')return;
-        requestAnimationFrame(()=>requestAnimationFrame(reveal));
-      },{once:true});
-      const result=original.call(this,url,...args);
-      setTimeout(reveal,900);
-      return result;
+      layer.classList.remove('sbp-reveal-detail');layer.classList.add('sbp-preload-detail');let revealed=false;
+      const reveal=()=>{if(revealed)return;revealed=true;layer.classList.remove('sbp-preload-detail','swapping');layer.classList.add('on','sbp-reveal-detail');requestAnimationFrame(()=>setTimeout(()=>layer.classList.remove('sbp-reveal-detail'),300))};
+      frame.addEventListener('load',()=>{if(frame.src==='about:blank')return;requestAnimationFrame(()=>requestAnimationFrame(reveal))},{once:true});
+      const result=original.call(this,url,...args);setTimeout(reveal,900);return result;
     };
-    installed=true;
-    return true;
+    installed=true;return true;
   }
-
-  if(!install()){
-    let tries=0;
-    const timer=setInterval(()=>{tries++;if(install()||tries>200)clearInterval(timer)},20);
-  }
+  if(!install()){let tries=0;const timer=setInterval(()=>{tries++;if(install()||tries>200)clearInterval(timer)},20)}
 })();
