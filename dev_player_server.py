@@ -21,6 +21,7 @@ COMMON_SCRIPTS = [
     "navigation-fix.js",
     "deep-route-smooth.js",
     "review-entry.js",
+    "booking-contiguous-slots.js",
     "review-native.js",
     "pass-route-live.js",
     "android-back.js",
