@@ -70,6 +70,14 @@ def blocking_condition():
     return or_(Booking.status.in_(PERMANENT_BLOCKING_STATUSES), and_(Booking.status == BookingStatus.pending_payment, Booking.created_at >= cutoff))
 
 
+def ensure_consecutive_slots(requested: list[time]) -> None:
+    if len(requested) <= 1:
+        return
+    minutes = [slot.hour * 60 + slot.minute for slot in requested]
+    if any(next_minute - current_minute != 60 for current_minute, next_minute in zip(minutes, minutes[1:])):
+        raise HTTPException(400, "Multiple slots must be consecutive to form one booking session")
+
+
 async def quote_payload(payload: QuoteRequest, db: AsyncSession) -> tuple[Venue, Court, list[dict], Decimal]:
     venue = await db.get(Venue, payload.venue_id)
     court = await db.get(Court, payload.court_id)
@@ -83,6 +91,7 @@ async def quote_payload(payload: QuoteRequest, db: AsyncSession) -> tuple[Venue,
         raise HTTPException(400, "Past dates cannot be booked")
 
     requested = sorted({slot.start_time.replace(second=0, microsecond=0) for slot in payload.slots})
+    ensure_consecutive_slots(requested)
     rules = (await db.scalars(select(PricingRule).where(PricingRule.venue_id == venue.id, PricingRule.is_active.is_(True)))).all()
     blocks = (await db.scalars(select(VenueBlock).where(VenueBlock.venue_id == venue.id, VenueBlock.block_date == payload.booking_date, VenueBlock.is_active.is_(True), or_(VenueBlock.court_id.is_(None), VenueBlock.court_id == court.id)))).all()
     blocking = (await db.execute(select(BookingSlot.start_time).join(Booking, Booking.id == BookingSlot.booking_id).where(BookingSlot.court_id == court.id, BookingSlot.booking_date == payload.booking_date, blocking_condition(), BookingSlot.start_time.in_(requested)))).scalars().all()
