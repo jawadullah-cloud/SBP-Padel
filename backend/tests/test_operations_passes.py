@@ -36,7 +36,7 @@ def test_paid_pass_validates_and_check_in_is_idempotent(monkeypatch) -> None:
                 "player_id": player_id,
                 "court_id": court_id,
                 "booking_date": booking_date,
-                "slots": ["17:00"],
+                "slots": ["17:00", "18:00"],
                 "payment_method": "cash",
                 "payment_reference": "PASS-QA-001",
                 "policy_acknowledged": True,
@@ -59,11 +59,14 @@ def test_paid_pass_validates_and_check_in_is_idempotent(monkeypatch) -> None:
         assert validated.status_code == 200, validated.text
         data = validated.json()
         assert data["valid"] is True
+        assert data["can_check_in"] is True
         assert data["reason_code"] == "valid"
         assert data["booking"]["booking_code"] == booking["booking_code"]
         assert data["booking"]["player"]["email"] == "player@sbppadel.local"
         assert data["booking"]["payment_status"] == "paid"
         assert data["booking"]["checked_in"] is False
+        assert data["booking"]["slot_count"] == 2
+        assert data["booking"]["duration_hours"] == 2
 
         checked = client.post(
             f"/api/v1/operations/bookings/{booking['id']}/check-in",
@@ -87,6 +90,8 @@ def test_paid_pass_validates_and_check_in_is_idempotent(monkeypatch) -> None:
             json={"venue_id": venue_id, "pass_value": booking["booking_code"]},
         )
         assert revalidated.status_code == 200, revalidated.text
-        assert revalidated.json()["valid"] is True
-        assert revalidated.json()["reason_code"] == "already_checked_in"
-        assert revalidated.json()["booking"]["checked_in"] is True
+        data = revalidated.json()
+        assert data["valid"] is True
+        assert data["can_check_in"] is False
+        assert data["reason_code"] == "already_checked_in"
+        assert data["booking"]["checked_in"] is True
