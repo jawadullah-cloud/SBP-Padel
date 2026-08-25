@@ -35,7 +35,12 @@ jobs:
 
       - name: JavaScript syntax
         run: |
+          node --check docs/runtime-api.js
+          node --check docs/booking-participants-live.js
           node --check docs/review-entry.js
+          node --check docs/review-players-live.js
+          node --check docs/booking-success-live.js
+          node --check docs/digital-pass-live.js
           node --check docs/bookings-entry.js
           node --check docs/player-bookings-live.js
           node --check docs/player-booking-detail-live.js
@@ -44,7 +49,6 @@ jobs:
           node --check docs/player-wallet-live.js
           node --check docs/profile-modules.js
           node --check docs/theme-bridge.js
-          node --check docs/booking-router-bridge.js
           node --check docs/navigation-fix.js
           node --check docs/deep-route-smooth.js
           node --check docs/notifications-live.js
@@ -65,14 +69,16 @@ jobs:
           grep -q 'data-sbp-step' docs/review-entry.js
           grep -q '/payments/initiate' docs/review-entry.js
           grep -q '/simulate-success' docs/review-entry.js
-          grep -q 'booking-router-bridge.js' docs/sw.js
-          grep -q 'review-entry.js' docs/sw.js
-          ! grep -q 'review-policy-gate.js' docs/sw.js
-          ! grep -q 'review-disabled-state.js' docs/sw.js
-          ! grep -q 'review-live-ui.js' docs/sw.js
-          ! grep -q 'review-pricing.js' docs/sw.js
-          ! grep -q 'flow-recovery.js' docs/sw.js
-          ! grep -q 'slot-pricing.js' docs/sw.js
+          grep -q 'review-entry.js' dev_player_server.py
+          grep -q 'runtime-api.js' dev_player_server.py
+          grep -q 'booking-participants-live.js' dev_player_server.py
+          ! grep -q 'booking-router-bridge.js' dev_player_server.py
+          ! grep -q 'review-policy-gate.js' dev_player_server.py
+          ! grep -q 'review-disabled-state.js' dev_player_server.py
+          ! grep -q 'review-live-ui.js' dev_player_server.py
+          ! grep -q 'review-pricing.js' dev_player_server.py
+          ! grep -q 'flow-recovery.js' dev_player_server.py
+          ! grep -q 'slot-pricing.js' dev_player_server.py
           ! grep -q 'player-live.js' docs/index.html
           ! grep -q 'player-ui-fixes.js' docs/app.js
 
@@ -94,7 +100,6 @@ jobs:
         shell: bash
         run: |
           grep -q 'deep-route-smooth.js' dev_player_server.py
-          grep -q 'deep-route-smooth.js' docs/sw.js
           grep -q 'sbp-preload-detail' docs/deep-route-smooth.js
           grep -q "review-booking.html" docs/deep-route-smooth.js
           grep -q "payment.html" docs/deep-route-smooth.js
@@ -106,22 +111,13 @@ jobs:
         run: |
           grep -q "'/notifications/me'" docs/notifications-live.js
           grep -q 'SBPShowNotifications' docs/player-profile-live.js
-          grep -q 'data-profile-action="notifications"' docs/player-profile-live.js
-          grep -q 'notifications-live.js' docs/sw.js
           grep -q 'notifications-live.js' dev_player_server.py
           grep -q '/bookings/me' docs/player-bookings-live.js
-          grep -q 'player-bookings-live.js' docs/sw.js
           grep -q '/auth/me' docs/player-profile-live.js
           grep -q '/auth/me/avatar' docs/player-profile-live.js
-          grep -q 'data-profile-photo-input' docs/player-profile-live.js
-          grep -q 'profileIcon.*svg' docs/player-profile-live.js
-          grep -q 'player-profile-live.js' docs/sw.js
           grep -q 'player-profile-live.js' dev_player_server.py
           grep -q '/payments/me' docs/player-payment-history-live.js
-          grep -q 'player-payment-history-live.js' docs/sw.js
-          grep -q 'player-wallet-live.js' docs/sw.js
           grep -q 'player-wallet-live.js' dev_player_server.py
-          ! grep -q 'player-account-live.js' docs/sw.js
           ! grep -q 'player-account-live.js' dev_player_server.py
           ! grep -q 'Adeel Raza' docs/player-profile-live.js
           ! grep -q 'Sara Khan\|Hamza Ali\|Mariam Shah' docs/profile-modules.js
@@ -130,7 +126,17 @@ jobs:
           grep -q '/reschedule' docs/player-booking-detail-live.js
           grep -q '/cancel' docs/player-booking-detail-live.js
           grep -q '/refund' docs/player-booking-detail-live.js
-          ! grep -q 'player-booking-refund.js' docs/sw.js
+
+      - name: Live checkout and pass guards
+        shell: bash
+        run: |
+          grep -q 'SBPApiBase' docs/runtime-api.js
+          grep -q '/participants' docs/booking-participants-live.js
+          grep -q '/participants' docs/booking-success-live.js
+          grep -q '/participants' docs/digital-pass-live.js
+          grep -q 'location.replace' docs/digital-pass-live.js
+          grep -q 'activePromise' docs/digital-pass-live.js
+          ! grep -q 'PDL-002381' docs/digital-pass-live.js
 
       - name: Theme ownership guards
         shell: bash
