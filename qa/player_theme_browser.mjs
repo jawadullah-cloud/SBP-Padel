@@ -7,12 +7,13 @@ const payment={id:'pay-theme',booking_id:'booking-theme',booking_code:'PDL-THEME
 await page.route('http://127.0.0.1:8000/api/v1/**',async route=>{const u=new URL(route.request().url()),p=u.pathname.replace('/api/v1','');let body={};if(p==='/auth/me')body={id:'theme-user',full_name:'Theme Player',email:'theme@example.com',phone:null,role:'player',avatar_data_url:null};else if(p==='/payments/me')body=[payment];else if(p==='/notifications/me'||p==='/bookings/me'||p==='/venues')body=[];await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)})});
 await page.addInitScript(()=>{localStorage.setItem('sbpPadelAccessToken','theme-token');localStorage.setItem('sbpPadelTheme','dark')});
 const assert=(c,m)=>{if(!c)throw new Error(m)};
+const waitDeepDismissed=()=>page.waitForFunction(()=>{const l=document.getElementById('sbpDeepLayer');return l&&!l.classList.contains('on')&&!l.classList.contains('leaving')});
 try{
   await page.goto(`${base}/index.html`,{waitUntil:'networkidle'});
   assert(await page.evaluate(()=>document.documentElement.dataset.theme)==='dark','Player did not start in stored dark theme.');
-  await page.locator('#themeToggle').click();
+  await page.evaluate(()=>window.SBPToggleTheme());
   await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
-  assert(await page.evaluate(()=>localStorage.getItem('sbpPadelTheme'))==='light','Header theme toggle did not persist light theme.');
+  assert(await page.evaluate(()=>localStorage.getItem('sbpPadelTheme'))==='light','Shared theme toggle did not persist light theme.');
   const shell=await page.evaluate(()=>({stage:getComputedStyle(document.querySelector('.stage')).backgroundColor,phone:getComputedStyle(document.querySelector('.phone')).backgroundColor,nav:getComputedStyle(document.querySelector('nav')).backgroundColor}));
   assert(shell.phone!=='rgb(6, 16, 18)','Light theme left the phone on the dark runtime background.');
 
@@ -28,6 +29,7 @@ try{
   const walletBg=await frame.locator('.phone').evaluate(el=>getComputedStyle(el).backgroundColor);
   assert(walletBg!=='rgb(6, 16, 18)','Wallet retained dark phone background in light theme.');
   await frame.locator('.head .back').click();
+  await waitDeepDismissed();
   await page.waitForFunction(()=>document.getElementById('profile')?.classList.contains('active'));
 
   await page.locator('#profile [data-profile-action="appearance"]').click();
