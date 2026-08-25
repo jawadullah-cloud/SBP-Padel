@@ -53,7 +53,7 @@ async function mockOperations(page: import('@playwright/test').Page) {
   await page.route('**/api/v1/operations/courts?*', async route => {
     const id = new URL(route.request().url()).searchParams.get('venue_id');
     if (id === venueA) await new Promise(resolve => setTimeout(resolve, 450));
-    route.fulfill({
+    await route.fulfill({
       json: id === venueB
         ? [{ id: courtB, code: '02', name: 'Multan Court', court_type: 'Panoramic', status: 'active', capacity: 4, is_indoor: false }]
         : [{ id: courtA, code: '01', name: 'Lahore Court', court_type: 'Panoramic', status: 'active', capacity: 4, is_indoor: false }],
@@ -89,27 +89,28 @@ test('venue switch rejects stale responses and applies per-venue role permission
   await page.goto('/');
 
   const venueSelect = page.getByLabel('Active venue');
+  const header = page.locator('header.top');
   await expect(venueSelect).toHaveValue(venueA);
   await venueSelect.selectOption(venueB);
-  await expect(page.getByText('Multan Padel Centre · Multan')).toBeVisible();
+  await expect(header.getByText('Multan Padel Centre · Multan', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Courts', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Multan Court' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Multan Court', exact: true })).toBeVisible();
   await page.waitForTimeout(650);
-  await expect(page.getByRole('heading', { name: 'Lahore Court' })).toHaveCount(0);
-  await expect(page.getByText('View only', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Lahore Court', exact: true })).toHaveCount(0);
+  await expect(page.getByText('View only', { exact: true }).first()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Bookable Hours & Pricing' }).click();
-  await expect(page.getByText('Operator access can view bookable hours and pricing but cannot change them.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'ADD BOOKABLE HOURS' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Bookable Hours & Pricing', exact: true }).click();
+  await expect(page.getByText('Operator access can view bookable hours and pricing but cannot change them.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'ADD BOOKABLE HOURS', exact: true })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Closures & Maintenance' }).click();
-  await expect(page.getByText('Operator access is view-only for closures.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'CREATE CLOSURE' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Closures & Maintenance', exact: true }).click();
+  await expect(page.getByText('Operator access is view-only for closures.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'CREATE CLOSURE', exact: true })).toHaveCount(0);
 
-  await expect(page.getByRole('button', { name: 'MY ACCOUNT' })).toBeVisible();
-  await page.getByRole('button', { name: 'MY ACCOUNT' }).click();
-  await expect(page.getByRole('heading', { name: 'Change Password' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'MY ACCOUNT', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'MY ACCOUNT', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Change Password', exact: true })).toBeVisible();
 });
 
 test('front-desk selections are cleared when staff changes venue', async ({ page }) => {
@@ -117,24 +118,24 @@ test('front-desk selections are cleared when staff changes venue', async ({ page
   await page.goto('/');
 
   const venueSelect = page.getByLabel('Active venue');
+  const header = page.locator('header.top');
   await expect(venueSelect).toHaveValue(venueA);
   await page.getByRole('button', { name: 'New Booking', exact: true }).click();
 
   await page.getByPlaceholder('Name, email or phone').fill('QA Player');
-  await page.getByRole('button', { name: 'SEARCH' }).click();
-  await page.getByRole('button', { name: /QA Player/ }).click();
-  await expect(page.getByText('BOOKING FOR')).toBeVisible();
+  await page.getByRole('button', { name: 'SEARCH', exact: true }).click();
+  await page.locator('.playerResults').getByRole('button').filter({ hasText: 'QA Player' }).click();
+  await expect(page.locator('.selectedPlayerCard')).toContainText('QA Player');
 
   const courtSelect = page.getByLabel('Court');
-  await expect(page.getByRole('option', { name: /Lahore Court/ })).toBeVisible();
+  await expect(courtSelect.locator(`option[value="${courtA}"]`)).toHaveText(/Lahore Court/);
   await courtSelect.selectOption(courtA);
   await expect(courtSelect).toHaveValue(courtA);
 
   await venueSelect.selectOption(venueB);
-  await expect(page.getByText('Multan Padel Centre · Multan')).toBeVisible();
-  await expect(page.getByText('BOOKING FOR')).toHaveCount(0);
+  await expect(header.getByText('Multan Padel Centre · Multan', { exact: true })).toBeVisible();
+  await expect(page.locator('.selectedPlayerCard')).toHaveCount(0);
   await expect(page.getByPlaceholder('Name, email or phone')).toHaveValue('');
   await expect(courtSelect).toHaveValue('');
-  await expect(page.getByText('Select registered player from the search results.')).toHaveCount(0);
-  await expect(page.getByText('Select a registered player from the search results.')).toBeVisible();
+  await expect(page.getByText('Select a registered player from the search results.', { exact: true })).toBeVisible();
 });
