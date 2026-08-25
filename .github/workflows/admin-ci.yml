@@ -6,7 +6,7 @@ on:
   pull_request:
     paths: ['admin/**','run_admin_dev.ps1','.github/workflows/admin-ci.yml']
 jobs:
-  build-and-scan-pass-runtime:
+  build-and-admin-runtime:
     runs-on: ubuntu-latest
     defaults:
       run: {working-directory: admin}
@@ -25,11 +25,11 @@ jobs:
           npm run dev -- --hostname 127.0.0.1 > /tmp/sbp-padel-admin.log 2>&1 &
           for i in {1..60}; do if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then exit 0; fi; sleep 1; done
           cat /tmp/sbp-padel-admin.log; exit 1
-      - name: Scan Pass browser runtime QA
+      - name: Admin browser runtime QA
         shell: bash
         run: |
           set -o pipefail
-          npm run test:scan-pass 2>&1 | tee /tmp/admin-qa.log
+          npm run test:admin 2>&1 | tee /tmp/admin-qa.log
       - name: Upload admin QA diagnostics
         if: always()
         uses: actions/upload-artifact@v4
