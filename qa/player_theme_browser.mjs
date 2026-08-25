@@ -5,7 +5,7 @@ const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:412,height:915}});
 const payment={id:'pay-theme',booking_id:'booking-theme',booking_code:'PDL-THEME',booking_date:'2026-08-29',payment_status:'paid',method:'card',provider_reference:'PAY-THEME',amount:'2100.00',currency:'PKR',created_at:new Date().toISOString(),refund:null};
 await page.route('http://127.0.0.1:8000/api/v1/**',async route=>{const u=new URL(route.request().url()),p=u.pathname.replace('/api/v1','');let body={};if(p==='/auth/me')body={id:'theme-user',full_name:'Theme Player',email:'theme@example.com',phone:null,role:'player',avatar_data_url:null};else if(p==='/payments/me')body=[payment];else if(p==='/notifications/me'||p==='/bookings/me'||p==='/venues')body=[];await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)})});
-await page.addInitScript(()=>{localStorage.setItem('sbpPadelAccessToken','theme-token');localStorage.setItem('sbpPadelTheme','dark')});
+await page.addInitScript(()=>{if(window.top!==window)return;localStorage.setItem('sbpPadelAccessToken','theme-token');localStorage.setItem('sbpPadelTheme','dark')});
 const assert=(c,m)=>{if(!c)throw new Error(m)};
 const waitDeepDismissed=()=>page.waitForFunction(()=>{const l=document.getElementById('sbpDeepLayer');return l&&!l.classList.contains('on')&&!l.classList.contains('leaving')});
 try{
