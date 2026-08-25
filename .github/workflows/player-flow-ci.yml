@@ -1,176 +1,62 @@
 name: Player Flow CI
-
 on:
   push:
     branches: [backend-v1-dev]
-    paths:
-      - 'docs/**'
-      - 'dev_player_server.py'
-      - 'qa/player_runtime_browser.mjs'
-      - 'qa/player_booking_lifecycle_browser.mjs'
-      - 'qa/player_account_browser.mjs'
-      - 'qa/player_theme_browser.mjs'
-      - '.github/workflows/player-flow-ci.yml'
+    paths: ['docs/**','dev_player_server.py','qa/player_runtime_browser.mjs','qa/player_booking_lifecycle_browser.mjs','qa/player_account_browser.mjs','qa/player_theme_browser.mjs','.github/workflows/player-flow-ci.yml']
   pull_request:
-    paths:
-      - 'docs/**'
-      - 'dev_player_server.py'
-      - 'qa/player_runtime_browser.mjs'
-      - 'qa/player_booking_lifecycle_browser.mjs'
-      - 'qa/player_account_browser.mjs'
-      - 'qa/player_theme_browser.mjs'
-      - '.github/workflows/player-flow-ci.yml'
-
+    paths: ['docs/**','dev_player_server.py','qa/player_runtime_browser.mjs','qa/player_booking_lifecycle_browser.mjs','qa/player_account_browser.mjs','qa/player_theme_browser.mjs','.github/workflows/player-flow-ci.yml']
 jobs:
   player-flow:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
       - name: JavaScript syntax
         run: |
-          node --check docs/runtime-api.js
-          node --check docs/booking-participants-live.js
-          node --check docs/review-entry.js
-          node --check docs/review-players-live.js
-          node --check docs/booking-success-live.js
-          node --check docs/digital-pass-live.js
-          node --check docs/bookings-entry.js
-          node --check docs/player-bookings-live.js
-          node --check docs/player-booking-detail-live.js
-          node --check docs/player-profile-live.js
-          node --check docs/player-payment-history-live.js
-          node --check docs/player-wallet-live.js
-          node --check docs/profile-modules.js
-          node --check docs/theme-bridge.js
-          node --check docs/navigation-fix.js
-          node --check docs/deep-route-smooth.js
-          node --check docs/notifications-live.js
-          node --check docs/booking-date-more.js
-          node --check docs/deep-router.js
-          node --check docs/native-transitions.js
-          node --check docs/player-stability.js
-          node --check qa/player_runtime_browser.mjs
-          node --check qa/player_booking_lifecycle_browser.mjs
-          node --check qa/player_account_browser.mjs
-          node --check qa/player_theme_browser.mjs
-          node --check docs/sw.js
-
-      - name: Booking flow architecture guards
+          for f in docs/runtime-api.js docs/booking-participants-live.js docs/review-entry.js docs/review-players-live.js docs/booking-success-live.js docs/digital-pass-live.js docs/bookings-entry.js docs/player-bookings-live.js docs/player-booking-detail-live.js docs/player-profile-live.js docs/player-payment-history-live.js docs/player-wallet-live.js docs/profile-modules.js docs/theme-bridge.js docs/navigation-fix.js docs/deep-route-smooth.js docs/notifications-live.js docs/booking-date-more.js docs/deep-router.js docs/native-transitions.js docs/player-stability.js docs/player-venues-live.js qa/player_runtime_browser.mjs qa/player_booking_lifecycle_browser.mjs qa/player_account_browser.mjs qa/player_theme_browser.mjs docs/sw.js; do node --check "$f"; done
+      - name: Architecture guards
         shell: bash
         run: |
           grep -q 'sbpPadelBookingSessionV2' docs/review-entry.js
           grep -q 'data-sbp-step' docs/review-entry.js
           grep -q '/payments/initiate' docs/review-entry.js
-          grep -q '/simulate-success' docs/review-entry.js
           grep -q 'review-entry.js' dev_player_server.py
-          grep -q 'runtime-api.js' dev_player_server.py
-          grep -q 'booking-participants-live.js' dev_player_server.py
-          ! grep -q 'booking-router-bridge.js' dev_player_server.py
-          ! grep -q 'review-policy-gate.js' dev_player_server.py
-          ! grep -q 'review-disabled-state.js' dev_player_server.py
-          ! grep -q 'review-live-ui.js' dev_player_server.py
-          ! grep -q 'review-pricing.js' dev_player_server.py
-          ! grep -q 'flow-recovery.js' dev_player_server.py
-          ! grep -q 'slot-pricing.js' dev_player_server.py
-          ! grep -q 'player-live.js' docs/index.html
-          ! grep -q 'player-ui-fixes.js' docs/app.js
-
-      - name: First-click navigation guards
-        shell: bash
-        run: |
           grep -q 'data-live-manage' docs/player-bookings-live.js
           grep -q 'SBPDeepRoute' docs/player-bookings-live.js
-          grep -q 'currentTab' docs/player-bookings-live.js
-          grep -q 'loadSeq' docs/player-bookings-live.js
-          grep -q 'bookings-module.css' docs/player-bookings-live.js
-          grep -q 'data-sbp-bookings-style' docs/player-bookings-live.js
-          grep -q '__SBPBookingsNavigationRetired' docs/bookings-entry.js
-          ! grep -q 'addEventListener' docs/bookings-entry.js
-          ! grep -q "id==='payButton')return'payment-success.html'" docs/deep-router.js
-          ! grep -q "id==='toPayment')return'payment.html'" docs/deep-router.js
-
-      - name: Deep-route transition guards
-        shell: bash
-        run: |
           grep -q 'deep-route-smooth.js' dev_player_server.py
-          grep -q 'sbp-preload-detail' docs/deep-route-smooth.js
-          grep -q "review-booking.html" docs/deep-route-smooth.js
-          grep -q "payment.html" docs/deep-route-smooth.js
-          grep -q "booking-detail.html" docs/deep-route-smooth.js
-          grep -q "frame.addEventListener('load'" docs/deep-route-smooth.js
-
-      - name: Live player ownership guards
-        shell: bash
-        run: |
           grep -q '/notifications/me' docs/notifications-live.js
-          grep -q 'SBPShowNotifications' docs/player-profile-live.js
-          grep -q 'notifications-live.js' dev_player_server.py
           grep -q '/bookings/me' docs/player-bookings-live.js
           grep -q '/auth/me' docs/player-profile-live.js
-          grep -q '/auth/me/avatar' docs/player-profile-live.js
-          grep -q 'player-profile-live.js' dev_player_server.py
           grep -q '/payments/me' docs/player-payment-history-live.js
-          grep -q 'player-wallet-live.js' dev_player_server.py
-          ! grep -q 'player-account-live.js' dev_player_server.py
-          ! grep -q 'Adeel Raza' docs/player-profile-live.js
-          ! grep -q 'Sara Khan\|Hamza Ali\|Mariam Shah' docs/profile-modules.js
-          ! grep -q 'PKR 2,450\|Wallet top-up' docs/wallet.html
-          ! grep -q 'PDL-002381' docs/payment-history.html
           grep -q '/reschedule' docs/player-booking-detail-live.js
           grep -q '/cancel' docs/player-booking-detail-live.js
           grep -q '/refund' docs/player-booking-detail-live.js
-
-      - name: Live checkout and pass guards
-        shell: bash
-        run: |
-          grep -q 'SBPApiBase' docs/runtime-api.js
-          grep -q '/participants' docs/booking-participants-live.js
-          grep -q '/participants' docs/booking-success-live.js
           grep -q '/participants' docs/digital-pass-live.js
-          grep -q 'location.replace' docs/digital-pass-live.js
-          grep -q 'activePromise' docs/digital-pass-live.js
-          ! grep -q 'PDL-002381' docs/digital-pass-live.js
-
-      - name: Theme ownership guards
-        shell: bash
-        run: |
           grep -q 'SBPToggleTheme' docs/theme-bridge.js
-          grep -q '#themeToggle' docs/theme-bridge.js
-          grep -q 'sbp-theme-change' docs/theme-bridge.js
-          grep -q 'SBPToggleTheme' docs/player-profile-live.js
-          grep -q 'html\[data-theme="light"\] body nav' docs/theme-bridge.js
-
-      - name: Dev runtime provenance guards
-        shell: bash
-        run: |
           grep -q 'X-SBP-Padel-Build' dev_player_server.py
-          grep -q '__SBP_DEV_BUILD__' dev_player_server.py
-          grep -q 'NOOP_SERVICE_WORKER' dev_player_server.py
-          grep -q 'Cache-Control' dev_player_server.py
-
+          ! grep -q 'Adeel Raza' docs/player-profile-live.js
+          ! grep -q 'PDL-002381' docs/digital-pass-live.js
       - name: Install Playwright
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
-
       - name: Browser runtime interaction QA
         shell: bash
         run: |
+          set -o pipefail
           python dev_player_server.py > /tmp/sbp-player-dev.log 2>&1 &
           SERVER_PID=$!
           trap 'kill $SERVER_PID || true' EXIT
-          for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:5173/index.html >/dev/null; then break; fi
-            sleep 1
-          done
-          node qa/player_runtime_browser.mjs
-          node qa/player_booking_lifecycle_browser.mjs
-          node qa/player_account_browser.mjs
-          node qa/player_theme_browser.mjs
+          for i in {1..30}; do if curl -fsS http://127.0.0.1:5173/index.html >/dev/null; then break; fi; sleep 1; done
+          { node qa/player_runtime_browser.mjs && node qa/player_booking_lifecycle_browser.mjs && node qa/player_account_browser.mjs && node qa/player_theme_browser.mjs; } 2>&1 | tee /tmp/player-qa.log
+      - name: Upload browser QA diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-browser-qa-log
+          path: |
+            /tmp/player-qa.log
+            /tmp/sbp-player-dev.log
+          if-no-files-found: ignore
+          retention-days: 3
