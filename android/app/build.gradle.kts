@@ -19,8 +19,8 @@ android {
         applicationId = "pk.gov.punjab.sbp.padel"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.11-debug"
+        versionCode = 12
+        versionName = "0.12-debug"
     }
 
     buildTypes {
@@ -35,4 +35,5 @@ android {
 
 dependencies {
     implementation("com.google.android.gms:play-services-auth:21.2.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 }
