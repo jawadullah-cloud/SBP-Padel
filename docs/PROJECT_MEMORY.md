@@ -49,14 +49,21 @@ HQ Bookings follows the same compact-review pattern: each booking is collapsed b
 Accepted: manager/operator venue assignment, Court Schedule, booking search/detail, check-in, closures, court status, front-desk booking, payments/refunds, pricing/bookable hours, reports, player registration/search. Pricing rules define the visible booking schedule. General Bookings sorts by creation activity; Court Schedule is chronological.
 
 ## HQ architecture
-HQ Home owns overview, cross-venue bookings, staff accounts, policies and refund decisions. Dedicated routes: `/hq/provisioning`, per-venue management, `/hq/reports`, `/hq/finance`, and `/hq/audit`.
+HQ Home owns overview, cross-venue bookings, policies and refund decisions. Staff credential/lifecycle management is now a dedicated `/hq/staff` route. Dedicated network routes include `/hq/provisioning`, per-venue management/profile, `/hq/reports`, `/hq/finance`, and `/hq/audit`.
 
-HQ uses one left-side navigation model. Dedicated HQ routes are gated before render so switching pages must not flash the login screen. HQ provisioning layout uses a shared content frame beside the fixed sidebar; do not independently offset child pages again.
+HQ uses one persistent left-side navigation model. Dedicated HQ routes are gated before render so switching pages must not flash the login screen. Dedicated pages must retain links to Overview, Bookings, Staff, Policies, Refunds, Venue Directory, Reports, Finance and Activity Trail; do not collapse the sidebar to network-only links. HQ provisioning layout uses a shared content frame beside the fixed sidebar; do not independently offset child pages again.
 
-### Staff roles and lifecycle
-Built-in roles are intentionally fixed: `player`, `venue_operator`, `venue_manager`, `admin`. Do not add arbitrary user-defined roles without a demonstrated permission-model requirement. HQ Staff shows a readable permission summary for the three staff roles.
+### Venue profile management
+Venue records are not create-once data. HQ can edit a venue after creation through `/hq/provisioning/profile?venue=<id>` and `PATCH /admin/venues/{venue_id}`. Editable fields include name, city, address, description, latitude/longitude, opening/closing hours and amenities. Common amenities are selectable and custom amenities are allowed. Venue Directory exposes separate **Manage Venue** and **Edit Profile & Amenities** actions, and Venue Management exposes a direct profile-edit shortcut.
 
-Staff accounts can be disabled/reactivated. Authentication rejects inactive accounts. Permanent staff deletion is allowed only when there is no operational/audit/assignment history; otherwise disable the account to preserve accountability. An HQ admin cannot disable/delete their own current account.
+Editing a venue profile must preserve courts, bookings, pricing, staff assignments, gallery and history. Coordinate changes intentionally affect player Near Me/Next Available ranking; profile/amenity changes propagate through live public venue APIs to player discovery/detail surfaces.
+
+### Staff roles, credentials and lifecycle
+Built-in roles remain intentionally fixed: `player`, `venue_operator`, `venue_manager`, `admin`. Do not add arbitrary user-defined roles without a demonstrated permission-model requirement.
+
+HQ staff management lives at `/hq/staff`. Staff creation uses a generated temporary password by default but allows manual entry, Show/Hide, Generate and Copy. After account creation, the exact temporary password remains visible client-side until explicitly dismissed or the page is left, so a missed initial copy does not immediately lose it. The server never stores readable passwords.
+
+HQ admins can reset the password of any admin, venue manager or venue operator through `PATCH /admin/staff/{user_id}/password`; passwords are re-hashed server-side. Reset UX also provides Generate/Copy and keeps the newly chosen password visible client-side after success until dismissed/leave. Existing Disable/Reactivate/Delete lifecycle actions remain available. Authentication rejects inactive accounts. Permanent staff deletion is allowed only when there is no operational/audit/assignment history; otherwise disable the account to preserve accountability. An HQ admin cannot disable/delete their own current account.
 
 ### Activity & Audit Trail
 `/hq/audit` is management-facing. Default presentation must translate technical API actions into readable activities (check-in, pass validation, pricing change, closure, staff assignment, court/venue change, refund, reconciliation, front-desk booking). Raw action/entity/payload information belongs behind optional Technical details.
@@ -71,8 +78,8 @@ Safe venue cleanup: unused courts may be deleted; courts with booking history pr
 ## Backend ownership
 - `operations.py`: venue bookings/check-in/blocks.
 - `operations_management.py`: venue-side front desk, pricing, finance/refunds/reports.
-- `admin.py`, `admin_hq.py`, `admin_finance.py`, `admin_reports.py`: core HQ.
-- `admin_governance.py`: detailed refund review, staff lifecycle and role-permission summaries.
+- `admin.py`, `admin_hq.py`, `admin_finance.py`, `admin_reports.py`: core HQ and editable venue profile APIs.
+- `admin_governance.py`: detailed refund review, staff lifecycle, password reset and role-permission summaries.
 - `venue_gallery.py`: public and HQ facility gallery APIs.
 - `booking_policy.py`: 12-hour player change eligibility.
 
