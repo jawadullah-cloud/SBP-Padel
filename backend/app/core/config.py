@@ -2,6 +2,8 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_JWT_SECRET = "change-this-in-production"
+
 
 class Settings(BaseSettings):
     app_name: str = "SBP Padel API"
@@ -15,7 +17,7 @@ class Settings(BaseSettings):
         "http://localhost:3000,http://localhost:5173,"
         "http://127.0.0.1:3000,http://127.0.0.1:5173"
     )
-    jwt_secret: str = "change-this-in-production"
+    jwt_secret: str = DEFAULT_JWT_SECRET
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 60 * 24 * 7
     service_fee: int = 100
@@ -38,6 +40,14 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+
+def validate_runtime_settings(config: Settings) -> None:
+    environment = config.environment.strip().lower()
+    if environment not in {"development", "test"} and config.jwt_secret == DEFAULT_JWT_SECRET:
+        raise RuntimeError(
+            "JWT_SECRET must be explicitly configured before SBP-Padel runs outside development/test"
+        )
 
 
 @lru_cache
