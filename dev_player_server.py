@@ -54,6 +54,25 @@ def current_build_id() -> str:
         return "unknown"
 
 
+def mask_prototype_booking_content(page: str, html: str) -> str:
+    """Do not flash prototype identities/bookings before the live runtime hydrates."""
+    if page == "review-booking.html":
+        html = html.replace("<div class=\"avatar\">AR</div><div><h3>Adeel Raza</h3>", "<div class=\"avatar\">P</div><div><h3>Player</h3>")
+    elif page == "payment-success.html":
+        html = html.replace("PDL-002381", "—")
+        html = html.replace("Saturday, 22 Aug 2026", "Loading…")
+        html = html.replace("7:00 PM – 8:00 PM", "Loading…")
+        html = html.replace("Nishtar Park Sports Complex", "Loading booking…")
+        html = html.replace("Court 01", "Loading…")
+    elif page == "digital-pass.html":
+        html = html.replace("PDL-002381", "—")
+        html = html.replace("SATURDAY, 22 AUG 2026", "LOADING…")
+        html = html.replace("7:00 PM – 8:00 PM", "LOADING…")
+        html = html.replace("NISHTAR PARK SPORTS COMPLEX", "LOADING BOOKING…")
+        html = html.replace("COURT 01", "LOADING…")
+    return html
+
+
 class NoCacheHandler(SimpleHTTPRequestHandler):
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
@@ -86,6 +105,7 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
         if target.suffix.lower() == ".html" and target.is_file():
             html = target.read_text(encoding="utf-8")
             page = target.name
+            html = mask_prototype_booking_content(page, html)
             mobile_bootstrap = '<script src="mobile-runtime.js?dev=1"></script>'
             if 'src="mobile-runtime.js' not in html and "src='mobile-runtime.js" not in html:
                 html = html.replace("</head>", mobile_bootstrap + "</head>")
