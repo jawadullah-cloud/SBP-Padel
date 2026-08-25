@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.admin import router as admin_router
 from app.api.admin_finance import router as admin_finance_router
+from app.api.admin_governance import router as admin_governance_router
 from app.api.admin_hq import router as admin_hq_router
 from app.api.admin_reports import router as admin_reports_router
 from app.api.auth import router as auth_router
@@ -26,21 +27,20 @@ from app.core.audit_middleware import AdministrationAuditMiddleware
 from app.core.config import settings
 from app.core.slot_locks import slot_locks
 from app.db.seed import seed_reference_data
-from app.db.session import SessionLocal, engine
-from app.models import booking_participants as booking_participant_models  # noqa: F401
-from app.models import operations as operations_models  # noqa: F401
-from app.models import platform as platform_models  # noqa: F401
+from app.db.session import SessionLocal,engine
+from app.models import booking_participants as booking_participant_models  # noqa:F401
+from app.models import operations as operations_models  # noqa:F401
+from app.models import platform as platform_models  # noqa:F401
 from app.models.domain import Base
 @asynccontextmanager
 async def lifespan(app:FastAPI):
     if settings.environment=="development":
         async with engine.begin() as connection: await connection.run_sync(Base.metadata.create_all)
         async with SessionLocal() as session: await seed_reference_data(session)
-    yield
-    await slot_locks.close()
+    yield; await slot_locks.close()
 app=FastAPI(title=settings.app_name,version="0.11.0",description="Sports Board Punjab Padel booking and venue management API",lifespan=lifespan)
 app.add_middleware(AdministrationAuditMiddleware)
 app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origin_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
-for r in [router,auth_router,policies_router,booking_passes_router,bookings_router,booking_participants_router,cancellations_router,reschedules_router,player_payments_router,payments_router,notifications_router,admin_router,admin_hq_router,admin_finance_router,admin_reports_router,venue_gallery_router,operations_router,operations_courts_router,operations_management_router,operations_passes_router,operations_players_router]: app.include_router(r,prefix=settings.api_prefix)
+for r in [router,auth_router,policies_router,booking_passes_router,bookings_router,booking_participants_router,cancellations_router,reschedules_router,player_payments_router,payments_router,notifications_router,admin_router,admin_hq_router,admin_governance_router,admin_finance_router,admin_reports_router,venue_gallery_router,operations_router,operations_courts_router,operations_management_router,operations_passes_router,operations_players_router]: app.include_router(r,prefix=settings.api_prefix)
 @app.get("/",include_in_schema=False)
-async def root()->dict: return {"service":settings.app_name,"api":settings.api_prefix,"docs":"/docs"}
+async def root()->dict:return {"service":settings.app_name,"api":settings.api_prefix,"docs":"/docs"}
