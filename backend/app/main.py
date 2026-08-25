@@ -25,7 +25,7 @@ from app.api.reschedules import router as reschedules_router
 from app.api.routes import router
 from app.api.venue_gallery import router as venue_gallery_router
 from app.core.audit_middleware import AdministrationAuditMiddleware
-from app.core.config import settings
+from app.core.config import settings, validate_runtime_settings
 from app.core.slot_locks import slot_locks
 from app.db.seed import seed_reference_data
 from app.db.session import SessionLocal,engine
@@ -35,6 +35,7 @@ from app.models import platform as platform_models  # noqa:F401
 from app.models.domain import Base
 @asynccontextmanager
 async def lifespan(app:FastAPI):
+    validate_runtime_settings(settings)
     if settings.environment=="development":
         async with engine.begin() as connection: await connection.run_sync(Base.metadata.create_all)
         async with SessionLocal() as session: await seed_reference_data(session)
