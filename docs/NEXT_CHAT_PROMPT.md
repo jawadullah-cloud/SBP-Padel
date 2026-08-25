@@ -6,19 +6,26 @@ Continue `jawadullah-cloud/SBP-Padel` on `backend-v1-dev`. Inspect HEAD, read th
 Player discovery/location/gallery and the previously reviewed booking lifecycle are manually accepted. Do not reopen accepted behavior without a reproduced regression.
 
 ## Current HQ pass requiring manual review
-A new HQ venue-profile/staff-credential/navigation pass was implemented after the accepted player work. Verify latest Admin Portal CI and Backend CI before manual review.
+The editable venue-profile/staff-credential/navigation pass is implemented. A follow-up pass also addresses the venue action alignment shown in manual screenshots and adds self-service password changes for authenticated staff. Verify final Admin Portal CI and Backend CI before manual review.
 
 ### Editable venue profiles and amenities
 Venue information is no longer create-once. HQ exposes `/hq/provisioning/profile?venue=<id>` and `PATCH /admin/venues/{venue_id}`. Admin can correct name, city, address, description, latitude/longitude, opening/closing hours and amenities. Common amenities include Parking, Changing Rooms, Washrooms, Seating, Cafeteria, Drinking Water, Floodlights, Equipment Rental, Prayer Area and Lockers; custom amenities are also supported.
 
-Venue Directory separates **Manage Venue** from **Edit Profile & Amenities**. New venue creation redirects to the profile editor before operational setup, and Venue Management provides a direct edit-profile shortcut. Profile edits must preserve courts, bookings, pricing, staff assignments, gallery and history. Coordinate changes intentionally affect Near Me/Next Available.
+Venue Directory separates **Manage Venue** from **Edit Profile & Amenities**. New venue creation redirects to the profile editor before operational setup. Profile edits must preserve courts, bookings, pricing, staff assignments, gallery and history. Coordinate changes intentionally affect Near Me/Next Available.
 
-### HQ staff credentials
-Staff management is now a dedicated `/hq/staff` route. The HQ home Staff item routes there.
+The earlier globally floated **Edit Venue Profile & Amenities** shortcut was removed after manual review showed it misaligned above Venue Management. Do not reintroduce it as a floating global control. If a direct manage-page shortcut is needed, place it deliberately inside that page's header/action group.
 
-Creating admin/venue-manager/venue-operator accounts provides a generated password by default plus Show/Hide, Generate and Copy controls. After creation, the chosen temporary password remains visible client-side until dismissed or leaving the page. It is never stored readable server-side.
+### HQ staff credentials and self-service account security
+Staff management is a dedicated `/hq/staff` route. Creating admin/venue-manager/venue-operator accounts provides a generated password by default plus Show/Hide, Generate and Copy controls. After creation, the chosen temporary password remains visible client-side until dismissed or leaving the page. It is never stored readable server-side.
 
-HQ admins can reset any staff password through `PATCH /admin/staff/{user_id}/password`; the replacement is hashed server-side. Reset UI also provides Generate/Copy and preserves the chosen password after success until dismissed/leave. Disable/Reactivate/Delete remain available and existing safety rules still apply: accounts with operational history should be disabled rather than deleted; self-disable/delete remains blocked.
+HQ admins can reset any staff password through `PATCH /admin/staff/{user_id}/password`; the replacement is hashed server-side. Reset UI also provides Generate/Copy and preserves the chosen password after success until dismissed/leave.
+
+Authenticated HQ admins, venue managers and venue operators also have **My Account → Change Password** self-service. The shared endpoint is `POST /auth/change-password`; it requires the current password plus a policy-compliant new password and rejects reuse of the current password. HQ reset remains the recovery/admin path. The self-service UI is owned by `admin/app/StaffAccountControl.tsx` and appears across the admin/operations product according to the active HQ or operations token.
+
+Disable/Reactivate/Delete remain available and existing safety rules still apply: accounts with operational history should be disabled rather than deleted; self-disable/delete remains blocked.
+
+### HQ venue action alignment
+Manual screenshots exposed floating/stacked venue actions. The follow-up alignment pass removes the global floating venue-edit shortcut, standardizes HQ page toolbar action heights/alignment, gives Venue Directory card actions equal sizing, and constrains Facility Photos so it no longer floats over the page header. These changes require manual visual review before being marked accepted.
 
 ### Persistent HQ navigation
 Dedicated HQ routes must retain the full navigation set: Overview, Bookings, Staff, Policies, Refunds, Venue Directory, Reports, Finance and Activity Trail. Bookings/Policies/Refunds return to their HQ home tabs through `?tab=` routing. Do not regress to the earlier behavior where dedicated pages showed only Overview/network links.
@@ -38,14 +45,14 @@ Player cancellation/rescheduling cutoff remains 12 hours before first slot. HQ R
 
 ## Manual review sequence for current HQ pass
 1. Pull and restart backend + admin frontend.
-2. Venue Directory → select Multan → Edit Profile & Amenities. Add/change amenities, description/address/hours and save; reload to confirm persistence.
-3. Confirm Manage Venue has an Edit Venue Profile & Amenities shortcut.
-4. Check an edited venue in the player app to confirm live profile/amenity propagation; if latitude/longitude is changed, verify Near Me ranking accordingly.
-5. HQ → Staff: create a disposable manager/operator using Generate + Copy. Confirm the password remains visible after creation until dismissed.
-6. Reset an existing admin/manager/operator password and confirm login succeeds with the new password.
+2. Venue Directory → Multan → Edit Profile & Amenities. Add/change amenities and save; reload to confirm persistence.
+3. Check Venue Directory action alignment and Venue Management top actions/Facility Photos against the earlier screenshots.
+4. HQ → Staff: confirm generated-password Copy/Show and admin Reset Password remain correct.
+5. Log in as a disposable manager/operator and use **My Account → Change Password**. Confirm a wrong current password is rejected, a valid change succeeds, the old password no longer logs in and the new password does.
+6. Confirm the same My Account control is available to an HQ admin.
 7. Verify Disable/Reactivate/Delete behavior remains available and safe-delete rules still apply.
-8. Navigate Venue Management, Reports, Finance and Activity Trail and confirm the full left sidebar remains present, including Bookings, Staff, Policies and Refunds.
+8. Navigate Venue Management, Reports, Finance and Activity Trail and confirm the full left sidebar remains present.
 9. From a dedicated route, open Bookings/Policies/Refunds and confirm the correct HQ home tab opens without a login flash.
 
 ## Verification discipline
-Distinguish implementation, green CI and manual acceptance. Do not call the current HQ pass accepted until the user manually reviews it.
+Distinguish implementation, green CI and manual acceptance. Do not call the current HQ alignment/self-service pass accepted until the user manually reviews it.
