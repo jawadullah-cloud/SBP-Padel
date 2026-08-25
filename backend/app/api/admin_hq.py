@@ -41,6 +41,10 @@ class VenueCreateRequest(BaseModel):
     closing_time: time = time(23, 0)
 
 
+class VenueUpdateRequest(VenueCreateRequest):
+    pass
+
+
 class CourtCreateRequest(BaseModel):
     code: str = Field(min_length=1, max_length=40)
     name: str = Field(min_length=2, max_length=120)
@@ -81,6 +85,26 @@ async def create_venue(payload: VenueCreateRequest, _: User = Depends(admin_user
     venue = Venue(name=payload.name.strip(), city=payload.city.strip(), address=payload.address.strip(), latitude=payload.latitude, longitude=payload.longitude, description=payload.description.strip() if payload.description else None, amenities=sorted(set(a.strip() for a in payload.amenities if a.strip())), opening_time=payload.opening_time, closing_time=payload.closing_time, is_active=True)
     db.add(venue); await db.commit(); await db.refresh(venue)
     return {"id": str(venue.id), "name": venue.name, "city": venue.city, "is_active": True}
+
+
+@router.patch("/venues/{venue_id}")
+async def update_venue(venue_id: UUID, payload: VenueUpdateRequest, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)) -> dict:
+    venue = await db.get(Venue, venue_id)
+    if not venue:
+        raise HTTPException(404, "Venue not found")
+    if payload.closing_time <= payload.opening_time:
+        raise HTTPException(400, "Closing time must be after opening time")
+    venue.name = payload.name.strip()
+    venue.city = payload.city.strip()
+    venue.address = payload.address.strip()
+    venue.latitude = payload.latitude
+    venue.longitude = payload.longitude
+    venue.description = payload.description.strip() if payload.description and payload.description.strip() else None
+    venue.amenities = sorted(set(a.strip() for a in payload.amenities if a.strip()))
+    venue.opening_time = payload.opening_time
+    venue.closing_time = payload.closing_time
+    await db.commit(); await db.refresh(venue)
+    return {"id": str(venue.id), "name": venue.name, "city": venue.city, "amenities": venue.amenities}
 
 
 @router.delete("/venues/{venue_id}")
