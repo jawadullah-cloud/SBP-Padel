@@ -4,8 +4,8 @@
   window.__SBPProfileModules=true;
   const css=document.createElement('link');css.rel='stylesheet';css.href='profile-modules.css?v=20260825-favourites-live2';document.head.appendChild(css);
   const app=document.querySelector('.app'),nav=document.querySelector('nav'),profile=document.getElementById('profile');if(!app||!nav||!profile)return;
-  const API=(localStorage.getItem('sbpPadelApiBase')||'http://127.0.0.1:8000/api/v1').replace(/\/$/,'');
-  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const apiBase=()=>window.SBPApiBase?.()||(localStorage.getItem('sbpPadelApiBase')||'http://127.0.0.1:8000/api/v1').replace(/\/$/,'');
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
   const initials=n=>String(n||'').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]?.toUpperCase()).join('');
   const playersKey='sbpPadelSavedPlayers',favKey='sbpPadelFavouriteVenueIds';
   function makeScreen(id){let s=document.getElementById(id);if(s)return s;s=document.createElement('section');s.className='screen';s.id=id;app.insertBefore(s,nav);return s}
@@ -16,7 +16,7 @@
   function setPlayers(rows){localStorage.setItem(playersKey,JSON.stringify(rows))}
   function getFavIds(){try{const rows=JSON.parse(localStorage.getItem(favKey)||'[]');return Array.isArray(rows)?rows.map(String):[]}catch{return[]}}
   function setFavIds(rows){const ids=[...new Set(rows.map(String))];localStorage.setItem(favKey,JSON.stringify(ids));window.dispatchEvent(new CustomEvent('sbp-favourites-change',{detail:{ids}}));return ids}
-  async function getVenues(){try{const r=await fetch(`${API}/venues?_=${Date.now()}`,{cache:'no-store'});if(!r.ok)throw new Error();const rows=await r.json();return Array.isArray(rows)?rows:[]}catch{return[]}}
+  async function getVenues(){try{const r=await fetch(`${apiBase()}/venues?_=${Date.now()}`,{cache:'no-store'});if(!r.ok)throw new Error();const rows=await r.json();return Array.isArray(rows)?rows:[]}catch{return[]}}
   function directionsFor(v){if(v?.latitude==null||v?.longitude==null)return'';return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(v.latitude)},${encodeURIComponent(v.longitude)}`}
   function featureText(v){const count=Array.isArray(v?.courts)?v.courts.length:null;const bits=[];if(count)bits.push(`${count} Court${count===1?'':'s'}`);if(Array.isArray(v?.amenities)&&v.amenities.length)bits.push(...v.amenities.slice(0,2));return bits.join(' · ')||'SBP Padel facility'}
   function openExternal(url){if(!url)return;if(typeof window.SBPPlayerOpenExternal==='function'){window.SBPPlayerOpenExternal(url);return}try{if(window.SBPAndroid&&typeof window.SBPAndroid.openExternal==='function'){window.SBPAndroid.openExternal(url);return}}catch{}location.href=url}
@@ -25,17 +25,16 @@
   async function renderFavs(){
     const ids=getFavIds();
     favs.innerHTML=`<div class="pmWrap"><div class="pmHead"><button type="button" class="pmBack" data-pm-back>←</button><div><small>PROFILE</small><h1>Favourite Venues</h1></div></div><p class="pmIntro">Your saved SBP Padel facilities appear here for faster access and booking.</p><div class="pmSectionTitle"><h2>Saved venues</h2><small>${ids.length?`${ids.length} venue${ids.length===1?'':'s'}`:'None yet'}</small></div><div class="pmEmpty ${ids.length?'':'show'}">${ids.length?'Loading saved venues…':'No favourite venues yet.<br>Save a venue to see it here.'}</div></div>`;
-    if(!ids.length){window.SBPRefreshBackIcons?.();return}
+    window.SBPRefreshBackIcons?.();
+    if(!ids.length)return;
     const venues=await getVenues();
+    if(!favs.classList.contains('active')&&document.getElementById('favouriteVenues')!==favs)return;
     const rows=ids.map(id=>venues.find(v=>String(v.id)===id)).filter(Boolean);
     const wrap=favs.querySelector('.pmWrap');if(!wrap)return;
     const empty=wrap.querySelector('.pmEmpty');
     if(!rows.length){if(empty){empty.classList.add('show');empty.innerHTML='Saved venues could not be loaded.<br>Try again when the venue service is available.'}window.SBPRefreshBackIcons?.();return}
     empty?.remove();
-    wrap.insertAdjacentHTML('beforeend',rows.map(v=>{
-      const directions=directionsFor(v);
-      return `<article class="pmVenue" data-fav-venue="${esc(v.id)}"><div class="pmVenueImage"><span class="pmVenueBadge">OPEN · ${esc(String(v.city||'Punjab').toUpperCase())}</span><button type="button" class="pmHeart" data-remove-favourite="${esc(v.id)}" aria-label="Remove ${esc(v.name)} from favourites">♥</button></div><div class="pmVenueBody"><h3>${esc(v.name)}</h3><p>${esc(featureText(v))}</p><div class="pmVenueMeta">${(v.amenities||[]).slice(0,3).map(a=>`<span>${esc(a)}</span>`).join('')}</div><div class="pmVenueActions"><button type="button" class="pmExplore" data-open-favourite="${esc(v.id)}">EXPLORE VENUE</button>${directions?`<button type="button" class="pmDirections" data-fav-directions-url="${esc(directions)}">DIRECTIONS ↗</button>`:''}</div></div></article>`
-    }).join(''));
+    wrap.insertAdjacentHTML('beforeend',rows.map(v=>{const directions=directionsFor(v);return `<article class="pmVenue" data-fav-venue="${esc(v.id)}"><div class="pmVenueImage"><span class="pmVenueBadge">OPEN · ${esc(String(v.city||'Punjab').toUpperCase())}</span><button type="button" class="pmHeart" data-remove-favourite="${esc(v.id)}" aria-label="Remove ${esc(v.name)} from favourites">♥</button></div><div class="pmVenueBody"><h3>${esc(v.name)}</h3><p>${esc(featureText(v))}</p><div class="pmVenueMeta">${(v.amenities||[]).slice(0,3).map(a=>`<span>${esc(a)}</span>`).join('')}</div><div class="pmVenueActions"><button type="button" class="pmExplore" data-open-favourite="${esc(v.id)}">EXPLORE VENUE</button>${directions?`<button type="button" class="pmDirections" data-fav-directions-url="${esc(directions)}">DIRECTIONS ↗</button>`:''}</div></div></article>`}).join(''));
     window.SBPRefreshBackIcons?.();
   }
   function removeFavourite(id){setFavIds(getFavIds().filter(x=>x!==String(id)));if(favs.classList.contains('active'))renderFavs();window.SBPPlayerVenuesRefresh?.()}
