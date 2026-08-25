@@ -14,6 +14,7 @@ from app.models.domain import Booking, BookingSlot, BookingStatus, Court, Paymen
 from app.models.operations import BookingCheckIn
 
 router = APIRouter(prefix="/operations/pass", tags=["venue pass validation"])
+ACTIVE_PASS_STATUSES = {BookingStatus.confirmed, BookingStatus.rescheduled}
 
 
 class PassValidationRequest(BaseModel):
@@ -85,7 +86,7 @@ async def validate_pass(
     reason = "Pass is valid for check-in"
     reason_code = "valid"
 
-    if booking.status != BookingStatus.confirmed:
+    if booking.status not in ACTIVE_PASS_STATUSES:
         valid = False
         reason = f"Booking is {booking.status.value.replace('_', ' ')}"
         reason_code = "booking_status"
