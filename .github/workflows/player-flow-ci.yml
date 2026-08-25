@@ -37,6 +37,7 @@ jobs:
           grep -q 'X-SBP-Padel-Build' dev_player_server.py
           ! grep -q 'Adeel Raza' docs/player-profile-live.js
           ! grep -q 'PDL-002381' docs/digital-pass-live.js
+          ! grep -qi 'Continue with Google' docs/auth-preview.html
       - name: Install Playwright
         run: |
           npm install --no-save playwright@1.55.0
