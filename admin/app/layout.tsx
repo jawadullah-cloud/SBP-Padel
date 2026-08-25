@@ -6,6 +6,7 @@ import './hq-provisioning.css';
 import './hq-shell.css';
 import type { Metadata } from 'next';
 import PlayersSidebarLink from './PlayersSidebarLink';
+import StaffAccountControl from './StaffAccountControl';
 
 export const metadata: Metadata = {
   title: 'SBP Padel Operations',
@@ -13,5 +14,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}<PlayersSidebarLink/></body></html>;
+  return <html lang="en"><body>{children}<PlayersSidebarLink/><StaffAccountControl/></body></html>;
 }
