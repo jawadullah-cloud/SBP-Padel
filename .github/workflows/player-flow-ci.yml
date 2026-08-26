@@ -2,9 +2,9 @@ name: Player Flow CI
 on:
   push:
     branches: [backend-v1-dev]
-    paths: ['docs/**','dev_player_server.py','qa/player_runtime_browser.mjs','qa/player_booking_lifecycle_browser.mjs','qa/player_account_browser.mjs','qa/player_theme_browser.mjs','qa/player_navigation_recovery_browser.mjs','qa/player_review_mobile_browser.mjs','qa/player_splash_session_browser.mjs','qa/player_locked_regressions_browser.mjs','.github/workflows/player-flow-ci.yml']
+    paths: ['docs/**','dev_player_server.py','qa/player_runtime_browser.mjs','qa/player_booking_lifecycle_browser.mjs','qa/player_account_browser.mjs','qa/player_theme_browser.mjs','qa/player_navigation_recovery_browser.mjs','qa/player_review_mobile_browser.mjs','qa/player_splash_session_browser.mjs','qa/player_locked_regressions_browser.mjs','qa/player_provider_payment_browser.mjs','.github/workflows/player-flow-ci.yml']
   pull_request:
-    paths: ['docs/**','dev_player_server.py','qa/player_runtime_browser.mjs','qa/player_booking_lifecycle_browser.mjs','qa/player_account_browser.mjs','qa/player_theme_browser.mjs','qa/player_navigation_recovery_browser.mjs','qa/player_review_mobile_browser.mjs','qa/player_splash_session_browser.mjs','qa/player_locked_regressions_browser.mjs','.github/workflows/player-flow-ci.yml']
+    paths: ['docs/**','dev_player_server.py','qa/player_runtime_browser.mjs','qa/player_booking_lifecycle_browser.mjs','qa/player_account_browser.mjs','qa/player_theme_browser.mjs','qa/player_navigation_recovery_browser.mjs','qa/player_review_mobile_browser.mjs','qa/player_splash_session_browser.mjs','qa/player_locked_regressions_browser.mjs','qa/player_provider_payment_browser.mjs','.github/workflows/player-flow-ci.yml']
 permissions:
   contents: read
 concurrency:
@@ -87,6 +87,9 @@ jobs:
           ! grep -q 'Adeel Raza' docs/player-profile-live.js
           ! grep -q 'PDL-002381' docs/digital-pass-live.js
           ! grep -qi 'Continue with Google' docs/auth-preview.html
+          grep -q 'providerAwaiting' docs/payment-methods-live.js
+          grep -q 'requires_provider_integration' docs/payment-methods-live.js
+          grep -q '/simulate-success' docs/payment-methods-live.js
       - name: Install Playwright
         run: |
           npm install --no-save playwright@1.55.0
@@ -99,7 +102,7 @@ jobs:
           SERVER_PID=$!
           trap 'kill $SERVER_PID || true' EXIT
           for i in {1..30}; do if curl -fsS http://127.0.0.1:5173/index.html >/dev/null; then break; fi; sleep 1; done
-          { node qa/player_runtime_browser.mjs && node qa/player_booking_lifecycle_browser.mjs && node qa/player_account_browser.mjs && node qa/player_theme_browser.mjs && node qa/player_navigation_recovery_browser.mjs && node qa/player_review_mobile_browser.mjs && node qa/player_splash_session_browser.mjs && node qa/player_locked_regressions_browser.mjs; } 2>&1 | tee /tmp/player-qa.log
+          { node qa/player_runtime_browser.mjs && node qa/player_booking_lifecycle_browser.mjs && node qa/player_account_browser.mjs && node qa/player_theme_browser.mjs && node qa/player_navigation_recovery_browser.mjs && node qa/player_review_mobile_browser.mjs && node qa/player_splash_session_browser.mjs && node qa/player_locked_regressions_browser.mjs && node qa/player_provider_payment_browser.mjs; } 2>&1 | tee /tmp/player-qa.log
       - name: Upload browser QA diagnostics
         if: always()
         uses: actions/upload-artifact@v6
