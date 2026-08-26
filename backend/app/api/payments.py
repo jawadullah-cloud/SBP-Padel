@@ -20,6 +20,7 @@ from app.models.domain import (
     RefundStatus,
     User,
 )
+from app.payments.providers import payment_provider
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -70,6 +71,24 @@ async def _ensure_confirmation_notification(booking: Booking, user: User, db: As
     )
 
 
+def _payment_response(payment: Payment, booking: Booking) -> dict:
+    metadata = dict(payment.provider_metadata or {})
+    return {
+        "payment_id": str(payment.id),
+        "booking_id": str(booking.id),
+        "booking_code": booking.booking_code,
+        "status": payment.status.value,
+        "amount": f"{payment.amount:.2f}",
+        "currency": payment.currency,
+        "method": payment.method,
+        "provider": payment.provider,
+        "provider_reference": payment.provider_reference,
+        "redirect_url": metadata.get("redirect_url"),
+        "client_payload": metadata.get("client_payload") or {},
+        "requires_provider_integration": payment.provider == "unconfigured",
+    }
+
+
 @router.post("/initiate")
 async def initiate_payment(
     payload: InitiatePaymentRequest,
@@ -91,34 +110,46 @@ async def initiate_payment(
         .order_by(Payment.created_at.desc())
     )
     if existing:
-        payment = existing
-    else:
-        payment = Payment(
-            booking_id=booking.id,
-            provider="unconfigured",
-            provider_reference=f"PAY-{uuid4().hex[:16].upper()}",
-            method=payload.method,
+        return _payment_response(existing, booking)
+
+    local_reference = f"PAY-{uuid4().hex[:16].upper()}"
+    try:
+        initiation = await payment_provider.initiate_payment(
+            reference=local_reference,
             amount=booking.total_amount,
             currency=booking.currency,
-            status=PaymentStatus.pending,
-            provider_metadata={"stage": "provider_selection_pending"},
+            method=payload.method,
+            return_url=None,
         )
-        db.add(payment)
-        await db.commit()
-        await db.refresh(payment)
+    except Exception as exc:
+        raise HTTPException(502, "Payment provider could not initiate the transaction") from exc
 
-    return {
-        "payment_id": str(payment.id),
-        "booking_id": str(booking.id),
-        "booking_code": booking.booking_code,
-        "status": payment.status.value,
-        "amount": f"{payment.amount:.2f}",
-        "currency": payment.currency,
-        "method": payment.method,
-        "provider": payment.provider,
-        "provider_reference": payment.provider_reference,
-        "requires_provider_integration": payment.provider == "unconfigured",
-    }
+    try:
+        status = PaymentStatus(initiation.status)
+    except ValueError:
+        status = PaymentStatus.pending
+
+    provider_metadata = dict(initiation.provider_metadata or {})
+    if initiation.redirect_url:
+        provider_metadata["redirect_url"] = initiation.redirect_url
+    if initiation.client_payload:
+        provider_metadata["client_payload"] = initiation.client_payload
+    provider_metadata.setdefault("local_reference", local_reference)
+
+    payment = Payment(
+        booking_id=booking.id,
+        provider=initiation.provider,
+        provider_reference=initiation.provider_reference or local_reference,
+        method=payload.method,
+        amount=booking.total_amount,
+        currency=booking.currency,
+        status=status,
+        provider_metadata=provider_metadata,
+    )
+    db.add(payment)
+    await db.commit()
+    await db.refresh(payment)
+    return _payment_response(payment, booking)
 
 
 @router.get("/{payment_id}")
@@ -131,17 +162,9 @@ async def payment_detail(
     if not payment:
         raise HTTPException(404, "Payment not found")
     booking = await _owned_booking(payment.booking_id, user, db)
-    return {
-        "id": str(payment.id),
-        "booking_id": str(booking.id),
-        "booking_code": booking.booking_code,
-        "status": payment.status.value,
-        "method": payment.method,
-        "provider": payment.provider,
-        "provider_reference": payment.provider_reference,
-        "amount": f"{payment.amount:.2f}",
-        "currency": payment.currency,
-    }
+    response = _payment_response(payment, booking)
+    response["id"] = response.pop("payment_id")
+    return response
 
 
 @router.post("/{payment_id}/simulate-success", include_in_schema=False)
