@@ -47,6 +47,7 @@ jobs:
           grep -q 'VALID_PASS_STATUSES' backend/app/api/booking_passes.py
           grep -q 'saved-players-sync.js' dev_player_server.py
           grep -q 'bookings-activation-guard.js' dev_player_server.py
+          grep -q "'bookings-activation-guard.js'" docs/sw.js
           grep -q 'SBPRefreshBookings' docs/bookings-activation-guard.js
           grep -q 'google-auth-disabled.js' dev_player_server.py
           test -f docs/google-auth-disabled.js
@@ -71,10 +72,10 @@ jobs:
           grep -q '#select,#time' docs/mobile-runtime.js
           grep -q 'CANONICAL_REVIEW_BOOTSTRAP' dev_player_server.py
           grep -q '__reviewNative' docs/review-native.js
-          grep -q '20260826-production-runtime-v2' docs/sw.js
-          grep -q '20260826-production-runtime-v2' docs/app.js
-          grep -q '20260826-production-runtime-v2' docs/index.html
-          grep -q "register('./sw.js?v=20260826-production-runtime-v2'" docs/app.js
+          grep -q '20260826-production-runtime-v3' docs/sw.js
+          grep -q '20260826-production-runtime-v3' docs/app.js
+          grep -q '20260826-production-runtime-v3' docs/index.html
+          grep -q "register('./sw.js?v=20260826-production-runtime-v3'" docs/app.js
           ! grep -q '20260824-runtime' docs/app.js
           ! grep -q '20260824-runtime' docs/index.html
           grep -q 'function versionLocalAssets' docs/sw.js
