@@ -1,0 +1,53 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    target-branch: backend-v1-dev
+    schedule:
+      interval: monthly
+    groups:
+      backend-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
+
+  - package-ecosystem: npm
+    directory: /admin
+    target-branch: backend-v1-dev
+    schedule:
+      interval: monthly
+    groups:
+      admin-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
+
+  - package-ecosystem: gradle
+    directory: /android
+    target-branch: backend-v1-dev
+    schedule:
+      interval: monthly
+    groups:
+      android-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: backend-v1-dev
+    schedule:
+      interval: monthly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
