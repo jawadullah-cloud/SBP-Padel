@@ -10,9 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import current_user
 from app.db.session import get_db
-from app.models.domain import Booking, User
+from app.models.domain import Booking, BookingStatus, User
 
 router = APIRouter(prefix="/bookings/pass", tags=["booking passes"])
+VALID_PASS_STATUSES = {BookingStatus.confirmed, BookingStatus.rescheduled}
 
 
 def _png_chunk(kind: bytes, data: bytes) -> bytes:
@@ -32,11 +33,7 @@ def _qr_png(payload: str, *, scale: int = 8, border: int = 3) -> bytes:
         row = bytearray([0])
         for x in range(size):
             module_x = x // scale - border
-            dark = (
-                0 <= module_x < modules
-                and 0 <= module_y < modules
-                and matrix[module_y][module_x]
-            )
+            dark = 0 <= module_x < modules and 0 <= module_y < modules and matrix[module_y][module_x]
             row.append(0 if dark else 255)
         rows.append(bytes(row))
     raw = b"".join(rows)
@@ -55,27 +52,16 @@ async def booking_pass_qr(
     booking = await db.get(Booking, booking_id)
     if not booking or booking.user_id != user.id:
         raise HTTPException(404, "Booking not found")
+    if booking.status not in VALID_PASS_STATUSES:
+        raise HTTPException(409, f"A {booking.status.value} booking does not have a valid entry pass")
 
     # The QR is an identifier, not an authorization credential. Reception must
     # always validate the decoded booking against the API before check-in.
     payload = f"SBPPADEL|{booking.id}|{booking.booking_code}"
     if format == "png":
-        return Response(
-            content=_qr_png(payload),
-            media_type="image/png",
-            headers={"Cache-Control": "no-store"},
-        )
+        return Response(content=_qr_png(payload), media_type="image/png", headers={"Cache-Control": "no-store"})
 
-    image = qrcode.make(
-        payload,
-        image_factory=qrcode.image.svg.SvgPathImage,
-        box_size=8,
-        border=2,
-    )
+    image = qrcode.make(payload, image_factory=qrcode.image.svg.SvgPathImage, box_size=8, border=2)
     stream = BytesIO()
     image.save(stream)
-    return Response(
-        content=stream.getvalue(),
-        media_type="image/svg+xml",
-        headers={"Cache-Control": "no-store"},
-    )
+    return Response(content=stream.getvalue(), media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
