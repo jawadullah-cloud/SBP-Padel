@@ -87,42 +87,40 @@ HQ → Finance & Reconciliation owns the persisted checkout service fee. The fee
 - Facility Photos supports up to 12 images; cover images propagate across accepted player surfaces.
 
 ## Booking policy
-Player cancellation/rescheduling cutoff remains 12 hours before the first slot, with started/checked-in bookings blocked. Eligible paid cancellation creates a refund request. Player and staff rescheduling currently require the replacement total to equal the existing booking total. Staff operational rescheduling may bypass the player's 12-hour cutoff but still must preserve availability and financial integrity.
+Player cancellation/rescheduling cutoff remains 12 hours before the first slot, with started/checked-in bookings blocked. Eligible paid cancellation creates an internal refund request. Player and staff rescheduling currently require the replacement total to equal the existing booking total. Staff operational rescheduling may bypass the player's 12-hour cutoff but still must preserve availability and financial integrity.
 
-## Payment provider direction — PayZen likely, integration not yet activated
-The department is likely to use PITB PayZen. Read `docs/PAYZEN_INTEGRATION.md` before payment work. Public information indicates a PSID/1Bill-oriented government payment model with multiple payment channels, but the production implementation must wait for the department's authoritative PayZen onboarding pack, credentials, service IDs, sandbox/production URLs, callback authentication, status codes, settlement/reconciliation and refund/reversal rules.
+## PayZen direction — PSID-first, refunds manual
+PayZen is now the intended payment architecture direction. Read `docs/PAYZEN_INTEGRATION.md` before payment work.
 
-Do not invent private PayZen endpoints or signatures from public examples.
+Confirmed design assumptions from PITB public material, the PayZen 2025 presentation and project direction:
+- PayZen integrates with the existing SBP-Padel Line of Business/billing application rather than replacing it.
+- **PSID is the central PayZen payment identifier and must be treated as first-class.**
+- SBP-Padel creates/holds the booking, requests/registers the bill, receives/persists the PSID and shows it prominently to the player.
+- Players pay the PSID through PayZen/1Bill-supported channels.
+- PayZen/1LINK performs PSID inquiry/verification according to the official contract.
+- Payment confirmation must come from authoritative server-side PayZen notification/status, never from a browser redirect/return.
+- The presentation lists both PayZen APIs and Client APIs, so be prepared for PayZen to require SBP-Padel bill-inquiry/validation endpoints.
+- PayZen does **not** provide an automated refund capability for this project. Keep SBP-Padel refund requests/approvals as internal governance, but actual refund execution is manual. Do not build a guessed PayZen refund adapter.
 
-The backend payment boundary is provider-oriented:
-- `/payments/initiate` calls `backend/app/payments/providers.py` instead of manually creating an `unconfigured` provider row;
-- provider reference (expected to accommodate PSID), optional redirect URL, client payload and provider metadata are persisted/returned;
-- repeating initiation for the same pending booking returns the existing payment and must not generate a duplicate provider bill/PSID;
-- provider callback authentication/parsing is normalized through the provider abstraction;
-- verified `paid` confirms only when the booking can still safely own its held inventory;
-- a late verified payment after hold expiry records receipt but must not resurrect/reclaim the slot and enters refund/reconciliation instead;
-- verified `failed` moves a still-pending booking to payment-failed and releases held inventory;
-- duplicate verified callbacks are idempotent;
-- the development simulator remains development-only;
-- client return/success pages are never authoritative proof of payment.
+Production implementation still waits for official PITB endpoints, schemas, credentials, authentication/signature rules, client inquiry contract, callback/status contract, networking/VPN/IP-whitelisting requirements, settlement/reconciliation details and UAT.
+
+The most important business/technical question is PSID validity versus the short court-booking hold. If a PayZen PSID remains payable after SBP-Padel releases the slot, a late paid PSID must be recorded but must never resurrect/reclaim inventory. It enters manual reconciliation/refund handling.
+
+The backend payment boundary remains provider-oriented:
+- `/payments/initiate` calls `backend/app/payments/providers.py`;
+- provider reference accommodates the PayZen PSID;
+- repeated initiation for the same pending booking must not create duplicate PSIDs;
+- provider notification/status is normalized into the core state machine;
+- verified paid confirms only while the booking can safely own inventory;
+- late paid after hold expiry records receipt but does not reclaim the slot;
+- verified failed/expired releases held inventory where applicable;
+- duplicate events are idempotent;
+- development simulator remains development-only.
 
 ### Player configured-provider regression — green 27 Aug 2026
-`docs/payment-methods-live.js` is loaded on `payment.html` by both the development injector and the production service-worker runtime. It capture-intercepts `#payButton` so the provider-aware checkout path owns the tap ahead of the older `review-entry.js` development handler.
+`docs/payment-methods-live.js` is loaded on `payment.html` by both development and production runtime paths. `qa/player_provider_payment_browser.mjs` proves participant persistence, configured provider initiation, PSID/reference display with Copy, Check Status/polling, no configured-provider simulator call, no redirect-as-proof behavior, backend-verified confirmation, and already-confirmed recovery without duplicate booking/payment initiation.
 
-The configured-provider Player regression initially timed out waiting for `#providerAwaiting`. Runtime diagnostics proved the provider script was loaded and active. The actual blocker was an incomplete test mock: `booking-participants-live.js` wraps successful booking creation and waits for `PUT /bookings/{booking_id}/participants`, but the provider test had not mocked that established request. Checkout therefore correctly stopped before `/payments/initiate`.
-
-`qa/player_provider_payment_browser.mjs` now follows the real runtime contract and proves:
-- booking participant persistence occurs;
-- configured `/payments/initiate` returns provider metadata/reference without invoking the development simulator;
-- provider PSID/reference is shown with Copy UI;
-- Check Status/polling remains waiting until backend payment/booking state is verified;
-- a provider redirect/reference is not treated as proof of payment;
-- verified backend `paid` + confirmed booking state is required before success navigation;
-- already-confirmed booking recovery does not create a duplicate booking or initiate another payment.
-
-Player Flow CI run **401** completed green at commit `cede06ddceb4fa429055a524f4c280949dcb8ce4`, including all established Player browser suites plus this configured-provider regression. Backend CI run **255** for `be9f113caa331d05fc2be77e4e2c3939e4e28d93` (`Lock failed payment callback slot release`) also completed green. Later work in this handoff only touched Player QA/documentation, not backend behavior.
-
-Exact PayZen callback/reconciliation/refund execution still depends on official PITB documentation and credentials.
+Player Flow CI run 403 completed green on the synchronized handoff state; Backend CI run 255 for `be9f113caa331d05fc2be77e4e2c3939e4e28d93` (`Lock failed payment callback slot release`) completed green.
 
 ## Production-readiness hardening — implemented 26 Aug 2026
 Read `docs/LAUNCH_READINESS.md` and `docs/STAGING_DEPLOYMENT.md` before deployment work.
@@ -150,7 +148,7 @@ The previously verified redundant `tmp-visual-assets-staging`, `pages-fix`, and 
 Proven-dead HQ bridges `HQHomeRouteBridge.tsx` and `HQVenueEditShortcut.tsx` have been removed. Do not over-clean player/runtime bridge files merely because their names look old; many still own accepted WebView/navigation/service-worker behavior.
 
 ### Remaining external decisions/blockers
-PayZen is the likely online payment direction, but production integration still requires the official departmental API/onboarding material, credentials and UAT. Other external choices still required are the production PostgreSQL/hosting and backup architecture, final domains/HTTPS/CORS/trusted hosts, SMTP provider/credentials, SBP-controlled Android release key/distribution, and optional object storage before image scale grows.
+PayZen production integration requires the official technical/onboarding material, credentials, network enablement and UAT. Other external choices still required are production PostgreSQL/hosting and backup architecture, final domains/HTTPS/CORS/trusted hosts, SMTP provider/credentials, SBP-controlled Android release key/distribution, and optional object storage before image scale grows.
 
 Do not choose these vendor/business decisions implicitly during unrelated work.
 
