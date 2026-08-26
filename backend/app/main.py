@@ -9,6 +9,7 @@ from app.api.admin import router as admin_router
 from app.api.admin_finance import router as admin_finance_router
 from app.api.admin_governance import router as admin_governance_router
 from app.api.admin_hq import router as admin_hq_router
+from app.api.admin_platform_settings import router as admin_platform_settings_router
 from app.api.admin_reports import router as admin_reports_router
 from app.api.auth import router as auth_router
 from app.api.booking_participants import router as booking_participants_router
@@ -39,6 +40,7 @@ from app.models import booking_participants as booking_participant_models  # noq
 from app.models import operations as operations_models  # noqa:F401
 from app.models import platform as platform_models  # noqa:F401
 from app.models.domain import Base
+from app.models.platform import PlatformSetting
 
 
 @asynccontextmanager
@@ -49,6 +51,13 @@ async def lifespan(app: FastAPI):
             await connection.run_sync(Base.metadata.create_all)
         async with SessionLocal() as session:
             await seed_reference_data(session)
+    async with SessionLocal() as session:
+        stored_fee = await session.get(PlatformSetting, "checkout_service_fee")
+        if stored_fee:
+            try:
+                settings.service_fee = max(0, int(stored_fee.value))
+            except (TypeError, ValueError):
+                pass
     yield
     await slot_locks.close()
 
@@ -107,6 +116,7 @@ for api_router in [
     admin_hq_router,
     admin_governance_router,
     admin_finance_router,
+    admin_platform_settings_router,
     admin_reports_router,
     venue_gallery_router,
     operations_router,
