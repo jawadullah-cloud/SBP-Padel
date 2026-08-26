@@ -12,7 +12,16 @@
   const methodLabel=v=>v==='card'?'Card':v==='bank'?'Online Banking':v?String(v).replaceAll('_',' '):'Payment complete';
   const sessionMeta=slots=>{const rows=Array.isArray(slots)?slots:[];if(!rows.length)return{label:'—',hours:0,count:0};const first=rows[0],last=rows[rows.length-1];return{label:`${fmtTime(first.start_time)} – ${fmtTime(last.end_time)}`,hours:rows.length,count:rows.length}};
   function route(url){if(window.parent&&window.parent!==window&&typeof window.parent.SBPDeepRoute==='function'){window.parent.SBPDeepRoute(url);return}if(typeof window.SBPDeepRoute==='function'){window.SBPDeepRoute(url);return}location.href=url}
-  function wire(){document.addEventListener('click',e=>{const btn=e.target.closest?.('#viewPass,#backHome');if(!btn)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();const id=bookingUuid();if(id)localStorage.setItem('sbpPadelSelectedBookingId',id);if(btn.id==='viewPass')route('digital-pass.html');else route('index.html?open=bookings')},true)}
+  function openBookings(){
+    const p=window.parent;
+    if(p&&p!==window&&typeof p.SBPNavigate==='function'){
+      p.SBPNavigate('bookings');
+      requestAnimationFrame(()=>{try{p.SBPDeepClose?.(false)}catch{};setTimeout(()=>p.SBPRefreshBookings?.(),0)});
+      return;
+    }
+    route('index.html?open=bookings');
+  }
+  function wire(){document.addEventListener('click',e=>{const btn=e.target.closest?.('#viewPass,#backHome');if(!btn)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();const id=bookingUuid();if(id)localStorage.setItem('sbpPadelSelectedBookingId',id);if(btn.id==='viewPass')route('digital-pass.html');else openBookings()},true)}
   async function hydrate(){
     const id=bookingUuid();if(!id||!token()){set('bookingId','Booking unavailable');return}
     localStorage.setItem('sbpPadelBookingUuid',id);localStorage.setItem('sbpPadelSelectedBookingId',id);
