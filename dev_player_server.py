@@ -39,7 +39,7 @@ PAGE_SCRIPTS = {
     "wallet.html": ["player-wallet-live.js"],
     "digital-pass.html": ["digital-pass-live.js"],
     "auth-preview.html": ["player-live.js", "auth-enhancements.js", "google-auth-disabled.js"],
-    "booking-detail.html": ["player-booking-detail-live.js", "player-booking-integrity.js"],
+    "booking-detail.html": ["player-booking-detail-live.js", "player-booking-integrity.js", "booking-detail-polish.js"],
 }
 
 NOOP_SERVICE_WORKER = """\
@@ -93,9 +93,16 @@ def mask_prototype_booking_content(page: str, html: str) -> str:
         html = html.replace("COURT 01", "LOADING…")
     elif page == "booking-detail.html":
         # The static prototype contains active actions before the live booking status is known.
-        # Keep the container hidden from first paint; player-booking-integrity.js reveals the
-        # correct action set only after the real booking has hydrated.
+        # Hide both the container and each prototype action before first paint. The live
+        # integrity runtime replaces the entire action set once the real booking has hydrated.
         html = html.replace('<div class="tools" id="tools">', '<div class="tools" id="tools" style="visibility:hidden">', 1)
+        for marker in (
+            '<button class="primary" id="passBtn">',
+            '<button class="secondary" id="rescheduleBtn">',
+            '<button class="secondary" id="receiptBtn">',
+            '<button class="danger" id="cancelBtn">',
+        ):
+            html = html.replace(marker, marker[:-1] + ' hidden>', 1)
     return html
 
 
