@@ -5,7 +5,9 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import settings
+from app.models import booking_participants as booking_participant_models  # noqa: F401
 from app.models import operations as operations_models  # noqa: F401
+from app.models import platform as platform_models  # noqa: F401
 from app.models.domain import Base
 
 config = context.config
