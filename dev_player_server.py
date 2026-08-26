@@ -24,6 +24,7 @@ COMMON_SCRIPTS = [
     "review-entry.js",
     "booking-contiguous-slots.js",
     "review-native.js",
+    "saved-player-sync.js",
     "pass-route-live.js",
     "android-back.js",
     "back-icons.js",
@@ -134,12 +135,6 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
             if page == "index.html":
                 if 'native-tall-layout.css' not in html:
                     html = html.replace("</head>", '<link rel="stylesheet" href="native-tall-layout.css?dev=1"></head>')
-                # The player shell used to load review-native.js late through the
-                # generic footer injection. That created a race where the first
-                # Review navigation could reach legacy review-booking.html while
-                # later visits used the native Step-5 Review. Install the deep
-                # router and native Review wrapper before app.js so every Review
-                # request has one deterministic destination.
                 if 'canonical-review' not in html:
                     marker = '<script src="app.js'
                     if marker in html:
