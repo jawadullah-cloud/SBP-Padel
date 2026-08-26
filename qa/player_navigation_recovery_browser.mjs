@@ -48,7 +48,11 @@ try{
     }
     window.SBPNavigate('home');
   });
-  await page.waitForFunction(()=>document.getElementById('home')?.classList.contains('active'));
+  await page.waitForFunction(()=>{
+    const home=document.getElementById('home');
+    const layer=document.getElementById('sbpDeepLayer');
+    return !!home?.classList.contains('active')&&getComputedStyle(home).pointerEvents!=='none'&&home.style.touchAction!=='none'&&(!layer||getComputedStyle(layer).pointerEvents==='none');
+  });
 
   const immediate=await page.evaluate(()=>{
     const home=document.getElementById('home');
