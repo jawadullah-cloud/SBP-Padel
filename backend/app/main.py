@@ -18,6 +18,7 @@ from app.api.cancellations import router as cancellations_router
 from app.api.health import router as health_router
 from app.api.notifications import router as notifications_router
 from app.api.operations import router as operations_router
+from app.api.operations_cancellations import router as operations_cancellations_router
 from app.api.operations_courts import router as operations_courts_router
 from app.api.operations_management import router as operations_management_router
 from app.api.operations_passes import router as operations_passes_router
@@ -111,6 +112,7 @@ for api_router in [
     operations_router,
     operations_courts_router,
     operations_management_router,
+    operations_cancellations_router,
     operations_reschedules_router,
     operations_passes_router,
     operations_players_router,
