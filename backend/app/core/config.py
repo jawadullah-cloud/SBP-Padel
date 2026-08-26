@@ -18,6 +18,7 @@ class Settings(BaseSettings):
         "http://localhost:3000,http://localhost:5173,"
         "http://127.0.0.1:3000,http://127.0.0.1:5173"
     )
+    trusted_hosts: str = "localhost,127.0.0.1,testserver"
     jwt_secret: str = DEFAULT_JWT_SECRET
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 60 * 24 * 7
@@ -41,6 +42,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def trusted_host_list(self) -> list[str]:
+        return [host.strip() for host in self.trusted_hosts.split(",") if host.strip()]
 
 
 def validate_runtime_settings(config: Settings) -> None:
@@ -69,6 +74,12 @@ def validate_runtime_settings(config: Settings) -> None:
         if host in {"localhost", "127.0.0.1", "0.0.0.0"}:
             problems.append("CORS_ORIGINS must not contain localhost origins outside development/test")
             break
+
+    trusted_hosts = config.trusted_host_list
+    if not trusted_hosts or "*" in trusted_hosts:
+        problems.append("TRUSTED_HOSTS must contain explicit host names outside development/test")
+    elif any(host.lower() in {"localhost", "127.0.0.1", "0.0.0.0", "testserver"} for host in trusted_hosts):
+        problems.append("TRUSTED_HOSTS must not contain local/test hosts outside development/test")
 
     if config.redis_required and not config.redis_url:
         problems.append("REDIS_URL is required when REDIS_REQUIRED=true")
