@@ -5,7 +5,9 @@ import { createPortal } from 'react-dom';
 import { usePathname, useRouter } from 'next/navigation';
 
 type OpsTab='schedule'|'bookings'|'new'|'payments'|'pricing'|'closures'|'courts'|'reports';
+type Venue={id:string;name:string;city:string;role:string};
 
+const API=process.env.NEXT_PUBLIC_API_URL||'http://127.0.0.1:8000/api/v1';
 const operationalTabs:[OpsTab,string][]=[
   ['schedule','Court Schedule'],
   ['bookings','Bookings'],
@@ -20,15 +22,16 @@ const operationalTabs:[OpsTab,string][]=[
 export default function PlayersSidebarLink(){
   const pathname=usePathname();
   const router=useRouter();
-  const[host,setHost]=useState<Element|null>(null);
+  const[host,setHost]=useState<Element|null>(null),[foot,setFoot]=useState<Element|null>(null),[role,setRole]=useState('OPERATIONS');
   const utilityRoute=pathname==='/players'||pathname==='/scan-pass';
 
   useEffect(()=>{
-    setHost(null);
+    setHost(null);setFoot(null);
     if(pathname.startsWith('/hq'))return;
     const findHost=()=>{
       const nav=document.querySelector('.sidebar .nav');
-      if(nav){setHost(nav);return true}
+      const footer=document.querySelector('.sidebar .sideFoot');
+      if(nav){setHost(nav);setFoot(footer);return true}
       return false;
     };
     if(findHost())return;
@@ -41,8 +44,20 @@ export default function PlayersSidebarLink(){
     if(!utilityRoute||!host)return;
     const native=[...host.children].filter(el=>!el.classList.contains('sbpCanonicalUtilityNav')) as HTMLElement[];
     native.forEach(el=>el.hidden=true);
-    return()=>native.forEach(el=>el.hidden=false);
-  },[utilityRoute,host]);
+    const nativeFoot=foot?[...foot.children].filter(el=>!el.classList.contains('sbpCanonicalUtilityFoot')) as HTMLElement[]:[];
+    nativeFoot.forEach(el=>el.hidden=true);
+    return()=>{native.forEach(el=>el.hidden=false);nativeFoot.forEach(el=>el.hidden=false)};
+  },[utilityRoute,host,foot]);
+
+  useEffect(()=>{
+    if(!utilityRoute)return;
+    const token=localStorage.getItem('sbp_padel_ops_token')||'';
+    if(!token)return;
+    fetch(`${API}/operations/my-venues`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'})
+      .then(async response=>response.ok?response.json() as Promise<Venue[]>:[])
+      .then(rows=>{const active=rows[0]?.role;if(active)setRole(active.toUpperCase())})
+      .catch(()=>{});
+  },[utilityRoute]);
 
   useEffect(()=>{
     if(pathname!=='/')return;
@@ -67,7 +82,8 @@ export default function PlayersSidebarLink(){
       router.push(`/?tab=${tab}`);
     };
     const utility=(path:string)=>router.push(path);
-    return createPortal(<div className="sbpCanonicalUtilityNav">{operationalTabs.map(([id,label])=><button type="button" key={id} onClick={()=>go(id)}>{label}</button>)}<button type="button" className={pathname==='/players'?'active':''} onClick={()=>utility('/players')}>Players</button><button type="button" className={pathname==='/scan-pass'?'active':''} onClick={()=>utility('/scan-pass')}>Scan Pass</button></div>,host);
+    const signOut=()=>{localStorage.removeItem('sbp_padel_ops_token');router.replace('/')};
+    return <>{createPortal(<div className="sbpCanonicalUtilityNav">{operationalTabs.map(([id,label])=><button type="button" key={id} onClick={()=>go(id)}>{label}</button>)}<button type="button" className={pathname==='/players'?'active':''} onClick={()=>utility('/players')}>Players</button><button type="button" className={pathname==='/scan-pass'?'active':''} onClick={()=>utility('/scan-pass')}>Scan Pass</button></div>,host)}{foot&&createPortal(<div className="sbpCanonicalUtilityFoot"><span>{role}</span><button type="button" onClick={signOut}>Sign out</button></div>,foot)}</>;
   }
 
   const openUtility=(path:string)=>router.push(path);
