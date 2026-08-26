@@ -50,30 +50,39 @@ try{
   });
   await page.waitForFunction(()=>document.getElementById('home')?.classList.contains('active'));
 
-  const state=await page.evaluate(()=>{
+  const immediate=await page.evaluate(()=>{
     const home=document.getElementById('home');
     const layer=document.getElementById('sbpDeepLayer');
     return {
       homePointer:getComputedStyle(home).pointerEvents,
       homeTouch:home.style.touchAction,
-      layerOn:!!layer?.classList.contains('on'),
-      layerLeaving:!!layer?.classList.contains('leaving'),
       layerPointer:layer?getComputedStyle(layer).pointerEvents:'none',
     };
   });
-  assert(state.homePointer!=='none','Home remained non-interactive after main navigation recovery.');
-  assert(state.homeTouch!=='none','Home retained stale touch-action:none after recovery.');
-  assert(!state.layerOn&&!state.layerLeaving,'Deep-route overlay remained active after returning Home.');
-  assert(state.layerPointer==='none','Stale deep-route layer still intercepted Home interactions.');
+  assert(immediate.homePointer!=='none','Home remained non-interactive after main navigation recovery.');
+  assert(immediate.homeTouch!=='none','Home retained stale touch-action:none after recovery.');
+  assert(immediate.layerPointer==='none','Stale deep-route layer still intercepted Home interactions.');
 
   await page.locator('#home .primary[data-nav="venues"]').click();
   await page.waitForFunction(()=>document.getElementById('venues')?.classList.contains('active'));
   await page.locator('nav [data-nav="home"]').click();
   await page.waitForFunction(()=>document.getElementById('home')?.classList.contains('active'));
+  await page.waitForTimeout(140);
+  const settled=await page.evaluate(()=>{
+    const layer=document.getElementById('sbpDeepLayer');
+    return {
+      on:!!layer?.classList.contains('on'),
+      leaving:!!layer?.classList.contains('leaving'),
+      preload:!!layer?.classList.contains('sbp-preload-detail'),
+      reveal:!!layer?.classList.contains('sbp-reveal-detail'),
+    };
+  });
+  assert(!settled.on&&!settled.leaving&&!settled.preload&&!settled.reveal,'Deep-route transition state did not settle after returning Home.');
+
   await page.locator('#home .quick [data-nav="bookings"]').click();
   await page.waitForFunction(()=>document.getElementById('bookings')?.classList.contains('active'));
 
-  console.log('Player navigation recovery QA passed: Home remains interactive after repeated main/deep-route state changes.');
+  console.log('Player navigation recovery QA passed: Home stays immediately interactive and deep-route state fully settles.');
 }finally{
   await browser.close();
 }
