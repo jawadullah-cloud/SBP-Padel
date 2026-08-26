@@ -25,7 +25,7 @@
     if(nav)nav.classList.remove('flowHidden');
   }
 
-  function finishPersistentRecovery(target){
+  function clearStaleInteractionState(target){
     if(!recoveryScreens.has(target))return;
 
     recoveryScreens.forEach(id=>{
@@ -59,11 +59,8 @@
 
   function recoverPersistentTarget(target){
     if(!recoveryScreens.has(target))return;
-    // Flow screens that can physically cover the destination must be disabled
-    // immediately after SBPNavigate() switches .active classes. Deep-layer
-    // teardown stays on the next frame because it restores the active scroller.
     deactivateAbandonedFlowScreens(target);
-    requestAnimationFrame(()=>finishPersistentRecovery(target));
+    requestAnimationFrame(()=>clearStaleInteractionState(target));
   }
 
   function install(){
@@ -90,10 +87,8 @@
     if(!nav)return;
     const target=nav.dataset.nav;
     if(!recoveryScreens.has(target))return;
-    // Capture-phase pre-cleanup ensures an already-invisible Review cannot
-    // swallow the destination's first interaction while navigation settles.
     deactivateAbandonedFlowScreens(target);
-    requestAnimationFrame(()=>finishPersistentRecovery(target));
+    requestAnimationFrame(()=>clearStaleInteractionState(target));
   },true);
 
   window.addEventListener('pageshow',()=>{
