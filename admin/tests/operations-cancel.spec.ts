@@ -43,7 +43,7 @@ test('manager sees cancellation, refund management and one canonical utility sid
  await expect(page.locator('.sidebar .nav button')).toHaveCount(11);
  await expect(page.locator('.sidebar .nav button.active')).toHaveText('Players');
  await expect(page.locator('.sidebar .sideFoot')).toContainText('MANAGER');
- await expect(page.locator('.sidebar .sideFoot button').filter({hasText:/^Sign out$/})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Sign out'})).toBeVisible();
  await expect(page.locator('.sidebar .sideFoot')).not.toContainText('PLAYER DIRECTORY');
 
  await page.locator('.sidebar .nav button').filter({hasText:/^Scan Pass$/}).click();
