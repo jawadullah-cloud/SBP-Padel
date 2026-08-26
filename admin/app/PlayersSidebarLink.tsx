@@ -22,8 +22,8 @@ const operationalTabs:[OpsTab,string][]=[
 export default function PlayersSidebarLink(){
   const pathname=usePathname();
   const router=useRouter();
-  const[host,setHost]=useState<Element|null>(null),[foot,setFoot]=useState<Element|null>(null),[role,setRole]=useState('OPERATIONS');
-  const utilityRoute=pathname==='/players'||pathname==='/scan-pass';
+  const[host,setHost]=useState<Element|null>(null),[foot,setFoot]=useState<Element|null>(null),[role,setRole]=useState('OPERATIONS'),[canRefund,setCanRefund]=useState(false);
+  const utilityRoute=pathname==='/players'||pathname==='/scan-pass'||pathname==='/refunds';
 
   useEffect(()=>{
     setHost(null);setFoot(null);
@@ -50,14 +50,14 @@ export default function PlayersSidebarLink(){
   },[utilityRoute,host,foot]);
 
   useEffect(()=>{
-    if(!utilityRoute)return;
+    if(pathname.startsWith('/hq'))return;
     const token=localStorage.getItem('sbp_padel_ops_token')||'';
     if(!token)return;
     fetch(`${API}/operations/my-venues`,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'})
       .then(async response=>response.ok?response.json() as Promise<Venue[]>:[])
-      .then(rows=>{const active=rows[0]?.role;if(active)setRole(active.toUpperCase())})
+      .then(rows=>{const active=rows[0]?.role;if(active)setRole(active.toUpperCase());setCanRefund(rows.some(row=>row.role==='manager'||row.role==='admin'))})
       .catch(()=>{});
-  },[utilityRoute]);
+  },[pathname]);
 
   useEffect(()=>{
     if(pathname!=='/')return;
@@ -83,9 +83,9 @@ export default function PlayersSidebarLink(){
     };
     const utility=(path:string)=>router.push(path);
     const signOut=()=>{localStorage.removeItem('sbp_padel_ops_token');router.replace('/')};
-    return <>{createPortal(<div className="sbpCanonicalUtilityNav">{operationalTabs.map(([id,label])=><button type="button" key={id} onClick={()=>go(id)}>{label}</button>)}<button type="button" className={pathname==='/players'?'active':''} onClick={()=>utility('/players')}>Players</button><button type="button" className={pathname==='/scan-pass'?'active':''} onClick={()=>utility('/scan-pass')}>Scan Pass</button></div>,host)}{foot&&createPortal(<div className="sbpCanonicalUtilityFoot"><span>{role}</span><button type="button" onClick={signOut}>Sign out</button></div>,foot)}</>;
+    return <>{createPortal(<div className="sbpCanonicalUtilityNav">{operationalTabs.map(([id,label])=><button type="button" key={id} onClick={()=>go(id)}>{label}</button>)}{canRefund&&<button type="button" className={pathname==='/refunds'?'active':''} onClick={()=>utility('/refunds')}>Refund Management</button>}<button type="button" className={pathname==='/players'?'active':''} onClick={()=>utility('/players')}>Players</button><button type="button" className={pathname==='/scan-pass'?'active':''} onClick={()=>utility('/scan-pass')}>Scan Pass</button></div>,host)}{foot&&createPortal(<div className="sbpCanonicalUtilityFoot"><span>{role}</span><button type="button" onClick={signOut}>Sign out</button></div>,foot)}</>;
   }
 
   const openUtility=(path:string)=>router.push(path);
-  return createPortal(<><button type="button" className="sidebarRouteLink" onClick={()=>openUtility('/players')}>Players</button><button type="button" className="sidebarRouteLink" onClick={()=>openUtility('/scan-pass')}>Scan Pass</button></>,host);
+  return createPortal(<><>{canRefund&&<button type="button" className="sidebarRouteLink" onClick={()=>openUtility('/refunds')}>Refund Management</button>}</><button type="button" className="sidebarRouteLink" onClick={()=>openUtility('/players')}>Players</button><button type="button" className="sidebarRouteLink" onClick={()=>openUtility('/scan-pass')}>Scan Pass</button></>,host);
 }
