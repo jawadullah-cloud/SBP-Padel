@@ -20,6 +20,7 @@ def main() -> None:
     print(f"environment={config.environment}")
     print(f"database={redact_database_url(config.database_url)}")
     print(f"cors_origins={','.join(config.cors_origin_list)}")
+    print(f"trusted_hosts={','.join(config.trusted_host_list)}")
     print(f"redis_required={config.redis_required}")
     print(f"redis_configured={bool(config.redis_url)}")
     print(f"smtp_configured={bool(config.smtp_host and config.smtp_from_email)}")
