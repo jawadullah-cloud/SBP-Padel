@@ -3,88 +3,82 @@
 Continue `jawadullah-cloud/SBP-Padel` on `backend-v1-dev`. Inspect HEAD, read this file, `docs/PROJECT_MEMORY.md` and `docs/LAUNCH_READINESS.md`, inspect relevant implementation/recent commits, and treat repository/runtime/CI as source of truth.
 
 ## Current accepted state — 26 Aug 2026
-Player discovery/location/gallery and the previously reviewed booking lifecycle are manually accepted. The latest HQ / Venue Directory / Venue Management pass is also manually accepted, including persistent HQ navigation, editable venue profiles and amenities, facility gallery, staff credential/lifecycle controls, manager/operator Change Password visibility, venue-action alignment and exact venue-context navigation. Do not reopen accepted behavior without a reproduced regression.
+Player discovery/location/gallery, booking lifecycle, six-day date rail + More+, the latest HQ / Venue Directory / Venue Management pass, and the reviewed Venue Manager / Operator console are manually accepted unless a new regression is reproduced.
 
-## Unattended Venue Manager / Operator hardening — ready for manual review
-After the accepted HQ pass, an unattended operations review found and corrected objective consistency/safety issues without redesigning the accepted operations UI.
+Accepted operations behavior now includes persistent sidebar navigation on Players and Scan Pass, return to the authenticated console without login flash, multi-venue stale-response protection, manager/operator permission boundaries, Change Password, rescheduled-booking QR/check-in, closure safety, and manager/admin rescheduling of active bookings.
 
-### Rescheduled booking check-in
-A paid booking with status `rescheduled` is an active booking. Previously the operations UI offered check-in for it while the backend check-in/pass validator accepted only `confirmed`, so a legitimately rescheduled player could be rejected at the venue.
+## Player Home / bottom-navigation stability
+An intermittent player bug was reproduced where Home looked visible but did not accept taps while the bottom navigation still worked. The cause was stale inline interaction state on an inactive bottom-tab screen (`Home`, `Bookings`, `Courts/Venues`, or `Profile`) combined with deep-route cleanup ordering. An invisible inactive screen could retain `pointer-events:auto` and sit over Home. Calling deep-route cleanup before the destination screen became active could also restore interaction to the screen being left.
 
-Now:
-- `backend/app/api/operations.py` allows check-in for `confirmed` and `rescheduled`.
-- `backend/app/api/operations_passes.py` validates both statuses as active paid passes.
-- `backend/tests/test_operations_rescheduled_checkin.py` covers player booking → payment → reschedule → pass validation on the replacement date → operator check-in → operations feed confirmation.
+Current invariant:
+- `docs/main-navigation-hardening.js` wraps `SBPNavigate` only for persistent bottom-tab destinations: `home`, `bookings`, `venues`, `profile`.
+- Normal `SBPNavigate(target)` runs first.
+- Recovery runs after the destination is active.
+- The destination gets active pointer/touch scrolling state.
+- Other bottom-tab screens have stale inline pointer/touch values cleared so normal inactive-screen CSS (`pointer-events:none`) owns them again.
+- Any stale deep-route layer is closed only after the destination screen is active.
+- Booking-flow screens such as select/time/review/confirm/pass are deliberately not reset by this guard; their existing transition choreography remains authoritative.
 
-Preserve this invariant.
+`qa/player_navigation_recovery_browser.mjs` deliberately corrupts Home/deep-route interaction state and verifies recovery. Player Flow CI also retains the existing native Review 5→4→3→4→5 stress navigation, booking lifecycle, account and theme suites. Do not weaken these guards.
 
-### Multi-venue operations context
-The operations console can serve staff assigned to more than one venue. The selected venue is now authoritative:
-- late API responses from a previously selected venue are discarded instead of overwriting current venue data;
-- switching venue clears venue-scoped selections/state including selected booking, player search/selection, booking court/slots/quote/payment reference/policy acknowledgement, availability, closure court and pricing court;
-- manager/operator role controls are reevaluated against the newly selected venue;
-- the staff login form no longer embeds/prefills the development manager password or email.
+## Staff-side booking reschedule — accepted on surface
+Venue manager/admin can open an active confirmed/rescheduled booking and use **Reschedule Booking**. Staff may move a booking even inside the player's normal 12-hour self-service cutoff, which is required for operational closures/maintenance. The replacement must currently have the same total price; price-adjusted staff rescheduling is intentionally not implemented yet. Player notification is generated and the booking remains the same booking with status `rescheduled` rather than creating a duplicate.
 
-`admin/tests/operations.spec.ts` provides browser regression coverage for blank login credentials, delayed stale-response rejection, operator read-only controls, My Account visibility and front-desk state clearing across venue switches. Keep it in Admin Portal CI.
+Backend regression `backend/tests/test_operations_staff_reschedule_release.py` explicitly proves availability integrity: after staff reschedule, the original slot becomes available again and the replacement slot becomes unavailable with reason `Booked`.
 
-These operations hardening changes are implementation/CI state until manually reviewed on the running UI.
+## Closure / maintenance safety — accepted
+Do not silently strand active bookings:
+- creating a venue/court closure that overlaps pending-payment, confirmed or rescheduled bookings is refused;
+- changing a court to Maintenance/Closed is refused while current/future active bookings conflict;
+- HQ venue deactivation is refused while current/future active bookings conflict;
+- staff must reschedule or cancel affected bookings first.
+
+Automatic cancellation/refund is intentionally not performed by a closure action.
+
+## Operations utility routes — accepted
+Players and Scan Pass remain dedicated routes but must display the complete venue-operations sidebar. Their operations/back links restore the authenticated console state rather than causing a login flash. `admin/tests/operations.spec.ts` covers these routes together with blank staff-login credentials, stale multi-venue response rejection, role-scoped controls, My Account visibility and venue-switch state clearing.
+
+## Rescheduled booking check-in — accepted
+A paid booking with status `rescheduled` is an active booking. Both operations check-in and pass/QR validation accept `confirmed` and `rescheduled`. Targeted backend regression covers pay → reschedule → replacement-date pass validation → operator check-in.
+
+## Player booking date rail — accepted
+The quick booking rail must show exactly six dates plus a seventh **More +** control on one row. `booking-date-more.js` uses `quick.slice(6)`. Player Flow CI guards this so seven quick dates plus More cannot silently wrap onto a second line again.
 
 ## Player authentication UI invariant
-Google sign-in remains deferred and must not be advertised on the player login screen until a real Google authentication flow is intentionally implemented and accepted. Password/email/mobile authentication and password recovery remain the active player authentication UI.
-
-`docs/GOOGLE_SIGNIN.md` now explicitly documents the integration as deferred. Player Flow CI contains a guard that fails if `Continue with Google` returns to `docs/auth-preview.html`.
-
-## Production readiness
-Read `docs/LAUNCH_READINESS.md` before calling the system production-ready. Major remaining production decisions/blockers include:
-- real online player payment provider and provider callbacks/idempotency/reconciliation/refund execution;
-- production database, migrations, backups and recovery;
-- production domains/HTTPS/CORS;
-- SMTP for real password-reset delivery;
-- production secrets and environment configuration;
-- Android release signing/distribution;
-- optional object storage migration before facility-image scale grows.
-
-The backend now refuses to start outside `development`/`test` if the repository default `JWT_SECRET` is still in use. Do not weaken this protection.
-
-Google sign-in is intentionally deferred and is not itself a launch blocker unless product scope changes.
+Google sign-in remains deferred and must not be advertised until a real Google authentication flow is intentionally implemented and accepted. Password/email/mobile authentication and recovery remain active. Player Flow CI fails if `Continue with Google` reappears in `docs/auth-preview.html`.
 
 ## Venue-context routing — accepted
-The route UUID is authoritative:
+The current route UUID is authoritative:
 - `/hq/provisioning/profile?venue=<id>` edits exactly `<id>`.
 - Back to Venue Management targets `/hq/provisioning/manage?venue=<same-id>`.
-- Venue Directory Manage/Edit actions preserve each card's exact ID.
-- Venue Management → Facility Photos and gallery → Venue Management preserve the same ID.
-- All Venues returns to `/hq/provisioning` without inventing venue context.
+- Venue Directory Manage/Edit and Facility Photos navigation preserve each card's exact venue ID.
+- All Venues returns to `/hq/provisioning` without inventing a venue context.
 
-`admin/tests/venue-context.spec.ts` covers two distinct venue IDs and must remain in Admin Portal CI.
+`admin/tests/venue-context.spec.ts` covers two distinct venues and must fail on any cross-venue fallback.
 
-## HQ staff credentials and self-service account security — accepted baseline
-Staff management remains at `/hq/staff`. Generated temporary passwords, Show/Hide, Generate, Copy, post-create visibility, HQ Reset Password, Disable/Reactivate/Delete and safe-delete rules remain accepted behavior.
+## HQ staff credentials and account security — accepted
+`/hq/staff` retains generated/manual temporary passwords, Show/Hide, Generate, Copy, post-create visibility, HQ Reset Password, Disable/Reactivate/Delete and safe-delete rules. Inactive staff cannot authenticate.
 
-Authenticated HQ admins, venue managers and venue operators use **My Account → Change Password** via `POST /auth/change-password`. Backend QA verifies wrong-current rejection, password-policy rejection, successful manager/operator changes, old-password login failure, new-password login success and subsequent separate HQ admin reset.
+Authenticated HQ admins, venue managers and venue operators can use **My Account → Change Password** via `POST /auth/change-password`. Backend QA verifies wrong current password rejection, policy rejection, successful change, old-password login failure, new-password login success and later independent HQ admin reset.
 
-## Persistent HQ navigation and venue action alignment — accepted
-Dedicated HQ routes retain Overview, Bookings, Staff, Policies, Refunds, Venue Directory, Reports, Finance and Activity Trail. Bookings/Policies/Refunds return through HQ `?tab=` routing. Venue Directory/Venue Management/Facility Photos action alignment is accepted; do not reintroduce floating/stacked controls.
+## Persistent HQ navigation / venue actions — accepted
+Dedicated HQ routes retain Overview, Bookings, Staff, Policies, Refunds, Venue Directory, Reports, Finance and Activity Trail. Venue Directory/Venue Management/Facility Photos action alignment is accepted. Do not reintroduce floating/stacked profile/gallery actions.
 
 ## Player discovery/location/gallery — accepted
-- `discovery-tools.js` owns Find Your Court. Search is live; All/Near Me are visible; city choices come from active venues.
+- `discovery-tools.js` owns Find Your Court search/filter UI.
 - Android native Fused Location Provider is primary; WebView geolocation is fallback.
-- Current accepted Android wrapper is `0.12-debug` / versionCode 12.
-- Near Me = active venues within 15 km only, sorted by distance.
-- Next Available = real availability within the same 15 km radius when location is available.
-- Facility Photos supports up to 12 images, captions, cover, reorder and delete; cover images propagate across accepted player surfaces.
+- Accepted Android wrapper: `0.12-debug`, versionCode 12.
+- Near Me means active venues within 15 km only, sorted by distance.
+- Next Available uses real availability within the same 15 km radius when location exists.
+- Facility Photos supports up to 12 images; cover images propagate across accepted player surfaces.
 
-## Booking policy and HQ review screens
-Player cancellation/rescheduling cutoff remains 12 hours before first slot. HQ Refunds and HQ Bookings remain compact/collapsible with detailed decision/context views and semantic status colors.
+## Booking policy
+Player cancellation/rescheduling cutoff remains 12 hours before the first slot, with started/checked-in bookings blocked. Eligible paid cancellation creates a refund request. Player and staff rescheduling currently require the replacement total to equal the existing booking total. Staff operational rescheduling may bypass the player's 12-hour cutoff but still must preserve availability and financial integrity.
 
-## Suggested morning review
-1. Pull/restart backend and admin frontend.
-2. Log in as a venue manager and confirm the operations login is blank rather than prefilled.
-3. Review Court Schedule, Bookings, New Booking, Payments & Refunds, Bookable Hours & Pricing, Closures, Courts and Reports.
-4. If the manager has multiple assigned venues, switch between them while moving through New Booking and confirm no player/court/slot state carries to the next venue.
-5. Log in as an operator and confirm Pricing/Closures/Courts are view-only while booking/search/check-in remain usable.
-6. If convenient, exercise My Account → Change Password with a disposable staff account; backend behavior is already regression-tested.
-7. For a rescheduled paid booking, confirm the operations UI/QR flow permits check-in on the replacement date.
+## Production readiness
+Read `docs/LAUNCH_READINESS.md` before calling the system production-ready. Major remaining decisions/blockers include real online payment provider + callbacks/idempotency/reconciliation/refunds, production database/migrations/backups, domains/HTTPS/CORS, SMTP, production secrets, Android release signing/distribution and optional object storage before facility-image scale grows.
+
+The backend refuses to start outside development/test with the repository default JWT secret. Do not weaken this protection. Admin dependency audit warnings should be handled as a separate dependency-maintenance task rather than mixed into unrelated functional fixes.
 
 ## Verification discipline
-Distinguish implementation, green CI and manual acceptance. Treat repository and actual runtime as source of truth. Do not call the unattended operations hardening manually accepted until it has been reviewed on the running console.
+Distinguish implementation, green CI and manual acceptance. Treat repository and actual runtime behavior as source of truth. When the user reports a visible runtime discrepancy, inspect the effective loading path before layering more fixes.
