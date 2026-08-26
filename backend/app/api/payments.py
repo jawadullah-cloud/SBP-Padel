@@ -88,6 +88,7 @@ async def _ensure_late_payment_refund(payment: Payment, booking: Booking, db: As
         reason="Payment received after booking could no longer be safely confirmed",
     )
     db.add(refund)
+    await db.flush()
     player = await db.get(User, booking.user_id)
     if player:
         db.add(
@@ -398,6 +399,7 @@ async def request_refund(
     else:
         refund = Refund(payment_id=payment.id, booking_id=booking.id, amount=payment.amount, currency=payment.currency, status=RefundStatus.requested, reason=payload.reason)
         db.add(refund)
+        await db.flush()
         db.add(Notification(user_id=user.id, kind="refund_requested", title="Refund requested", body=f"Refund processing has started for booking {booking.booking_code}.", payload={"booking_id": str(booking.id), "refund_id": str(refund.id)}))
         await db.commit()
         await db.refresh(refund)
