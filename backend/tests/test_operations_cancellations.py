@@ -75,6 +75,34 @@ def test_manager_can_cancel_paid_booking_and_operator_cannot() -> None:
         assert tx["refund"]["status"] == "requested"
         assert "Venue cancellation" in tx["refund"]["reason"]
 
+        manager_refunds = client.get(
+            "/api/v1/operations/refunds-detailed",
+            headers=manager,
+            params={"venue_id": venue_id},
+        )
+        assert manager_refunds.status_code == 200, manager_refunds.text
+        refund = next(row for row in manager_refunds.json() if row["booking"]["booking_code"] == booking["booking_code"])
+        assert refund["status"] == "requested"
+        assert refund["booking"]["court"]
+        assert refund["booking"]["player_name"]
+        assert refund["booking"]["checked_in"] is False
+        assert refund["payment"]["reference"] == "OPS-CANCEL-QA"
+        assert refund["booking"]["cutoff_hours"] == 12
+
+        operator_refunds = client.get(
+            "/api/v1/operations/refunds-detailed",
+            headers=operator,
+            params={"venue_id": venue_id},
+        )
+        assert operator_refunds.status_code == 403
+
+        processed = client.patch(
+            f"/api/v1/operations/refunds/{refund['id']}",
+            headers=manager,
+            json={"status": "processing"},
+        )
+        assert processed.status_code == 200, processed.text
+
         again = client.post(
             f"/api/v1/operations/bookings/{booking['id']}/cancel",
             headers=manager,
