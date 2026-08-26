@@ -39,7 +39,7 @@ PAGE_SCRIPTS = {
     "wallet.html": ["player-wallet-live.js"],
     "digital-pass.html": ["digital-pass-live.js"],
     "auth-preview.html": ["player-live.js", "auth-enhancements.js", "google-auth-disabled.js"],
-    "booking-detail.html": ["player-booking-detail-live.js"],
+    "booking-detail.html": ["player-booking-detail-live.js", "player-booking-integrity.js"],
 }
 
 NOOP_SERVICE_WORKER = """\
