@@ -57,12 +57,11 @@ try{
   assert(saved.status!=='confirmed','Configured provider redirect/reference was treated as proof of payment before backend verification.');
 
   paid=true;
-  await page.locator('#checkProviderPayment').evaluate(async el=>{if(typeof el.onclick==='function')await el.onclick(new MouseEvent('click',{bubbles:true,cancelable:true}));else el.click()});
+  await Promise.all([
+    page.waitForURL(/payment-success\.html/,{timeout:5000}),
+    page.locator('#checkProviderPayment').click(),
+  ]);
   saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('sbpPadelBookingSessionV2')||'{}'));
-  if(saved.status!=='confirmed'){
-    await page.waitForTimeout(1200);
-    saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('sbpPadelBookingSessionV2')||'{}'));
-  }
   assert(saved.status==='confirmed',`Verified provider payment did not confirm player state. status=${saved.status}; requests=${apiRequests.join(' | ')}; pageErrors=${pageErrors.join(' | ')}`);
   assert(!simulateCalled,'Configured provider checkout called the simulator while confirming verified payment.');
   assert(saved.paymentProvider==='fake-payzen','Configured provider name was not preserved in booking state.');
@@ -72,8 +71,10 @@ try{
   await page.goto(`${base}/payment.html`,{waitUntil:'networkidle'});
   await page.locator('#payButton').waitFor({state:'visible'});
   await page.waitForTimeout(100);
-  await page.locator('#payButton').click();
-  await page.waitForTimeout(400);
+  await Promise.all([
+    page.waitForURL(/payment-success\.html/,{timeout:5000}),
+    page.locator('#payButton').click(),
+  ]);
   const recovered=await page.evaluate(()=>JSON.parse(localStorage.getItem('sbpPadelBookingSessionV2')||'{}'));
   assert(recovered.status==='confirmed',`Already-confirmed booking recovery lost confirmed state. status=${recovered.status}`);
   assert(bookingCreateCalls===1,`Already-confirmed booking recovery created a duplicate booking. creates=${bookingCreateCalls}; requests=${apiRequests.join(' | ')}`);
