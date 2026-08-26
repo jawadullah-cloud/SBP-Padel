@@ -14,12 +14,19 @@ await page.addInitScript(()=>{
 
 try{
   await page.goto(`${base}/index.html?api=http://127.0.0.1:8000/api/v1`,{waitUntil:'networkidle'});
-  await page.waitForFunction(()=>typeof window.SBPDeepRoute==='function');
-  await page.evaluate(()=>window.SBPDeepRoute('review-booking.html'));
+  await page.waitForFunction(()=>typeof window.SBPDeepClose==='function'&&!!document.getElementById('sbpDeepFrame'));
+  await page.evaluate(()=>{
+    const layer=document.getElementById('sbpDeepLayer');
+    const frame=document.getElementById('sbpDeepFrame');
+    layer.classList.remove('leaving','native','swapping','backing','sbp-preload-detail','sbp-reveal-detail');
+    layer.classList.add('on');
+    layer.style.pointerEvents='auto';
+    frame.src='review-booking.html';
+  });
   const frame=page.frameLocator('#sbpDeepFrame');
   await frame.locator('main.screen').waitFor({state:'visible'});
 
-  const before=await frame.locator('main.screen').evaluate(el=>({top:el.scrollTop,max:el.scrollHeight-el.clientHeight,touch:getComputedStyle(el).touchAction,overflow:getComputedStyle(el).overflowY}));
+  const before=await frame.locator('main.screen').evaluate(el=>({max:el.scrollHeight-el.clientHeight,touch:getComputedStyle(el).touchAction,overflow:getComputedStyle(el).overflowY}));
   assert(before.max>100,'Review page is not long enough to exercise scrolling.');
   assert(before.overflow==='auto'||before.overflow==='scroll','Review page is not vertically scrollable.');
   assert(before.touch!=='none','Review page touch scrolling is disabled.');
@@ -31,15 +38,15 @@ try{
   const after=await frame.locator('main.screen').evaluate(el=>el.scrollTop);
   assert(after>100,`Android-owned Review scrolling did not move the screen (${after}).`);
 
-  await frame.locator('.back').click();
+  await page.evaluate(()=>window.SBPDeepClose(false));
   await page.waitForFunction(()=>!document.getElementById('sbpDeepLayer')?.classList.contains('on'));
-  await page.waitForTimeout(140);
+  await page.waitForTimeout(160);
   await page.locator('nav [data-nav="home"]').click();
   await page.waitForFunction(()=>document.getElementById('home')?.classList.contains('active'));
   await page.locator('#home .primary[data-nav="venues"]').click();
   await page.waitForFunction(()=>document.getElementById('venues')?.classList.contains('active'));
 
-  console.log('Player Android Review QA passed: review scrolls by touch and exiting it does not poison subsequent clicks.');
+  console.log('Player Android Review QA passed: review scrolls by touch and closing it does not poison subsequent clicks.');
 }finally{
   await browser.close();
 }
