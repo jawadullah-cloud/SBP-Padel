@@ -6,9 +6,11 @@ import './hq-provisioning.css';
 import './hq-shell.css';
 import './account-control.css';
 import './hq-action-fixes.css';
+import './reschedule-control.css';
 import type { Metadata } from 'next';
 import PlayersSidebarLink from './PlayersSidebarLink';
 import StaffAccountControl from './StaffAccountControl';
+import OperationsRescheduleControl from './OperationsRescheduleControl';
 
 export const metadata: Metadata = {
   title: 'SBP Padel Operations',
@@ -16,5 +18,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}<PlayersSidebarLink/><StaffAccountControl/></body></html>;
+  return <html lang="en"><body>{children}<PlayersSidebarLink/><StaffAccountControl/><OperationsRescheduleControl/></body></html>;
 }
