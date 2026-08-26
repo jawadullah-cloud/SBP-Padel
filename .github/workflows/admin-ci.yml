@@ -17,8 +17,8 @@ jobs:
     defaults:
       run: {working-directory: admin}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with: {node-version: '22',cache: npm,cache-dependency-path: admin/package.json}
       - name: Install
         run: npm install
@@ -48,11 +48,12 @@ jobs:
           npm run test:admin 2>&1 | tee /tmp/admin-qa.log
       - name: Upload admin QA diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: admin-browser-qa-log
           path: |
             /tmp/admin-qa.log
             /tmp/sbp-padel-admin.log
+            admin/package-lock.json
           if-no-files-found: ignore
           retention-days: 3
