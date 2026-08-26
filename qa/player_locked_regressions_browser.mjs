@@ -30,9 +30,11 @@ const exerciseScroll=async id=>{
   await page.evaluate(screen=>{
     window.SBPNavigate(screen);
     const root=document.getElementById(screen);
-    const content=root?.querySelector('.content')||root;
-    if(content&&!content.querySelector('[data-locked-scroll-filler]')){
-      const filler=document.createElement('div');filler.dataset.lockedScrollFiller='1';filler.style.height='900px';content.appendChild(filler);
+    if(root&&!root.querySelector('[data-locked-scroll-filler]')){
+      const filler=document.createElement('div');
+      filler.dataset.lockedScrollFiller='1';
+      filler.style.cssText='display:block;flex:0 0 900px;width:1px;height:900px;min-height:900px;pointer-events:auto';
+      root.appendChild(filler);
     }
     if(root)root.scrollTop=0;
   },id);
@@ -42,7 +44,7 @@ const exerciseScroll=async id=>{
   assert(metrics.max>200,`${id} is not scrollable enough for the Android regression test.`);
   assert(metrics.touch!=='none',`${id} has touch scrolling disabled.`);
   assert(metrics.overflow==='auto'||metrics.overflow==='scroll',`${id} is not vertically scrollable.`);
-  await swipe(root.locator('.content').first());
+  await swipe(root.locator('[data-locked-scroll-filler]'));
   assert((await root.evaluate(el=>el.scrollTop))>100,`${id} Android touch scrolling did not move the screen.`);
 };
 
