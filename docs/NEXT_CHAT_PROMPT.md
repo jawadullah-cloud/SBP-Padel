@@ -75,10 +75,23 @@ Dedicated HQ routes retain Overview, Bookings, Staff, Policies, Refunds, Venue D
 ## Booking policy
 Player cancellation/rescheduling cutoff remains 12 hours before the first slot, with started/checked-in bookings blocked. Eligible paid cancellation creates a refund request. Player and staff rescheduling currently require the replacement total to equal the existing booking total. Staff operational rescheduling may bypass the player's 12-hour cutoff but still must preserve availability and financial integrity.
 
-## Production readiness
-Read `docs/LAUNCH_READINESS.md` before calling the system production-ready. Major remaining decisions/blockers include real online payment provider + callbacks/idempotency/reconciliation/refunds, production database/migrations/backups, domains/HTTPS/CORS, SMTP, production secrets, Android release signing/distribution and optional object storage before facility-image scale grows.
+## Production-readiness hardening — implemented 26 Aug 2026
+Read `docs/LAUNCH_READINESS.md` and `docs/STAGING_DEPLOYMENT.md` before deployment work.
 
-The backend refuses to start outside development/test with the repository default JWT secret. Do not weaken this protection. Admin dependency audit warnings should be handled as a separate dependency-maintenance task rather than mixed into unrelated functional fixes.
+The backend now fails fast outside development/test unless core deployment configuration is safe: strong explicit JWT secret, PostgreSQL database URL, explicit HTTPS/non-local CORS origins, and Redis URL when Redis is required. Production additionally requires SMTP host/from configuration. `backend/.env.production.example` is the non-secret checklist and `backend/scripts/production_preflight.py` is the deployment preflight command.
+
+Migration history is now deliberately frozen: Alembic revision `20260823_0001` has an explicit baseline table list rather than creating whatever happens to exist in current ORM metadata. Future model additions must be new revisions. Backend CI is intended to run a fresh temporary-database `alembic upgrade head`, `alembic current` and `alembic check` in addition to the full backend tests.
+
+Deployment probes are `/health/live` and `/health/ready`; readiness checks the database and required Redis.
+
+Admin dependency hardening raised the Next.js 15.5 floor to `^15.5.24` and Admin Portal CI now blocks on high-severity `npm audit` findings before build/browser QA. Do not downgrade the floor without checking current security advisories.
+
+Android debug signing remains intentionally separate from release signing. `dev-signing-key.b64` is a disposable stable-debug fixture only; Gradle applies it only to `debug`, while `release` has no repository signing configuration. Real release keys must remain outside Git. See `android/RELEASE_SIGNING.md`.
+
+### Remaining decisions/blockers
+The next major product/integration decision is the real online payment provider, including callbacks/idempotency/reconciliation/refund execution. Other external choices still required are the production PostgreSQL/hosting and backup architecture, final domains/HTTPS/CORS, SMTP provider/credentials, SBP-controlled Android release key/distribution, and optional object storage before image scale grows.
+
+Do not choose these vendor/business decisions implicitly during unrelated work.
 
 ## Verification discipline
 Distinguish implementation, green CI and manual acceptance. Treat repository and actual runtime behavior as source of truth. When the user reports a visible runtime discrepancy, inspect the effective loading path before layering more fixes.
