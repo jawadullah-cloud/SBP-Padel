@@ -22,6 +22,22 @@ class RefundInitiation:
     provider_metadata: dict = field(default_factory=dict)
 
 
+@dataclass
+class PaymentCallbackEvent:
+    """Provider-authenticated payment state normalized for core booking logic.
+
+    Provider implementations own signature/authentication and provider-specific
+    payload parsing. Core payment code only consumes this normalized event.
+    """
+
+    provider_reference: str
+    status: str
+    amount: Decimal | None = None
+    currency: str | None = None
+    transaction_reference: str | None = None
+    provider_metadata: dict = field(default_factory=dict)
+
+
 class PaymentProvider(ABC):
     name: str
 
@@ -49,7 +65,8 @@ class PaymentProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def verify_callback(self, payload: bytes, headers: dict[str, str]) -> dict:
+    async def verify_callback(self, payload: bytes, headers: dict[str, str]) -> PaymentCallbackEvent:
+        """Authenticate a provider callback and return its normalized event."""
         raise NotImplementedError
 
 
@@ -85,7 +102,7 @@ class UnconfiguredPaymentProvider(PaymentProvider):
             provider_metadata={"stage": "provider_selection_pending"},
         )
 
-    async def verify_callback(self, payload: bytes, headers: dict[str, str]) -> dict:
+    async def verify_callback(self, payload: bytes, headers: dict[str, str]) -> PaymentCallbackEvent:
         raise RuntimeError("No payment provider is configured")
 
 
