@@ -66,6 +66,8 @@ html.sbp-session-splash .splashContent{padding-bottom:34px}
  if(!token)return;
  document.documentElement.classList.add('sbp-session-splash');
  window.__SBP_SESSION_SPLASH__=true;
+ const hold=new URLSearchParams(location.search).get('holdSplash')==='1';
+ if(hold)return;
  window.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{
    if(localStorage.getItem('sbpPadelAccessToken'))location.replace('./');
  },900),{once:true});
