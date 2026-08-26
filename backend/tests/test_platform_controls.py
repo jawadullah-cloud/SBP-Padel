@@ -14,6 +14,18 @@ def test_finance_reconciliation_audit_and_reports():
 def test_booking_creation_reports_lock_mode():
     with TestClient(app) as client:
         login=client.post('/api/v1/auth/login',json={'identifier':'player@sbppadel.local','password':'PadelDemo2026!'});h={'Authorization':f"Bearer {login.json()['access_token']}"};policy=client.get('/api/v1/policies/active').json();venue=next(v for v in client.get('/api/v1/venues').json() if v['name']=='Nishtar Park Sports Complex');detail=client.get(f"/api/v1/venues/{venue['id']}").json();court_id=next(c['id'] for c in detail['courts'] if c['code']=='04');r=client.post('/api/v1/bookings',json={'venue_id':venue['id'],'court_id':court_id,'booking_date':'2026-12-17','slots':[{'start_time':'16:00'}],'policy_version_id':policy['id'],'policy_accepted':True},headers=h);assert r.status_code==200;assert r.json()['hold_minutes']==10;assert isinstance(r.json()['atomic_lock'],bool)
+def test_hq_service_fee_is_persistent_and_drives_player_quote():
+    with TestClient(app) as client:
+        admin=admin_headers(client)
+        current=client.get('/api/v1/admin/platform-settings/service-fee',headers=admin);assert current.status_code==200
+        changed=client.patch('/api/v1/admin/platform-settings/service-fee',json={'service_fee':175},headers=admin);assert changed.status_code==200;assert changed.json()['service_fee']==175;assert settings.service_fee==175
+        player_login=client.post('/api/v1/auth/login',json={'identifier':'player@sbppadel.local','password':'PadelDemo2026!'});player={'Authorization':f"Bearer {player_login.json()['access_token']}"}
+        denied=client.patch('/api/v1/admin/platform-settings/service-fee',json={'service_fee':250},headers=player);assert denied.status_code==403
+        venue=next(v for v in client.get('/api/v1/venues').json() if v['name']=='Nishtar Park Sports Complex');detail=client.get(f"/api/v1/venues/{venue['id']}").json();court_id=next(c['id'] for c in detail['courts'] if c['code']=='04')
+        quote=client.post('/api/v1/bookings/quote',json={'venue_id':venue['id'],'court_id':court_id,'booking_date':'2026-12-18','slots':[{'start_time':'16:00'}]});assert quote.status_code==200;assert quote.json()['service_fee']=='175.00';assert float(quote.json()['total'])==float(quote.json()['court_fee'])+175
+        again=client.get('/api/v1/admin/platform-settings/service-fee',headers=admin);assert again.json()['service_fee']==175
+        audit=client.get('/api/v1/admin/audit',headers=admin).json();assert any(row['action']=='platform.service_fee.updated' for row in audit)
+        reset=client.patch('/api/v1/admin/platform-settings/service-fee',json={'service_fee':100},headers=admin);assert reset.status_code==200
 @pytest.mark.asyncio
 async def test_redis_atomic_lock_if_configured():
     if not settings.redis_url:pytest.skip('Redis is not configured')
