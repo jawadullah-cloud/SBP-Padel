@@ -1,4 +1,4 @@
-const BUILD='20260826-production-runtime-v1';
+const BUILD='20260826-production-runtime-v2';
 self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 
@@ -46,6 +46,13 @@ function scrubPrototypeFallback(page,html){
   return html;
 }
 
+function versionLocalAssets(html){
+  return html.replace(
+    /((?:src|href)=["'])(?!https?:|\/\/|data:|#)([^"'?#]+\.(?:js|css))(?:\?[^"']*)?(["'])/gi,
+    (_match,prefix,path,quote)=>`${prefix}${path}?v=${BUILD}${quote}`,
+  );
+}
+
 self.addEventListener('fetch',event=>{
   const req=event.request;
   const url=new URL(req.url);
@@ -56,7 +63,7 @@ self.addEventListener('fetch',event=>{
       const type=res.headers.get('content-type')||'';
       if(!type.includes('text/html'))return res;
       const page=url.pathname.split('/').pop()||'index.html';
-      let html=scrubPrototypeFallback(page,await res.text());
+      let html=versionLocalAssets(scrubPrototypeFallback(page,await res.text()));
       const scripts=[];
       const add=name=>{if(!html.includes(name)&&!scripts.includes(name))scripts.push(name)};
       for(const name of COMMON_SCRIPTS)add(name);
