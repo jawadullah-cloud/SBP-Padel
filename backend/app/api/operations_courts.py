@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import current_user
 from app.db.session import get_db
-from app.models.domain import Court, CourtStatus, User, UserRole
+from app.models.domain import Booking, BookingStatus, Court, CourtStatus, User, UserRole
 from app.models.operations import UserVenueAssignment, VenueAssignmentRole
 
 router = APIRouter(prefix="/operations", tags=["venue operations"])
@@ -70,6 +71,21 @@ async def set_operational_court_status(
     if not court:
         raise HTTPException(404, "Court not found")
     await ensure_manager(user, court.venue_id, db)
+    if payload.status != CourtStatus.active:
+        impacted = (
+            await db.scalars(
+                select(Booking.id).where(
+                    Booking.court_id == court.id,
+                    Booking.booking_date >= date.today(),
+                    Booking.status.in_([BookingStatus.confirmed, BookingStatus.rescheduled]),
+                )
+            )
+        ).all()
+        if impacted:
+            raise HTTPException(
+                409,
+                f"Court has {len(impacted)} active current/future booking(s). Reschedule or cancel them before making the court unavailable.",
+            )
     court.status = payload.status
     await db.commit()
     return {"id": str(court.id), "status": court.status.value}
