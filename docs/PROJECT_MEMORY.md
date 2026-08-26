@@ -15,16 +15,34 @@ HQ and venue operations remain separate products.
 ## Player milestone — manually accepted 25–26 Aug 2026
 Accepted: login persistence/recovery, venue discovery/favourites/directions, themes, Date → Court → Time → Review → Payment → Confirmation, stable repeated navigation, live player/additional-player count, consecutive multi-slot booking as one session, wallet hidden while disabled, backend confirmation/pass, booking-level QR/check-in, live My Bookings without prototype/layout flash, Android system back, venue gallery/cover propagation, native Android location, Near Me filtering and nearby-aware Next Available.
 
+The booking date rail is also accepted as **six quick dates plus a seventh More + control on one row**. `booking-date-more.js` intentionally uses the first six quick dates before appending More; Player Flow CI guards against silently returning to seven quick dates plus More and wrapping onto a second line.
+
 **Google sign-in remains intentionally deferred.** The player login screen must not advertise Google sign-in until the complete browser/native OAuth flow is intentionally enabled, tested and manually accepted. `docs/GOOGLE_SIGNIN.md` is a deferred-integration note, not a statement that the feature is active. Player Flow CI has an architecture guard that fails if `Continue with Google` returns to `docs/auth-preview.html`.
 
 ### Player runtime ownership
-`review-entry.js` booking state; `review-native.js` review/payment handoff; `player-venues-live.js` venue detail and real facility gallery; `player-discovery-live.js` dynamic venue discovery, native-location ranking and live Next Available; `discovery-tools.js` visible Find Your Court search/filter controls; `venue-cover-runtime.js` shared venue cover propagation; `player-bookings-live.js` My Bookings; `player-booking-detail-live.js` detail/reschedule/cancel/refund; `digital-pass-live.js` pass; `booking-success-live.js` confirmation; `player-profile-live.js` profile/auth; `notifications-live.js` notifications; `profile-modules.js` Saved Players/Favourites/Help; `theme-bridge.js` theme; `android-back.js` + MainActivity native back/location bridge.
+`review-entry.js` booking state; `review-native.js` review/payment handoff; `player-venues-live.js` venue detail and real facility gallery; `player-discovery-live.js` dynamic venue discovery, native-location ranking and live Next Available; `discovery-tools.js` visible Find Your Court search/filter controls; `venue-cover-runtime.js` shared venue cover propagation; `player-bookings-live.js` My Bookings; `player-booking-detail-live.js` detail/reschedule/cancel/refund; `digital-pass-live.js` pass; `booking-success-live.js` confirmation; `player-profile-live.js` profile/auth; `notifications-live.js` notifications; `profile-modules.js` Saved Players/Favourites/Help; `theme-bridge.js` theme; `android-back.js` + MainActivity native back/location bridge; `main-navigation-hardening.js` bottom-tab interaction recovery.
 
 ### Runtime loading discipline
-Critical player features should not rely only on development-server script injection when they materially affect the visible shell. `docs/index.html` now directly loads the live venue/discovery runtime and uses neutral loading text instead of misleading prototype venue/slot data. When runtime behavior contradicts the repository, inspect `run_player_dev.ps1`, `dev_player_server.py`, `docs/index.html`, injected scripts, duplicate legacy modules, service-worker/cache behavior and the DEV build badge before making more UI patches.
+Critical player features should not rely only on development-server script injection when they materially affect the visible shell. `docs/index.html` directly loads the live venue/discovery runtime and uses neutral loading text instead of misleading prototype venue/slot data. `bookings-entry.js`, which is directly loaded by the player shell, also bootstraps the main-navigation hardening layer so recovery is present even before a service worker controls a page.
+
+When runtime behavior contradicts the repository, inspect `run_player_dev.ps1`, `dev_player_server.py`, `docs/index.html`, injected scripts, duplicate legacy modules, service-worker/cache behavior and the DEV build badge before making more UI patches.
+
+### Bottom-navigation interaction stability
+An intermittent Android/player issue was reproduced on 26 Aug 2026 where Home looked visible but did not accept taps, while the persistent bottom navigation still worked. The user observed that Bookings → Booking Details → Home could make Home interactive again.
+
+The underlying class of bug was confirmed in browser QA: an inactive persistent screen such as Profile or Venues could retain an inline `pointer-events:auto`/touch state and invisibly intercept clicks over Home. A second ordering problem existed because `SBPDeepClose()` restores the current active scroller; if deep-route cleanup ran before the destination screen switched, it could re-enable the screen being left.
+
+`docs/main-navigation-hardening.js` now owns recovery for **persistent bottom tabs only**: `home`, `bookings`, `venues`, `profile`.
+- normal `SBPNavigate(target)` runs first;
+- after the destination is active, recovery makes that screen interactive/scrollable;
+- stale inline pointer/touch values are removed from the other persistent screens so inactive-screen CSS (`pointer-events:none`) owns them again;
+- stale deep-route overlay state is closed only after the destination is active;
+- booking-flow screens (`select`, `time`, review, confirmation, pass, etc.) are deliberately excluded so their established transition/scroll lifecycle is not disturbed.
+
+`qa/player_navigation_recovery_browser.mjs` deliberately corrupts Home/deep-route interaction state and verifies that navigation recovers immediately and that the deep-route transition state settles. Player Flow CI continues to run this together with the existing native Review 5→4→3→4→5 stress navigation, booking lifecycle, account and theme browser suites. Preserve this separation and do not broaden the recovery guard into booking-flow screens without a reproduced need.
 
 ## Venue discovery, covers and location — manually accepted 26 Aug 2026
-Venue cover/gallery behavior is now live across the player experience. Once a venue has a selected cover photo, that image should replace generic court artwork on Home featured venue, venue cards, Favourite Venues, My Bookings and booking/payment/confirmation/pass/detail surfaces where a venue visual is shown. Generic artwork is only a fallback when no cover exists. Real photo surfaces must suppress the old `.courtScene`/`.courtVisual`/`.miniCourt` prototype overlays and must remain pointer-safe.
+Venue cover/gallery behavior is live across the player experience. Once a venue has a selected cover photo, that image should replace generic court artwork on Home featured venue, venue cards, Favourite Venues, My Bookings and booking/payment/confirmation/pass/detail surfaces where a venue visual is shown. Generic artwork is only a fallback when no cover exists. Real photo surfaces must suppress old `.courtScene`/`.courtVisual`/`.miniCourt` prototype overlays and remain pointer-safe.
 
 The visible Find Your Court UI is owned by `discovery-tools.js`; do not reintroduce hard-coded Lahore/court-type prototype filters. It exposes search plus **All / Near Me**, with city choices generated from actual active venues. Venue cards have deliberate vertical spacing.
 
@@ -39,9 +57,14 @@ Consecutive selected slots form one booking session and one pass. Player count i
 
 **Cancellation/rescheduling cutoff: 12 hours before the first booked slot.** Player cancellation/rescheduling is blocked once the booking is inside 12 hours, has started, or has been checked in. Eligible paid cancellations create a refund request automatically. HQ retains administrative discretion for exceptional/manual cases. The shared policy calculation is `backend/app/core/booking_policy.py` and must use the venue timezone with Pakistan/Windows fallback.
 
-Rescheduling currently requires the replacement session to have the same total price; price-adjusted rescheduling remains a future enhancement.
+Player rescheduling currently requires the replacement session to have the same total price; price-adjusted rescheduling remains a future enhancement.
 
 **Rescheduled bookings remain active bookings.** A paid booking with status `rescheduled` must remain valid for venue pass/QR validation and check-in on its replacement date. `operations.py` and `operations_passes.py` share this behavior through explicit active-status sets, and targeted backend regression QA covers pay → reschedule → validate pass → operator check-in.
+
+### Staff-side operational reschedule
+Venue managers/admins can reschedule an active `confirmed`/`rescheduled` booking from the operations booking detail. This is an operational override intended for closures, maintenance and similar venue-side needs, so it is not constrained by the player's 12-hour self-service cutoff. It still requires a valid active venue/court/date/slot and currently requires the replacement total to equal the existing paid total. Price-adjusted staff rescheduling is intentionally not implemented yet.
+
+A staff reschedule updates the existing booking rather than creating a duplicate, records `rescheduled`, stores replacement slots, and notifies the player. `backend/tests/test_operations_staff_reschedule_release.py` explicitly proves availability integrity: the original slot is unavailable before the move, becomes available after the move, and the replacement slot becomes unavailable with reason `Booked`.
 
 ## Refund governance
 HQ Refunds is a decision screen, not a bare queue. Each refund request is a compact single-row summary by default and expands on click. Expanded review must expose booking code, player/contact, venue/court, date and all slots, amount/payment reference, cancellation reason/timing, check-in/utilization state and the 12-hour rule before an admin processes/rejects a refund. Completed refund processing updates payment status.
@@ -49,18 +72,26 @@ HQ Refunds is a decision screen, not a bare queue. Each refund request is a comp
 ## HQ bookings
 HQ Bookings follows the same compact-review pattern: each booking is collapsed by default with booking code, venue, date, semantic status and amount. Expanding a row retrieves/shows detailed player/contact, court, all slots, duration, payment, check-in/utilization, pricing, cancellation/refund context, creation time and UUID. Booking statuses use semantic colors: green for positive/complete, amber for pending/rescheduled, red for cancelled/failed/rejected, neutral for non-action states.
 
-## Venue operations — manually accepted baseline; unattended hardening pending manual review
-The previously reviewed baseline remains accepted: manager/operator venue assignment, Court Schedule, booking search/detail, check-in, closures, court status, front-desk booking, payments/refunds, pricing/bookable hours, reports, player registration/search. Pricing rules define the visible booking schedule. General Bookings sorts by creation activity; Court Schedule is chronological.
+## Venue operations — manually reviewed and accepted 26 Aug 2026
+The venue manager/operator operations console has been manually reviewed after the unattended hardening pass and is accepted on the current surface. Accepted behavior includes manager/operator venue assignment, Court Schedule, booking search/detail, check-in, closures, court status, front-desk booking, payments/refunds, pricing/bookable hours, reports, player registration/search, Change Password, Players and Scan Pass utility routes, multi-venue switching and staff-side booking reschedule.
 
-An unattended 26 Aug hardening pass added objective safeguards that require morning manual review but do not redesign the accepted UI:
-- operations login no longer embeds/prefills the development manager email/password;
-- the selected venue is authoritative during multi-venue operations: slower responses from a previously selected venue are discarded instead of overwriting the current venue;
-- changing venue clears venue-scoped transient state, including selected booking, front-desk player/court/slots/quote/payment reference, closure court and pricing court;
-- operator versus manager controls remain role-scoped: operators can view pricing/closures/courts but cannot mutate manager-only settings;
-- confirmed and rescheduled paid bookings are both eligible for pass validation/check-in;
-- `admin/tests/operations.spec.ts` covers blank staff credentials, stale-response rejection, role-scoped controls, My Account visibility and venue-switch clearing.
+Operational invariants:
+- operations login does not embed/prefill development manager credentials;
+- selected venue is authoritative: late responses from a previously selected venue cannot overwrite current venue data;
+- switching venue clears venue-scoped transient state such as selected booking, front-desk player/court/slots/quote/payment reference, closure court and pricing court;
+- operator versus manager controls remain role-scoped; operators may view manager-only configuration but not mutate it;
+- confirmed and rescheduled paid bookings are both valid for pass validation/check-in;
+- Players and Scan Pass are dedicated routes but must keep the complete operations sidebar and return to the authenticated console without a login-page flash;
+- `admin/tests/operations.spec.ts` covers blank credentials, stale-response rejection, role-scoped controls, My Account, venue-switch clearing and utility-route navigation.
 
-Do not mark this new hardening pass manually accepted until it is reviewed on the running operations UI.
+### Closure / maintenance safety
+A manager must not silently strand existing bookings when making inventory unavailable.
+- Creating a court/all-courts closure overlapping active pending-payment, confirmed or rescheduled bookings is refused.
+- Changing a court to Maintenance/Closed is refused while conflicting current/future active bookings remain.
+- HQ venue deactivation is refused while conflicting current/future active bookings remain.
+- Staff must reschedule or cancel affected bookings first.
+
+The system intentionally does not auto-cancel/refund active bookings when a closure is attempted because cancellation/refund/notification is a separate accountable operational action.
 
 ## HQ architecture
 HQ Home owns overview, cross-venue bookings, policies and refund decisions. Staff credential/lifecycle management is a dedicated `/hq/staff` route. Dedicated network routes include `/hq/provisioning`, per-venue management/profile, `/hq/reports`, `/hq/finance`, and `/hq/audit`.
@@ -103,11 +134,14 @@ Safe venue cleanup: unused courts may be deleted; courts with booking history pr
 
 The player online payment path currently uses provider `unconfigured`; development simulator endpoints are deliberately unavailable outside development. Do not call player online payments production-ready until a real provider, callbacks/idempotency, reconciliation, failure handling and refund execution are integrated.
 
-Production runtime must not use the repository default JWT secret. `validate_runtime_settings()` now rejects the default `change-this-in-production` value outside `development`/`test`, with backend regression coverage. Development behavior remains unchanged.
+Production runtime must not use the repository default JWT secret. `validate_runtime_settings()` rejects the default `change-this-in-production` value outside `development`/`test`, with backend regression coverage. Development behavior remains unchanged.
+
+Admin dependency audit warnings are a separate dependency-maintenance item. Do not mix framework/dependency upgrades into unrelated functional fixes unless a current runtime/security issue requires it.
 
 ## Backend ownership
 - `operations.py`: venue bookings/check-in/blocks.
 - `operations_management.py`: venue-side front desk, pricing, finance/refunds/reports.
+- `operations_reschedules.py`: manager/admin operational rescheduling of active bookings.
 - `operations_passes.py`: venue pass/QR validation; confirmed and rescheduled active bookings are valid candidates.
 - `admin.py`, `admin_hq.py`, `admin_finance.py`, `admin_reports.py`: core HQ and editable venue profile APIs.
 - `admin_governance.py`: detailed refund review, staff lifecycle, password reset and role-permission summaries.
