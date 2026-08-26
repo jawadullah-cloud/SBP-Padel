@@ -5,6 +5,9 @@ on:
     paths: ['admin/**','run_admin_dev.ps1','.github/workflows/admin-ci.yml']
   pull_request:
     paths: ['admin/**','run_admin_dev.ps1','.github/workflows/admin-ci.yml']
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build-and-admin-runtime:
     runs-on: ubuntu-latest
