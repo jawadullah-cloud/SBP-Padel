@@ -5,6 +5,9 @@ on:
     paths: ['backend/**','.github/workflows/backend-ci.yml']
   pull_request:
     paths: ['backend/**','.github/workflows/backend-ci.yml']
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
