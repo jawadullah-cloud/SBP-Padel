@@ -3,19 +3,11 @@
   if(window.__SBPMainNavigationHardening)return;
   window.__SBPMainNavigationHardening=true;
 
-  // Recovery belongs to the persistent bottom-navigation destinations.
-  // Booking-flow choreography remains owned by its flow modules. The only
-  // booking-flow state we explicitly clear here is stale interaction state
-  // from a screen being abandoned for a persistent destination.
   const recoveryScreens=new Set(['home','bookings','venues','profile']);
 
   function deactivateAbandonedFlowScreens(target){
     if(!recoveryScreens.has(target))return;
 
-    // Canonical Step-5 Review intentionally sets pointerEvents inline while
-    // active. A normal SBPNavigate() only changes .active classes, so without
-    // this cleanup Review can become invisible yet remain above the whole app
-    // and intercept every tap after the user abandons the booking flow.
     const review=document.getElementById('reviewNative');
     if(review&&review.id!==target){
       review.classList.remove('active');
@@ -24,9 +16,6 @@
       review.style.webkitOverflowScrolling='';
     }
 
-    // Future flow screens must not retain an explicit interactive override
-    // when they are no longer active. Do not alter their normal transition,
-    // scrolling or back/forward logic while they remain active.
     document.querySelectorAll('.app>.screen:not(.active)').forEach(screen=>{
       if(recoveryScreens.has(screen.id))return;
       if(screen.style.pointerEvents==='auto')screen.style.pointerEvents='none';
@@ -36,10 +25,8 @@
     if(nav)nav.classList.remove('flowHidden');
   }
 
-  function clearStaleInteractionState(target){
+  function finishPersistentRecovery(target){
     if(!recoveryScreens.has(target))return;
-
-    deactivateAbandonedFlowScreens(target);
 
     recoveryScreens.forEach(id=>{
       const screen=document.getElementById(id);
@@ -49,8 +36,6 @@
         screen.style.touchAction='pan-y';
         screen.style.webkitOverflowScrolling='touch';
       }else{
-        // Remove inline values left behind by an earlier active state so the
-        // normal inactive-screen CSS can make the screen non-interactive again.
         screen.style.pointerEvents='';
         screen.style.touchAction='';
         screen.style.webkitOverflowScrolling='';
@@ -62,9 +47,6 @@
     if(layer){
       const stale=layer.classList.contains('on')||layer.classList.contains('leaving')||layer.classList.contains('swapping')||layer.classList.contains('backing')||layer.classList.contains('sbp-preload-detail')||layer.classList.contains('sbp-reveal-detail');
       if(stale&&typeof window.SBPDeepClose==='function'){
-        // Run only after the destination screen has become active. SBPDeepClose
-        // restores the current active scroller, so doing this before navigation
-        // can accidentally re-enable the screen being left.
         try{window.SBPDeepClose(false)}catch{}
       }else if(stale){
         layer.classList.remove('on','leaving','swapping','backing','native','sbp-preload-detail','sbp-reveal-detail');
@@ -75,12 +57,21 @@
     }
   }
 
+  function recoverPersistentTarget(target){
+    if(!recoveryScreens.has(target))return;
+    // Flow screens that can physically cover the destination must be disabled
+    // immediately after SBPNavigate() switches .active classes. Deep-layer
+    // teardown stays on the next frame because it restores the active scroller.
+    deactivateAbandonedFlowScreens(target);
+    requestAnimationFrame(()=>finishPersistentRecovery(target));
+  }
+
   function install(){
     const original=window.SBPNavigate;
     if(typeof original!=='function'||original.__sbpHardened)return false;
     const wrapped=function(target,...args){
       const result=original.call(this,target,...args);
-      if(recoveryScreens.has(target))requestAnimationFrame(()=>clearStaleInteractionState(target));
+      recoverPersistentTarget(target);
       return result;
     };
     wrapped.__sbpHardened=true;
@@ -99,16 +90,19 @@
     if(!nav)return;
     const target=nav.dataset.nav;
     if(!recoveryScreens.has(target))return;
-    requestAnimationFrame(()=>clearStaleInteractionState(target));
+    // Capture-phase pre-cleanup ensures an already-invisible Review cannot
+    // swallow the destination's first interaction while navigation settles.
+    deactivateAbandonedFlowScreens(target);
+    requestAnimationFrame(()=>finishPersistentRecovery(target));
   },true);
 
   window.addEventListener('pageshow',()=>{
     const active=document.querySelector('.screen.active');
-    if(active&&recoveryScreens.has(active.id))clearStaleInteractionState(active.id);
+    if(active&&recoveryScreens.has(active.id))recoverPersistentTarget(active.id);
   });
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden)return;
     const active=document.querySelector('.screen.active');
-    if(active&&recoveryScreens.has(active.id))clearStaleInteractionState(active.id);
+    if(active&&recoveryScreens.has(active.id))recoverPersistentTarget(active.id);
   });
 })();
