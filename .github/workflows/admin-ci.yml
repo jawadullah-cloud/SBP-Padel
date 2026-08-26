@@ -16,6 +16,8 @@ jobs:
         with: {node-version: '22',cache: npm,cache-dependency-path: admin/package.json}
       - name: Install
         run: npm install
+      - name: Dependency security audit
+        run: npm audit --audit-level=high
       - name: Build
         run: npm run build
       - name: Install Playwright Chromium
