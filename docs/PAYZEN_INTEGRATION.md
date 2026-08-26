@@ -59,6 +59,25 @@ A verified payment arriving after the booking hold has expired must never reclai
 
 This late-payment path is now covered by backend regression QA, including duplicate callback handling.
 
+## Player configured-provider runtime — prepared and regression-locked
+
+`docs/payment-methods-live.js` is the provider-aware Player payment layer on `payment.html`. It owns the Pay action through capture interception so the older `review-entry.js` development checkout handler cannot also process the same tap.
+
+The configured-provider flow now has browser regression coverage proving the complete player-facing boundary without inventing PayZen behavior:
+
+- booking creation still performs the established participant persistence request before provider initiation;
+- `/payments/initiate` may return a configured provider name, provider reference/PSID, optional redirect URL and client payload;
+- the provider reference/PSID is displayed with a Copy control;
+- a Check Status control and automatic polling read authoritative backend payment and booking state;
+- a configured provider (`requires_provider_integration: false`) never calls the development `/simulate-success` endpoint;
+- receiving a provider reference or redirect URL does not mark the booking confirmed;
+- confirmation occurs only after backend payment state is `paid` and booking state is confirmed/rescheduled/completed;
+- returning to payment for an already-confirmed booking recovers that booking instead of creating another booking or initiating another payment.
+
+The configured-provider browser regression originally failed before `/payments/initiate`. Runtime diagnostics proved `payment-methods-live.js` was loaded and active. The actual cause was a test/mock contract mismatch: `booking-participants-live.js` wraps successful booking creation and waits for `PUT /bookings/{booking_id}/participants`, but the new provider test had not mocked that established request. The test now includes the real participant-sync contract and also locks duplicate-booking recovery.
+
+The development/unconfigured-provider simulator remains intentionally available only for development flow. Do not remove it until a real provider adapter is available, and do not permit it to run for a configured provider.
+
 ## Expected player experience
 
 The exact screen should follow the confirmed PayZen contract, but the application is prepared for both of these patterns:
@@ -110,6 +129,7 @@ The eventual PayZen adapter must obey these invariants:
 - Duplicate callbacks must be safe and idempotent.
 - Amount, currency, booking reference and provider reference must be reconciled before confirmation.
 - A payment received after a booking hold has expired must not silently steal a slot that may already have been rebooked. It must enter the existing explicit reconciliation/refund path.
+- A verified failed payment must move a still-pending booking into the payment-failed path and release its held inventory.
 - Payment and refund provider references must remain visible to HQ finance/reconciliation.
 - A provider outage must not create duplicate bookings or duplicate PSIDs through repeated taps.
 
@@ -127,6 +147,6 @@ Once the official PayZen integration material is available:
 2. add PayZen settings to the environment template and production preflight;
 3. map official PSID-generation and authenticated callback/status responses into the prepared provider events;
 4. add sandbox contract tests using official UAT credentials/test PSIDs;
-5. update player payment UI for the confirmed PSID/hosted flow;
+5. adapt the already-provider-aware Player payment presentation only where the official PSID/hosted-flow contract requires it;
 6. add payment-status inquiry/reconciliation and provider-refund execution where supported;
 7. complete UAT with PITB/PayZen before production activation.
