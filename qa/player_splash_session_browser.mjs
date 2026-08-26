@@ -21,8 +21,8 @@ try{
  assert(await loggedOut.locator('.glassActions').isVisible(),'Logged-out splash did not show Sign In/Create Account actions.');
  await loggedOut.close();
 
- // Establish localStorage on the actual HTML origin first. This is equivalent to Android
- // WebView reopening auth-preview.html with a persisted session from a previous launch.
+ // Establish localStorage on the actual HTML origin, then reopen the splash using the
+ // dev-only holdSplash flag. The flag changes only the redirect timer, not the session UI.
  const loggedIn=await browser.newPage({viewport:{width:412,height:915}});
  await routeApi(loggedIn);
  await loggedIn.goto(`${base}/auth-preview.html`,{waitUntil:'domcontentloaded'});
@@ -31,10 +31,7 @@ try{
   localStorage.setItem('sbpPadelUser',JSON.stringify({full_name:'Splash QA'}));
  });
  assert((await loggedIn.evaluate(()=>localStorage.getItem('sbpPadelAccessToken')))==='qa-token','Could not persist splash QA session on player origin.');
- // Prevent only the session splash's delayed location.replace('./') so the DOM remains
- // available for deterministic inspection after reloading with the stored token.
- await loggedIn.route(`${base}/`,route=>route.abort());
- await loggedIn.reload({waitUntil:'domcontentloaded'});
+ await loggedIn.goto(`${base}/auth-preview.html?holdSplash=1`,{waitUntil:'domcontentloaded'});
  const splashState=await loggedIn.evaluate(()=>{
   const actions=document.querySelector('.glassActions'),splash=document.querySelector('#splash');
   return {
@@ -49,6 +46,6 @@ try{
  assert(splashState.splashVisible,'Logged-in session skipped the branded splash entirely.');
  assert(splashState.token==='qa-token','Session-aware splash cleared a valid stored session.');
  await loggedIn.waitForTimeout(1200);
- assert(new URL(loggedIn.url()).pathname.endsWith('/auth-preview.html'),'Blocked session splash unexpectedly left the splash page.');
+ assert(new URL(loggedIn.url()).pathname.endsWith('/auth-preview.html'),'Held session splash unexpectedly left the splash page.');
  console.log('Player session-aware splash browser QA passed.');
 }finally{await browser.close()}
