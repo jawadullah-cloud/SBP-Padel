@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 
 const base=process.env.SBP_PLAYER_URL||'http://127.0.0.1:5173';
 const browser=await chromium.launch({headless:true});
-const page=await browser.newPage({viewport:{width:412,height:915}});
+const page=await browser.newPage({viewport:{width:412,height:650}});
 const assert=(condition,message)=>{if(!condition)throw new Error(message)};
 
 await page.addInitScript(()=>{
@@ -33,7 +33,7 @@ try{
 
   await frame.locator('.bookingCard').evaluate(el=>{
     const fire=(type,y)=>{const e=new Event(type,{bubbles:true,cancelable:true});Object.defineProperty(e,'touches',{value:type==='touchend'?[]:[{clientY:y}]});el.dispatchEvent(e)};
-    fire('touchstart',650);fire('touchmove',500);fire('touchmove',350);fire('touchend',350);
+    fire('touchstart',520);fire('touchmove',400);fire('touchmove',280);fire('touchend',280);
   });
   const after=await frame.locator('main.screen').evaluate(el=>el.scrollTop);
   assert(after>100,`Android-owned Review scrolling did not move the screen (${after}).`);
