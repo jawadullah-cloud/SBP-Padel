@@ -14,7 +14,7 @@ jobs:
         with: {node-version: '22'}
       - name: JavaScript syntax
         run: |
-          for f in docs/runtime-api.js docs/booking-participants-live.js docs/review-entry.js docs/review-players-live.js docs/booking-success-live.js docs/digital-pass-live.js docs/bookings-entry.js docs/main-navigation-hardening.js docs/player-bookings-live.js docs/player-booking-detail-live.js docs/player-profile-live.js docs/player-payment-history-live.js docs/player-wallet-live.js docs/profile-modules.js docs/theme-bridge.js docs/navigation-fix.js docs/deep-route-smooth.js docs/notifications-live.js docs/booking-date-more.js docs/deep-router.js docs/native-transitions.js docs/player-stability.js docs/player-venues-live.js qa/player_runtime_browser.mjs qa/player_booking_lifecycle_browser.mjs qa/player_account_browser.mjs qa/player_theme_browser.mjs qa/player_navigation_recovery_browser.mjs qa/player_review_mobile_browser.mjs docs/sw.js; do node --check "$f"; done
+          for f in docs/runtime-api.js docs/booking-participants-live.js docs/review-entry.js docs/review-players-live.js docs/booking-success-live.js docs/digital-pass-live.js docs/bookings-entry.js docs/main-navigation-hardening.js docs/player-bookings-live.js docs/player-booking-detail-live.js docs/player-profile-live.js docs/player-payment-history-live.js docs/player-wallet-live.js docs/profile-modules.js docs/theme-bridge.js docs/navigation-fix.js docs/deep-route-smooth.js docs/notifications-live.js docs/booking-date-more.js docs/deep-router.js docs/review-native.js docs/native-transitions.js docs/player-stability.js docs/player-venues-live.js qa/player_runtime_browser.mjs qa/player_booking_lifecycle_browser.mjs qa/player_account_browser.mjs qa/player_theme_browser.mjs qa/player_navigation_recovery_browser.mjs qa/player_review_mobile_browser.mjs docs/sw.js; do node --check "$f"; done
       - name: Architecture guards
         shell: bash
         run: |
@@ -38,7 +38,9 @@ jobs:
           grep -q 'SBPToggleTheme' docs/theme-bridge.js
           grep -q 'X-SBP-Padel-Build' dev_player_server.py
           grep -q 'quick.slice(6)' docs/booking-date-more.js
-          grep -q '.phone>.screen' docs/mobile-runtime.js
+          grep -q '#reviewNative' docs/mobile-runtime.js
+          grep -q 'CANONICAL_REVIEW_BOOTSTRAP' dev_player_server.py
+          grep -q '__reviewNative' docs/review-native.js
           ! grep -q 'Adeel Raza' docs/player-profile-live.js
           ! grep -q 'PDL-002381' docs/digital-pass-live.js
           ! grep -qi 'Continue with Google' docs/auth-preview.html
