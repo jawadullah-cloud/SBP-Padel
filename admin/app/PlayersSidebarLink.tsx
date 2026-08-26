@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 type OpsTab='schedule'|'bookings'|'new'|'payments'|'pricing'|'closures'|'courts'|'reports';
 
@@ -19,6 +19,7 @@ const operationalTabs:[OpsTab,string][]=[
 
 export default function PlayersSidebarLink(){
   const pathname=usePathname();
+  const router=useRouter();
   const[host,setHost]=useState<Element|null>(null);
 
   useEffect(()=>{
@@ -56,12 +57,10 @@ export default function PlayersSidebarLink(){
   if(pathname==='/players'||pathname==='/scan-pass'){
     const go=(tab:OpsTab)=>{
       sessionStorage.setItem('sbp_padel_ops_target_tab',tab);
-      const ref=document.referrer?new URL(document.referrer):null;
-      if(ref&&ref.origin===location.origin&&ref.pathname==='/')history.back();
-      else location.href=`/?tab=${tab}`;
+      router.push(`/?tab=${tab}`);
     };
-    return createPortal(<div className="opsRouteNavExtension">{operationalTabs.map(([id,label])=><button type="button" key={id} onClick={()=>go(id)}>{label}</button>)}</div>,host);
+    return createPortal(<div className="opsRouteNavExtension">{operationalTabs.map(([id,label])=><button type="button" key={id} onClick={()=>go(id)}>{label}</button>)}{pathname==='/players'&&<button type="button" onClick={()=>router.push('/scan-pass')}>Scan Pass</button>}</div>,host);
   }
 
-  return createPortal(<><a className="sidebarRouteLink" href="/players">Players</a><a className="sidebarRouteLink" href="/scan-pass">Scan Pass</a></>,host);
+  return createPortal(<><button type="button" className="sidebarRouteLink" onClick={()=>router.push('/players')}>Players</button><button type="button" className="sidebarRouteLink" onClick={()=>router.push('/scan-pass')}>Scan Pass</button></>,host);
 }
