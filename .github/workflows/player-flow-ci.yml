@@ -2,9 +2,9 @@ name: Player Flow CI
 on:
   push:
     branches: [backend-v1-dev]
-    paths: ['docs/**','dev_player_server.py','qa/player_runtime_browser.mjs','qa/player_booking_lifecycle_browser.mjs','qa/player_account_browser.mjs','qa/player_theme_browser.mjs','qa/player_navigation_recovery_browser.mjs','qa/player_review_mobile_browser.mjs','.github/workflows/player-flow-ci.yml']
+    paths: ['docs/**','dev_player_server.py','qa/player_runtime_browser.mjs','qa/player_booking_lifecycle_browser.mjs','qa/player_account_browser.mjs','qa/player_theme_browser.mjs','qa/player_navigation_recovery_browser.mjs','qa/player_review_mobile_browser.mjs','qa/player_splash_session_browser.mjs','.github/workflows/player-flow-ci.yml']
   pull_request:
-    paths: ['docs/**','dev_player_server.py','qa/player_runtime_browser.mjs','qa/player_booking_lifecycle_browser.mjs','qa/player_account_browser.mjs','qa/player_theme_browser.mjs','qa/player_navigation_recovery_browser.mjs','qa/player_review_mobile_browser.mjs','.github/workflows/player-flow-ci.yml']
+    paths: ['docs/**','dev_player_server.py','qa/player_runtime_browser.mjs','qa/player_booking_lifecycle_browser.mjs','qa/player_account_browser.mjs','qa/player_theme_browser.mjs','qa/player_navigation_recovery_browser.mjs','qa/player_review_mobile_browser.mjs','qa/player_splash_session_browser.mjs','.github/workflows/player-flow-ci.yml']
 jobs:
   player-flow:
     runs-on: ubuntu-latest
@@ -14,7 +14,7 @@ jobs:
         with: {node-version: '22'}
       - name: JavaScript syntax
         run: |
-          for f in docs/runtime-api.js docs/booking-participants-live.js docs/review-entry.js docs/review-players-live.js docs/booking-success-live.js docs/digital-pass-live.js docs/bookings-entry.js docs/main-navigation-hardening.js docs/player-bookings-live.js docs/player-booking-detail-live.js docs/player-booking-integrity.js docs/booking-detail-polish.js docs/saved-players-sync.js docs/player-profile-live.js docs/player-payment-history-live.js docs/player-wallet-live.js docs/profile-modules.js docs/theme-bridge.js docs/navigation-fix.js docs/deep-route-smooth.js docs/notifications-live.js docs/booking-date-more.js docs/deep-router.js docs/review-native.js docs/native-transitions.js docs/player-stability.js docs/player-venues-live.js qa/player_runtime_browser.mjs qa/player_booking_lifecycle_browser.mjs qa/player_account_browser.mjs qa/player_theme_browser.mjs qa/player_navigation_recovery_browser.mjs qa/player_review_mobile_browser.mjs docs/sw.js; do node --check "$f"; done
+          for f in docs/runtime-api.js docs/booking-participants-live.js docs/review-entry.js docs/review-players-live.js docs/booking-success-live.js docs/digital-pass-live.js docs/bookings-entry.js docs/main-navigation-hardening.js docs/player-bookings-live.js docs/player-booking-detail-live.js docs/player-booking-integrity.js docs/booking-detail-polish.js docs/saved-players-sync.js docs/player-profile-live.js docs/player-payment-history-live.js docs/player-wallet-live.js docs/profile-modules.js docs/theme-bridge.js docs/navigation-fix.js docs/deep-route-smooth.js docs/notifications-live.js docs/booking-date-more.js docs/deep-router.js docs/review-native.js docs/native-transitions.js docs/player-stability.js docs/player-venues-live.js qa/player_runtime_browser.mjs qa/player_booking_lifecycle_browser.mjs qa/player_account_browser.mjs qa/player_theme_browser.mjs qa/player_navigation_recovery_browser.mjs qa/player_review_mobile_browser.mjs qa/player_splash_session_browser.mjs docs/sw.js; do node --check "$f"; done
       - name: Architecture guards
         shell: bash
         run: |
@@ -42,7 +42,10 @@ jobs:
           grep -q 'court_id:selectedCourt' docs/player-booking-integrity.js
           grep -q 'place-items:center' docs/booking-detail-polish.js
           grep -q 'background:var(--brand)' docs/booking-detail-polish.js
+          grep -q 'sbpToolsReady' docs/booking-detail-polish.js
           grep -q 'visibility:hidden' dev_player_server.py
+          grep -q 'AUTH_SESSION_SPLASH_BOOTSTRAP' dev_player_server.py
+          grep -q 'sbp-session-splash' dev_player_server.py
           grep -q 'SBPToggleTheme' docs/theme-bridge.js
           grep -q 'X-SBP-Padel-Build' dev_player_server.py
           grep -q 'quick.slice(6)' docs/booking-date-more.js
@@ -64,7 +67,7 @@ jobs:
           SERVER_PID=$!
           trap 'kill $SERVER_PID || true' EXIT
           for i in {1..30}; do if curl -fsS http://127.0.0.1:5173/index.html >/dev/null; then break; fi; sleep 1; done
-          { node qa/player_runtime_browser.mjs && node qa/player_booking_lifecycle_browser.mjs && node qa/player_account_browser.mjs && node qa/player_theme_browser.mjs && node qa/player_navigation_recovery_browser.mjs && node qa/player_review_mobile_browser.mjs; } 2>&1 | tee /tmp/player-qa.log
+          { node qa/player_runtime_browser.mjs && node qa/player_booking_lifecycle_browser.mjs && node qa/player_account_browser.mjs && node qa/player_theme_browser.mjs && node qa/player_navigation_recovery_browser.mjs && node qa/player_review_mobile_browser.mjs && node qa/player_splash_session_browser.mjs; } 2>&1 | tee /tmp/player-qa.log
       - name: Upload browser QA diagnostics
         if: always()
         uses: actions/upload-artifact@v4
