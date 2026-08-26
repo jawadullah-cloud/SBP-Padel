@@ -5,12 +5,15 @@ on:
     paths: ['docs/**','dev_player_server.py','qa/player_runtime_browser.mjs','qa/player_booking_lifecycle_browser.mjs','qa/player_account_browser.mjs','qa/player_theme_browser.mjs','qa/player_navigation_recovery_browser.mjs','qa/player_review_mobile_browser.mjs','qa/player_splash_session_browser.mjs','.github/workflows/player-flow-ci.yml']
   pull_request:
     paths: ['docs/**','dev_player_server.py','qa/player_runtime_browser.mjs','qa/player_booking_lifecycle_browser.mjs','qa/player_account_browser.mjs','qa/player_theme_browser.mjs','qa/player_navigation_recovery_browser.mjs','qa/player_review_mobile_browser.mjs','qa/player_splash_session_browser.mjs','.github/workflows/player-flow-ci.yml']
+permissions:
+  contents: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   player-flow:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
