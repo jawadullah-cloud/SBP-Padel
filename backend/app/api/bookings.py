@@ -9,6 +9,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.platform_settings import get_service_fee
 from app.core.security import current_user
 from app.core.slot_locks import slot_locks
 from app.db.session import get_db
@@ -120,7 +121,7 @@ async def quote_payload(payload: QuoteRequest, db: AsyncSession) -> tuple[Venue,
 @router.post("/quote")
 async def quote(payload: QuoteRequest, db: AsyncSession = Depends(get_db)) -> dict:
     venue, court, slots, court_fee = await quote_payload(payload, db)
-    service_fee = Decimal(str(settings.service_fee))
+    service_fee = await get_service_fee(db)
     return {"venue": {"id": str(venue.id), "name": venue.name}, "court": {"id": str(court.id), "name": court.name, "court_type": court.court_type}, "date": payload.booking_date.isoformat(), "slots": [{"start_time": slot["start_time"].isoformat(timespec="minutes"), "end_time": slot["end_time"].isoformat(timespec="minutes"), "rate": f'{slot["rate"]:.2f}', "currency": "PKR"} for slot in slots], "court_fee": f"{court_fee:.2f}", "service_fee": f"{service_fee:.2f}", "total": f"{court_fee + service_fee:.2f}", "currency": "PKR"}
 
 
@@ -135,7 +136,7 @@ async def create_booking(payload: CreateBookingRequest, user: User = Depends(cur
     lock = await slot_locks.acquire(court.id, payload.booking_date, [slot["start_time"] for slot in slots])
     if not lock.acquired:
         raise HTTPException(409, "One or more selected slots are being reserved by another player")
-    service_fee = Decimal(str(settings.service_fee))
+    service_fee = await get_service_fee(db)
     booking = Booking(booking_code=f"PDL-{datetime.now(timezone.utc).strftime('%y%m%d%H%M%S%f')[-10:]}", user_id=user.id, venue_id=venue.id, court_id=court.id, booking_date=payload.booking_date, status=BookingStatus.pending_payment, court_fee=court_fee, service_fee=service_fee, total_amount=court_fee + service_fee, policy_version_id=policy.id, policy_accepted_at=datetime.now(timezone.utc))
     try:
         db.add(booking)
