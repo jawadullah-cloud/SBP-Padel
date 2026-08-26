@@ -21,19 +21,20 @@ try{
  assert(await loggedOut.locator('.glassActions').isVisible(),'Logged-out splash did not show Sign In/Create Account actions.');
  await loggedOut.close();
 
- // Establish the real player origin first, then persist the same localStorage keys Android
- // WebView keeps between launches. Block only the later root redirect so we can inspect the
- // session-aware splash without racing its 900ms navigation timer.
+ // Establish localStorage on the actual HTML origin first. This is equivalent to Android
+ // WebView reopening auth-preview.html with a persisted session from a previous launch.
  const loggedIn=await browser.newPage({viewport:{width:412,height:915}});
  await routeApi(loggedIn);
- await loggedIn.goto(`${base}/sw.js`,{waitUntil:'domcontentloaded'});
+ await loggedIn.goto(`${base}/auth-preview.html`,{waitUntil:'domcontentloaded'});
  await loggedIn.evaluate(()=>{
   localStorage.setItem('sbpPadelAccessToken','qa-token');
   localStorage.setItem('sbpPadelUser',JSON.stringify({full_name:'Splash QA'}));
  });
  assert((await loggedIn.evaluate(()=>localStorage.getItem('sbpPadelAccessToken')))==='qa-token','Could not persist splash QA session on player origin.');
+ // Prevent only the session splash's delayed location.replace('./') so the DOM remains
+ // available for deterministic inspection after reloading with the stored token.
  await loggedIn.route(`${base}/`,route=>route.abort());
- await loggedIn.goto(`${base}/auth-preview.html`,{waitUntil:'domcontentloaded'});
+ await loggedIn.reload({waitUntil:'domcontentloaded'});
  const splashState=await loggedIn.evaluate(()=>{
   const actions=document.querySelector('.glassActions'),splash=document.querySelector('#splash');
   return {
