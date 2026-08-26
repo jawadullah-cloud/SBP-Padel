@@ -13,6 +13,7 @@ HOST = os.environ.get("SBP_PLAYER_HOST", "127.0.0.1")
 PORT = int(os.environ.get("SBP_PLAYER_PORT", "5173"))
 
 COMMON_SCRIPTS = [
+    "auth-session-splash-guard.js",
     "runtime-api.js",
     "venue-cover-runtime.js",
     "booking-participants-live.js",
