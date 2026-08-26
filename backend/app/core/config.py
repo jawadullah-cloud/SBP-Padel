@@ -1,4 +1,5 @@
 from functools import lru_cache
+from urllib.parse import urlparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -43,11 +44,48 @@ class Settings(BaseSettings):
 
 
 def validate_runtime_settings(config: Settings) -> None:
+    """Fail fast on configuration that is unsafe outside local development/test."""
     environment = config.environment.strip().lower()
-    if environment not in {"development", "test"} and config.jwt_secret == DEFAULT_JWT_SECRET:
-        raise RuntimeError(
-            "JWT_SECRET must be explicitly configured before SBP-Padel runs outside development/test"
-        )
+    if environment in {"development", "test"}:
+        return
+
+    problems: list[str] = []
+    if config.jwt_secret == DEFAULT_JWT_SECRET or len(config.jwt_secret.strip()) < 32:
+        problems.append("JWT_SECRET must be explicitly configured and at least 32 characters")
+
+    database_scheme = urlparse(config.database_url).scheme.lower()
+    if not database_scheme.startswith("postgresql"):
+        problems.append("DATABASE_URL must use PostgreSQL outside development/test")
+
+    origins = config.cors_origin_list
+    if not origins:
+        problems.append("CORS_ORIGINS must contain at least one explicit origin")
+    for origin in origins:
+        parsed = urlparse(origin)
+        host = (parsed.hostname or "").lower()
+        if origin == "*" or parsed.scheme != "https":
+            problems.append("CORS_ORIGINS must use explicit HTTPS origins outside development/test")
+            break
+        if host in {"localhost", "127.0.0.1", "0.0.0.0"}:
+            problems.append("CORS_ORIGINS must not contain localhost origins outside development/test")
+            break
+
+    if config.redis_required and not config.redis_url:
+        problems.append("REDIS_URL is required when REDIS_REQUIRED=true")
+
+    if config.access_token_minutes <= 0:
+        problems.append("ACCESS_TOKEN_MINUTES must be positive")
+    if config.slot_hold_minutes <= 0:
+        problems.append("SLOT_HOLD_MINUTES must be positive")
+    if config.password_reset_minutes <= 0:
+        problems.append("PASSWORD_RESET_MINUTES must be positive")
+
+    if environment == "production":
+        if not config.smtp_host or not config.smtp_from_email:
+            problems.append("SMTP_HOST and SMTP_FROM_EMAIL are required in production")
+
+    if problems:
+        raise RuntimeError("Invalid SBP-Padel runtime configuration: " + "; ".join(problems))
 
 
 @lru_cache
