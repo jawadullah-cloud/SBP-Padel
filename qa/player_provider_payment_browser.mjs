@@ -7,11 +7,15 @@ const assert=(condition,message)=>{if(!condition)throw new Error(message)};
 let paid=false;
 let simulateCalled=false;
 let initiateCalls=0;
+const apiRequests=[];
+const pageErrors=[];
+page.on('pageerror',error=>pageErrors.push(error.message));
 
 await page.route('**/api/v1/**',async route=>{
   const request=route.request();
   const url=new URL(request.url());
   const path=url.pathname;
+  apiRequests.push(`${request.method()} ${path}`);
   const json=body=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
   if(path.endsWith('/bookings/quote'))return json({venue:{id:'venue-1',name:'Provider QA Venue'},court:{id:'court-1',name:'Court 01',court_type:'Standard'},date:'2026-09-30',slots:[{start_time:'18:00',end_time:'19:00',rate:'2000.00',currency:'PKR'}],court_fee:'2000.00',service_fee:'100.00',total:'2100.00',currency:'PKR'});
   if(path.endsWith('/bookings')&&request.method()==='POST')return json({id:'booking-provider-1',booking_code:'PDL-PROVIDER-QA',status:'pending_payment',amount_due:'2100.00',currency:'PKR',hold_minutes:10,atomic_lock:false});
@@ -19,7 +23,7 @@ await page.route('**/api/v1/**',async route=>{
   if(path.includes('/simulate-success')){simulateCalled=true;return route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({detail:'Configured provider must not call simulator'})})}
   if(path.endsWith('/payments/payment-provider-1'))return json({id:'payment-provider-1',booking_id:'booking-provider-1',booking_code:'PDL-PROVIDER-QA',status:paid?'paid':'pending',amount:'2100.00',currency:'PKR',method:'bank',provider:'fake-payzen',provider_reference:'PSID-2026-000123',redirect_url:'https://payments.example/PSID-2026-000123',client_payload:{psid:'PSID-2026-000123'},requires_provider_integration:false});
   if(path.endsWith('/bookings/booking-provider-1'))return json({id:'booking-provider-1',booking_code:'PDL-PROVIDER-QA',date:'2026-09-30',status:paid?'confirmed':'pending_payment',venue_id:'venue-1',court_id:'court-1',slots:[{start_time:'18:00',end_time:'19:00',rate:'2000.00'}],court_fee:'2000.00',service_fee:'100.00',total:'2100.00',currency:'PKR'});
-  return json({});
+  return route.fulfill({status:404,contentType:'application/json',body:JSON.stringify({detail:`Unmocked provider QA request: ${request.method()} ${path}`})});
 });
 
 await page.addInitScript(()=>{
@@ -40,10 +44,14 @@ try{
   assert((await page.locator('#providerPaymentStatus').innerText()).toLowerCase().includes('waiting'),'Provider payment page did not remain in an awaiting-confirmation state.');
 
   paid=true;
-  await page.locator('#checkProviderPayment').click();
-  await page.waitForFunction(()=>{try{return JSON.parse(localStorage.getItem('sbpPadelBookingSessionV2')||'{}').status==='confirmed'}catch{return false}});
+  await page.locator('#checkProviderPayment').evaluate(async el=>{if(typeof el.onclick==='function')await el.onclick(new MouseEvent('click',{bubbles:true,cancelable:true}));else el.click()});
+  let saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('sbpPadelBookingSessionV2')||'{}'));
+  if(saved.status!=='confirmed'){
+    await page.waitForTimeout(1200);
+    saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('sbpPadelBookingSessionV2')||'{}'));
+  }
+  assert(saved.status==='confirmed',`Verified provider payment did not confirm player state. status=${saved.status}; requests=${apiRequests.join(' | ')}; pageErrors=${pageErrors.join(' | ')}`);
   assert(!simulateCalled,'Configured provider checkout called the simulator while confirming verified payment.');
-  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('sbpPadelBookingSessionV2')||'{}'));
   assert(saved.paymentProvider==='fake-payzen','Configured provider name was not preserved in booking state.');
   assert(saved.paymentReference==='PSID-2026-000123','Configured provider reference was not preserved in booking state.');
   assert(saved.paymentStatus==='paid','Verified provider payment did not update player payment state.');
