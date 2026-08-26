@@ -37,10 +37,15 @@ test('manager sees cancellation action and utility routes retain full operations
  const labels=['Court Schedule','Bookings','New Booking','Payments & Refunds','Bookable Hours & Pricing','Closures & Maintenance','Courts','Reports','Players','Scan Pass'];
  for(const label of labels)await expect(page.locator('.sidebar .nav button').filter({hasText:new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`)})).toBeVisible();
  await expect(page.locator('.sidebar .nav button.active')).toHaveText('Players');
+ await expect(page.locator('.sidebar .sideFoot')).toContainText('MANAGER');
+ await expect(page.locator('.sidebar .sideFoot button').filter({hasText:/^Sign out$/})).toBeVisible();
+ await expect(page.locator('.sidebar .sideFoot')).not.toContainText('PLAYER DIRECTORY');
  await page.locator('.sidebar .nav button').filter({hasText:/^Scan Pass$/}).click();
  await expect(page).toHaveURL(/\/scan-pass$/);
  await expect(page.locator('.sidebar .nav button.active')).toHaveText('Scan Pass');
  await expect(page.locator('.sidebar .nav button').filter({hasText:/^Payments & Refunds$/})).toBeVisible();
+ await expect(page.locator('.sidebar .sideFoot')).toContainText('MANAGER');
+ await expect(page.locator('.sidebar .sideFoot')).not.toContainText('PASS VALIDATION');
 });
 
 test('operator cannot cancel bookings',async({page})=>{
