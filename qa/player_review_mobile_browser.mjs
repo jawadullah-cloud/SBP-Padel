@@ -5,6 +5,14 @@ const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:412,height:650}});
 const assert=(condition,message)=>{if(!condition)throw new Error(message)};
 
+await page.route('http://127.0.0.1:8000/api/v1/**',async route=>{
+  const url=new URL(route.request().url());
+  if(url.pathname.endsWith('/auth/me'))return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({id:'user-1',full_name:'Mobile QA',email:'mobile@example.com'})});
+  if(url.pathname.endsWith('/policies/active'))return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({id:'policy-1',title:'Booking, Cancellation & Refund Policy',version:'1',body:'QA policy body'})});
+  if(url.pathname.endsWith('/venues'))return route.fulfill({status:200,contentType:'application/json',body:'[]'});
+  return route.fulfill({status:404,contentType:'application/json',body:JSON.stringify({detail:'QA route not mocked'})});
+});
+
 await page.addInitScript(()=>{
   localStorage.setItem('sbpPadelAccessToken','review-mobile-qa');
   localStorage.setItem('sbpPadelUser',JSON.stringify({id:'user-1',full_name:'Mobile QA'}));
@@ -25,6 +33,7 @@ try{
   });
   const frame=page.frameLocator('#sbpDeepFrame');
   await frame.locator('main.screen').waitFor({state:'visible'});
+  await frame.locator('#livePolicyAccept').waitFor({state:'visible'});
 
   const before=await frame.locator('main.screen').evaluate(el=>({max:el.scrollHeight-el.clientHeight,touch:getComputedStyle(el).touchAction,overflow:getComputedStyle(el).overflowY}));
   assert(before.max>100,'Review page is not long enough to exercise scrolling.');
@@ -38,6 +47,23 @@ try{
   const after=await frame.locator('main.screen').evaluate(el=>el.scrollTop);
   assert(after>100,`Android-owned Review scrolling did not move the screen (${after}).`);
 
+  const jitterAllowed=await frame.locator('#toPayment').evaluate(el=>{
+    const fire=(type,y)=>{const e=new Event(type,{bubbles:true,cancelable:true});Object.defineProperty(e,'touches',{value:type==='touchend'?[]:[{clientY:y}]});return el.dispatchEvent(e)};
+    fire('touchstart',500);
+    const allowed=fire('touchmove',493);
+    fire('touchend',493);
+    return allowed;
+  });
+  assert(jitterAllowed,'A small finger drift on Continue to Payment was treated as scrolling and suppressed the tap.');
+
+  await frame.locator('#livePolicyAccept').check();
+  await frame.locator('#toPayment').click();
+  await page.waitForFunction(()=>{
+    const f=document.getElementById('sbpDeepFrame');
+    try{return new URL(f.src,location.href).pathname.endsWith('/payment.html')}catch{return false}
+  });
+  await frame.locator('#payButton').waitFor({state:'visible'});
+
   await page.evaluate(()=>window.SBPDeepClose(false));
   await page.waitForFunction(()=>!document.getElementById('sbpDeepLayer')?.classList.contains('on'));
   await page.waitForTimeout(160);
@@ -46,7 +72,7 @@ try{
   await page.locator('#home .primary[data-nav="venues"]').click();
   await page.waitForFunction(()=>document.getElementById('venues')?.classList.contains('active'));
 
-  console.log('Player Android Review QA passed: review scrolls by touch and closing it does not poison subsequent clicks.');
+  console.log('Player Android Review QA passed: Review scrolls, small tap jitter is preserved, one Continue tap opens Payment, and closing the deep route does not poison subsequent clicks.');
 }finally{
   await browser.close();
 }
