@@ -37,7 +37,10 @@
     const input=sheet.querySelector('input');sheet.querySelector('.cancel').onclick=closeSheet;sheet.querySelector('.apply').onclick=()=>{const iso=input.value;closeSheet();choose(iso)};sheet.addEventListener('click',e=>{if(e.target===sheet)closeSheet()});setTimeout(()=>input.focus(),0)
   }
   function install(){
-    const rail=document.querySelector('#select .dateRail');if(!rail||rail.querySelector('.dateMoreButton'))return;
+    const rail=document.querySelector('#select .dateRail');if(!rail)return;
+    const quick=[...rail.querySelectorAll(':scope > button[data-date]')].filter(button=>!button.hidden);
+    quick.slice(6).forEach(button=>button.remove());
+    if(rail.querySelector('.dateMoreButton'))return;
     const more=document.createElement('button');more.type='button';more.className='dateMoreButton';more.innerHTML='<small>MORE</small><b>＋</b>';more.setAttribute('aria-label','Choose another date');more.onclick=e=>{e.preventDefault();e.stopPropagation();openSheet()};rail.appendChild(more)
   }
   localStorage.removeItem('sbpPadelBookingDatePicker');
