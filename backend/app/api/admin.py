@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import require_roles
 from app.db.session import get_db
-from app.models.domain import Court, CourtStatus, PricingRule, User, UserRole, Venue
+from app.models.domain import Booking, BookingStatus, Court, CourtStatus, PricingRule, User, UserRole, Venue
 
 router = APIRouter(prefix="/admin", tags=["administration"])
 admin_user = require_roles(UserRole.admin)
@@ -71,6 +71,21 @@ async def set_venue_status(
     venue = await db.get(Venue, venue_id)
     if not venue:
         raise HTTPException(404, "Venue not found")
+    if not payload.is_active:
+        impacted = (
+            await db.scalars(
+                select(Booking.id).where(
+                    Booking.venue_id == venue.id,
+                    Booking.booking_date >= date.today(),
+                    Booking.status.in_([BookingStatus.confirmed, BookingStatus.rescheduled]),
+                )
+            )
+        ).all()
+        if impacted:
+            raise HTTPException(
+                409,
+                f"Venue has {len(impacted)} active current/future booking(s). Reschedule or cancel them before deactivating the venue.",
+            )
     venue.is_active = payload.is_active
     await db.commit()
     return {"id": str(venue.id), "is_active": venue.is_active}
@@ -107,6 +122,21 @@ async def set_court_status(
     court = await db.get(Court, court_id)
     if not court:
         raise HTTPException(404, "Court not found")
+    if payload.status != CourtStatus.active:
+        impacted = (
+            await db.scalars(
+                select(Booking.id).where(
+                    Booking.court_id == court.id,
+                    Booking.booking_date >= date.today(),
+                    Booking.status.in_([BookingStatus.confirmed, BookingStatus.rescheduled]),
+                )
+            )
+        ).all()
+        if impacted:
+            raise HTTPException(
+                409,
+                f"Court has {len(impacted)} active current/future booking(s). Reschedule or cancel them before making the court unavailable.",
+            )
     court.status = payload.status
     await db.commit()
     return {"id": str(court.id), "status": court.status.value}
