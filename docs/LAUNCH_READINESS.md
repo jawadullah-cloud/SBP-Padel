@@ -28,7 +28,7 @@ This file separates product behavior that is implemented/tested from production 
 - Manager-managed closures, court status and bookable hours/pricing.
 - Venue finance/refund workflow and venue reporting.
 - Self-service password change.
-- Multi-venue switching now treats the selected venue as authoritative; late responses from a previous venue are discarded and transient front-desk selections are cleared when the venue changes.
+- Multi-venue switching treats the selected venue as authoritative; late responses from a previous venue are discarded and transient front-desk selections are cleared when the venue changes.
 - Confirmed and rescheduled paid bookings are both valid active bookings for pass validation/check-in.
 
 ### HQ
@@ -39,22 +39,66 @@ This file separates product behavior that is implemented/tested from production 
 - Policies, refund decisions, finance, reports and management-facing activity trail.
 - Exact venue UUID is preserved through Directory → Profile → Management → Gallery navigation.
 
+## Production-hardening implemented 26 Aug 2026
+
+The unattended readiness pass added provider-neutral deployment safeguards without choosing a hosting vendor or payment gateway.
+
+### Runtime configuration fail-fast
+Outside `development` / `test`, startup validation now requires:
+- an explicitly configured JWT secret of at least 32 characters;
+- PostgreSQL rather than the SQLite development fallback;
+- explicit HTTPS CORS origins, with wildcard and localhost origins rejected;
+- `REDIS_URL` whenever `REDIS_REQUIRED=true`;
+- positive token, slot-hold and password-reset timing values.
+
+`production` additionally requires SMTP host/from configuration because password recovery is a public feature.
+
+`backend/.env.production.example` is the non-secret configuration checklist. `backend/scripts/production_preflight.py` validates deployment configuration before migrations/startup and redacts credentials from its output.
+
+### Database migration discipline
+Alembic remains the production schema mechanism. The initial revision no longer calls unrestricted `Base.metadata.create_all()` against whatever models happen to exist today. Its table set is frozen, so later models cannot silently mutate migration history or collide with later revisions.
+
+Alembic environment metadata explicitly imports the domain, operations, platform and booking-participant model modules.
+
+Backend CI now includes a fresh temporary-database `alembic upgrade head`, `alembic current` and `alembic check`, in addition to the revision-graph check. This is intended to catch a migration chain that imports successfully but cannot actually create a new database.
+
+### Deployment health
+- `GET /health/live` is a process liveness endpoint.
+- `GET /health/ready` verifies database connectivity and also Redis connectivity when `REDIS_REQUIRED=true`.
+
+A deployment should not receive traffic until readiness returns HTTP 200.
+
+### Admin dependency security
+The admin portal now requires a patched Next.js 15.5 release floor (`^15.5.24`) and Admin Portal CI includes `npm audit --audit-level=high` before the production build/browser suite. Dependency upgrades remain a controlled maintenance task rather than an excuse to redesign accepted admin behavior.
+
+### Android release-signing boundary
+The committed `dev-signing-key.b64` is a disposable development identity used only for stable debug APK upgrades. Gradle assigns it only to `debug`; `release` has no repository signing configuration. Real release keys, `.keystore`/`.jks`/`.p12` files and `key.properties` are excluded from source control.
+
+`android/RELEASE_SIGNING.md` documents the remaining release-signing procedure. Public release still requires an SBP-controlled signing key stored outside Git, final versioning/distribution and release-certificate verification.
+
+### Deployment runbook
+`docs/STAGING_DEPLOYMENT.md` now provides a provider-neutral sequence for PostgreSQL/Redis/SMTP/HTTPS configuration, preflight, Alembic migration, API startup, health probes and post-deploy acceptance.
+
 ## Automated quality gates
 
-The repository currently has dedicated CI for:
-- Backend API/tests.
-- Admin/operations Next.js production build and Playwright browser QA.
+The repository has dedicated CI for:
+- Backend API/tests and migration/preflight checks.
+- Admin/operations Next.js production build, dependency high-severity audit and Playwright browser QA.
 - Player browser/runtime interaction QA.
-- Android APK build.
+- Android debug APK build.
 
-Important regressions now explicitly covered include:
+Important regressions explicitly covered include:
 - manager/operator password changes and separate HQ reset flow;
 - two-venue HQ routing context;
 - operations pass/check-in for rescheduled bookings;
 - operations multi-venue stale-response protection and venue-scoped transient state;
 - operator read-only controls versus manager mutation controls;
 - player login must not display the deferred Google sign-in option;
-- non-development runtime cannot start with the repository default JWT secret.
+- non-development runtime configuration safeguards;
+- deployment health probes;
+- fresh database migration to current Alembic head.
+
+Implementation and CI are not the same as production acceptance. Do not mark deployment-ready merely because these automated checks pass.
 
 ## Production blockers / decisions still required
 
@@ -63,35 +107,37 @@ The online player payment path currently creates a payment with provider `unconf
 
 Front-desk payments are operational records entered by authorized venue staff and are separate from the online payment-provider integration.
 
-### 2. Production database, migrations and backups — blocking
-Development defaults to SQLite and automatically creates/seeds tables only in `development`. Production needs an explicitly selected database service, a controlled schema migration process, backup/restore policy, retention and recovery testing. Do not rely on development `create_all` behavior for production deployment.
+### 2. Production PostgreSQL hosting, backups and recovery — blocking
+The application and migration path are PostgreSQL-ready and now fail fast against SQLite outside dev/test, but an actual database service has not been selected. Production still needs the chosen PostgreSQL service, credentials/networking, backup retention, restore procedure and a tested recovery objective.
 
-### 3. Secrets and environment configuration — blocking
-Production must provide an explicit strong `JWT_SECRET`; the backend now refuses to start outside development/test with the repository default. Production also needs explicit database, Redis (if enabled/required), CORS, SMTP and other environment values stored outside source control.
+Do not rely on development `create_all` behavior for deployment.
+
+### 3. Production secrets and environment values — blocking
+The validation rules and template exist, but real JWT, database, Redis (if required), SMTP and other values must be provisioned through the selected platform's secret/config store.
 
 ### 4. Domain, HTTPS and CORS — blocking
-Choose final API/admin/player origins and configure TLS/HTTPS and the backend CORS allow-list accordingly. Localhost/LAN defaults are development configuration only.
+Choose final API/admin/player origins and configure TLS/HTTPS and the backend CORS allow-list accordingly. Localhost/LAN values remain development-only.
 
 ### 5. Real email delivery — needed for public password recovery
-SMTP must be configured for production password-reset emails. Development can expose delivery through its local development path; that is not a production substitute.
+Production validation requires SMTP host/from configuration, but an SMTP provider/account and actual credentials still need to be selected and tested end-to-end.
 
 ### 6. Venue image storage — recommended before scale
 Facility images currently use database-backed data URLs. The behavior is working and accepted, but production object/blob storage is recommended before large-scale venue/photo growth. The gallery API semantics can remain unchanged while the storage layer changes.
 
-### 7. Android release signing/distribution — blocking for store/release APK
-The development Android wrapper is suitable for current testing. Public distribution requires final release signing, release configuration, versioning and the chosen distribution channel. Production OAuth identities, if Google sign-in is later enabled, must use the final release signing certificate.
+### 7. Android release signing/distribution — blocking for public release
+The debug/release signing boundary is documented and guarded, but public distribution still requires the real SBP-controlled release key, release configuration, versioning, certificate custody/recovery and chosen distribution channel.
 
 ### 8. Google sign-in — intentionally deferred, not a launch blocker unless product scope changes
-Backend verification scaffolding exists, but the player-facing feature is deliberately hidden. It should remain hidden until Google Cloud OAuth configuration, browser/native flows, error states, staff-account isolation and manual acceptance are complete.
+Backend verification scaffolding exists, but the player-facing feature is deliberately hidden. It should remain hidden until Google Cloud OAuth configuration, browser/native flows, error states, staff-account isolation and manual acceptance are complete. Any Android OAuth client must use the final release certificate rather than the debug certificate.
 
 ## Recommended remaining sequence
 
-1. Manually review the latest Venue Manager / Operator pass on the running UI.
-2. Select the real online payment provider and define settlement/refund/reconciliation requirements.
-3. Choose the production database/hosting architecture and implement migrations/backups.
-4. Configure production secrets, SMTP, domains, HTTPS and CORS.
-5. Move facility image storage to production object storage if launch scale warrants it.
-6. Complete Android release-signing/distribution setup.
-7. Run a production-like staging acceptance pass across player → payment → venue check-in → refund → HQ reconciliation.
+1. Select the real online payment provider and define settlement/refund/reconciliation requirements.
+2. Choose the production PostgreSQL/hosting architecture and backup/restore policy.
+3. Choose final domains, TLS termination and SMTP provider; populate the production secret store.
+4. Deploy a production-like staging environment using `docs/STAGING_DEPLOYMENT.md`.
+5. Move facility image storage to object storage if launch scale warrants it.
+6. Create and secure the final Android release key and distribution configuration.
+7. Run staging acceptance across player → payment → venue check-in → refund → HQ reconciliation, including backup/restore and operational failure cases.
 
 Do not mark a surface manually accepted merely because its automated CI is green. Repository state, actual runtime behavior, CI and explicit manual review remain separate sources of truth.
