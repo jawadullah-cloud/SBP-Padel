@@ -61,7 +61,7 @@ test('manager sees cancellation, refund management and one canonical utility sid
  await expect(page.locator('.sidebar .nav button.active')).toHaveText('Refund Management');
  await expect(page.getByText(booking.booking_code)).toBeVisible();
  await page.locator('.refundManagerSummary').click();
- await expect(page.getByText('Venue operational closure')).toBeVisible();
+ await expect(page.getByText('Venue cancellation: operational closure')).toBeVisible();
  await expect(page.getByText(/12 hours/)).toBeVisible();
  await page.getByRole('button',{name:'APPROVE / PROCESS'}).click();
  await expect.poll(()=>processed).toBeTruthy();
