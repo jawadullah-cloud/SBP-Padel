@@ -32,7 +32,9 @@ The following branches have no unique work ahead of `backend-v1-dev`, or only co
 - `visual-system-implementation-15`
 - `visual-system-implementation-16`
 
-The connected GitHub tool can inspect and edit repository content but does not expose Git ref deletion, so these refs have not been falsely reported as deleted.
+All numbered visual branches currently point to the same already-absorbed historical commit. `tmp-visual-assets-staging` points to that same state.
+
+The connected GitHub mutation surface does not expose Git ref deletion, so these refs have not been falsely reported as deleted. When ref deletion is available, remove the redundant set above rather than carrying them into release governance.
 
 `ui-preview` has four unique early prototype commits even though its files are superseded by the current product. Keep it as an archive until branch deletion can intentionally preserve or discard that prototype history.
 
@@ -50,33 +52,38 @@ The Pages workflow is not redundant; it is the only publisher for the static `do
 
 All four development CI workflows use read-only repository permissions, per-workflow concurrency with cancellation of superseded runs, and hard job timeouts. The Pages workflow uses only the additional Pages and OIDC permissions required for deployment.
 
-## GitHub Actions infrastructure status
-
-GitHub Actions experienced a transient runner/allocation disruption on 26 August 2026. Backend runs showed `startup_failure` before job allocation and later commits temporarily received no new run objects. Actions subsequently resumed allocating Player CI jobs. A recovered Player run passed checkout, Node setup, all top-level player JavaScript syntax checks, architecture guards and Playwright installation before entering browser interaction QA.
-
-Treat the earlier startup failures as infrastructure noise, but do not mark final production readiness green until fresh Backend, Admin, Player and Android runs complete successfully on commits containing the final relevant code for each surface.
-
 ## Branch governance
 
-At the time of this audit both `main` and `backend-v1-dev` are unprotected. The connected GitHub tool exposes protection reads but not protection writes.
+At the time of this audit both `main` and `backend-v1-dev` are unprotected. The connected GitHub mutation surface exposes protection reads but not protection/ruleset writes.
 
 Before production release, configure protection/rulesets appropriate to the workflow, at minimum preventing accidental force-push/deletion of `main` and requiring the intended release checks before merge.
 
 ## Dependency and security maintenance
 
 - `.github/dependabot.yml` performs grouped monthly update checks for backend Python packages, Admin npm packages, Android Gradle dependencies and GitHub Actions, targeting `backend-v1-dev` with a low open-PR limit.
-- `SECURITY.md` directs vulnerability reports away from public issues and prohibits committing production secrets, signing material and real user data.
-- Admin direct dependencies are pinned to approved exact versions; a registry-resolved lockfile should still be generated when npm registry access is available.
+- `SECURITY.md` directs vulnerability reports away from public issues and prohibits committing production secrets, production signing material and real user data.
+- Admin direct dependencies are pinned to approved exact versions; Admin CI blocks on high-severity `npm audit` findings.
+- The stable Android debug signing fixture is deliberately public and development-only so test APKs remain upgrade-compatible across machines/CI. Production release signing remains external to Git and must use a separate SBP-controlled key.
 
 ## Repository hygiene completed
 
 - obsolete duplicate Saved Player runtime modules removed;
 - broken deferred-Google loader reference resolved and ambiguously named old shim removed;
+- superseded `HQHomeRouteBridge.tsx` removed after canonical Staff routing moved into `HQTabBridge`;
+- unused `HQVenueEditShortcut.tsx` removed after Venue Directory became the accepted Manage/Edit entry point;
 - `.gitignore` expanded for Python, Node/Next, Android, IDE, log and OS-generated files;
 - root README updated from prototype-era planning language to the actual mature architecture;
-- direct Admin dependencies pinned to approved exact versions pending generation of a real registry-resolved lockfile;
-- Player CI now syntax-checks every top-level runtime JavaScript file automatically and guards against removed legacy modules returning;
+- direct Admin dependencies pinned to approved exact versions;
+- Player CI syntax-checks every top-level runtime JavaScript file automatically and guards against removed legacy modules returning;
 - production player service-worker loader aligned with the canonical runtime and stale prototype fallback data scrubbed before hydration;
 - production backend edge hardened with explicit trusted hosts, hidden API documentation, baseline response security headers and production preflight coverage;
 - Admin portal configured with baseline browser security headers and CI smoke checks;
-- grouped dependency maintenance and a repository security-reporting policy added.
+- grouped dependency maintenance and a repository security-reporting policy added;
+- payment initiation routed through the provider abstraction instead of hard-coding an `unconfigured` payment row in the API route;
+- PayZen preparation documented separately in `docs/PAYZEN_INTEGRATION.md` without guessing private departmental endpoints or credentials;
+- service-fee financial snapshot regression coverage added for historical bookings and new quotes;
+- shared quote path now refreshes the persisted HQ service fee before front-desk booking creation so worker-local fee state cannot drift after an HQ update.
+
+## Do not over-clean runtime bridges
+
+The player and operations applications still contain small bridge/runtime modules because some of them own accepted navigation, hydration, Android WebView or service-worker behavior. Delete a bridge only after proving it is not imported/injected and its behavior has moved to a canonical replacement. File-name age alone is not sufficient evidence.
