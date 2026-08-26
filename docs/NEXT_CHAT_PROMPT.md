@@ -2,7 +2,7 @@
 
 Continue `jawadullah-cloud/SBP-Padel` on `backend-v1-dev`. Inspect HEAD, read this file, `docs/PROJECT_MEMORY.md`, `docs/LAUNCH_READINESS.md`, `docs/PAYZEN_INTEGRATION.md` and `docs/REPOSITORY_MAINTENANCE.md`, inspect relevant implementation/recent commits, and treat repository/runtime/CI as source of truth.
 
-## Current accepted state — 26 Aug 2026
+## Current accepted state — 27 Aug 2026
 Player discovery/location/gallery, booking lifecycle, six-day date rail + More+, the latest HQ / Venue Directory / Venue Management pass, and the reviewed Venue Manager / Operator console are manually accepted unless a new regression is reproduced.
 
 Accepted operations behavior now includes persistent sidebar navigation on Players and Scan Pass, return to the authenticated console without login flash, multi-venue stale-response protection, manager/operator permission boundaries, Change Password, rescheduled-booking QR/check-in, closure safety, manager/admin rescheduling and cancellation of active bookings, and manager-only refund management.
@@ -94,14 +94,35 @@ The department is likely to use PITB PayZen. Read `docs/PAYZEN_INTEGRATION.md` b
 
 Do not invent private PayZen endpoints or signatures from public examples.
 
-The backend payment boundary is now genuinely provider-oriented:
+The backend payment boundary is provider-oriented:
 - `/payments/initiate` calls `backend/app/payments/providers.py` instead of manually creating an `unconfigured` provider row;
 - provider reference (expected to accommodate PSID), optional redirect URL, client payload and provider metadata are persisted/returned;
 - repeating initiation for the same pending booking returns the existing payment and must not generate a duplicate provider bill/PSID;
+- provider callback authentication/parsing is normalized through the provider abstraction;
+- verified `paid` confirms only when the booking can still safely own its held inventory;
+- a late verified payment after hold expiry records receipt but must not resurrect/reclaim the slot and enters refund/reconciliation instead;
+- verified `failed` moves a still-pending booking to payment-failed and releases held inventory;
+- duplicate verified callbacks are idempotent;
 - the development simulator remains development-only;
 - client return/success pages are never authoritative proof of payment.
 
-`backend/tests/test_payment_provider_boundary.py` locks provider invocation and pending-payment idempotency. Exact callback/reconciliation/refund execution remains deferred until official PayZen documentation is available.
+### Player configured-provider regression — green 27 Aug 2026
+`docs/payment-methods-live.js` is loaded on `payment.html` by both the development injector and the production service-worker runtime. It capture-intercepts `#payButton` so the provider-aware checkout path owns the tap ahead of the older `review-entry.js` development handler.
+
+The configured-provider Player regression initially timed out waiting for `#providerAwaiting`. Runtime diagnostics proved the provider script was loaded and active. The actual blocker was an incomplete test mock: `booking-participants-live.js` wraps successful booking creation and waits for `PUT /bookings/{booking_id}/participants`, but the provider test had not mocked that established request. Checkout therefore correctly stopped before `/payments/initiate`.
+
+`qa/player_provider_payment_browser.mjs` now follows the real runtime contract and proves:
+- booking participant persistence occurs;
+- configured `/payments/initiate` returns provider metadata/reference without invoking the development simulator;
+- provider PSID/reference is shown with Copy UI;
+- Check Status/polling remains waiting until backend payment/booking state is verified;
+- a provider redirect/reference is not treated as proof of payment;
+- verified backend `paid` + confirmed booking state is required before success navigation;
+- already-confirmed booking recovery does not create a duplicate booking or initiate another payment.
+
+Player Flow CI run **401** completed green at commit `cede06ddceb4fa429055a524f4c280949dcb8ce4`, including all established Player browser suites plus this configured-provider regression. Backend CI run **255** for `be9f113caa331d05fc2be77e4e2c3939e4e28d93` (`Lock failed payment callback slot release`) also completed green. Later work in this handoff only touched Player QA/documentation, not backend behavior.
+
+Exact PayZen callback/reconciliation/refund execution still depends on official PITB documentation and credentials.
 
 ## Production-readiness hardening — implemented 26 Aug 2026
 Read `docs/LAUNCH_READINESS.md` and `docs/STAGING_DEPLOYMENT.md` before deployment work.
@@ -119,16 +140,21 @@ Android debug signing remains intentionally separate from release signing. `dev-
 ## Repository maintenance state
 Read `docs/REPOSITORY_MAINTENANCE.md` before cleanup work.
 
-`backend-v1-dev` and `main` are the meaningful active branches. `pages-fix`, `tmp-visual-assets-staging`, `visual-system-implementation` and `visual-system-implementation-2` through `-16` are verified redundant cleanup candidates. `ui-preview` retains unique early prototype history and is intentionally kept as an archive candidate.
+The remote branch set is intentionally reduced to exactly three branches:
+- `backend-v1-dev` — current development source of truth;
+- `main` — release/Pages branch, intentionally behind until accepted for release;
+- `ui-preview` — retained archive of unique early prototype history.
 
-The connected GitHub surface currently does not expose branch-ref deletion or protection/ruleset writes, so redundant refs remain visible and both `main`/`backend-v1-dev` remain unprotected. Do not falsely report them deleted/protected.
+The previously verified redundant `tmp-visual-assets-staging`, `pages-fix`, and `visual-system-implementation*` remote branches were removed and local remote-tracking refs were pruned. Both `main` and `backend-v1-dev` remain unprotected because the connected mutation surface does not expose protection/ruleset writes. Do not falsely report protection as configured.
 
 Proven-dead HQ bridges `HQHomeRouteBridge.tsx` and `HQVenueEditShortcut.tsx` have been removed. Do not over-clean player/runtime bridge files merely because their names look old; many still own accepted WebView/navigation/service-worker behavior.
 
 ### Remaining external decisions/blockers
-PayZen is the likely online payment direction, but its production integration still requires the official departmental API/onboarding material and UAT. Other external choices still required are the production PostgreSQL/hosting and backup architecture, final domains/HTTPS/CORS/trusted hosts, SMTP provider/credentials, SBP-controlled Android release key/distribution, and optional object storage before image scale grows.
+PayZen is the likely online payment direction, but production integration still requires the official departmental API/onboarding material, credentials and UAT. Other external choices still required are the production PostgreSQL/hosting and backup architecture, final domains/HTTPS/CORS/trusted hosts, SMTP provider/credentials, SBP-controlled Android release key/distribution, and optional object storage before image scale grows.
 
 Do not choose these vendor/business decisions implicitly during unrelated work.
 
 ## Verification discipline
 Distinguish implementation, green CI and manual acceptance. Treat repository and actual runtime behavior as source of truth. When the user reports a visible runtime discrepancy, inspect the effective loading path before layering more fixes. Preserve the locked regressions in `docs/REGRESSION_LOCKS_20260826.md` and the dedicated browser/backend tests added for previously accepted flows.
+
+The repository currently has no root `AGENTS.md`; do not assume one exists. If it is added later, read and follow it before changes.
