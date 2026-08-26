@@ -52,15 +52,21 @@ All four development CI workflows use read-only repository permissions, per-work
 
 ## GitHub Actions infrastructure status
 
-On 26 August 2026 GitHub stopped creating usable new jobs for later `backend-v1-dev` pushes. Earlier runs showed `startup_failure` before job allocation, and later commits received no new workflow-run/status objects at all. This is classified as repository/Actions infrastructure state, not a successful or failed product test.
+GitHub Actions experienced a transient runner/allocation disruption on 26 August 2026. Backend runs showed `startup_failure` before job allocation and later commits temporarily received no new run objects. Actions subsequently resumed allocating Player CI jobs. A recovered Player run passed checkout, Node setup, all top-level player JavaScript syntax checks, architecture guards and Playwright installation before entering browser interaction QA.
 
-Do not mark the final production-readiness pass green until fresh Backend, Admin, Player and Android runs execute on the final branch state.
+Treat the earlier startup failures as infrastructure noise, but do not mark final production readiness green until fresh Backend, Admin, Player and Android runs complete successfully on commits containing the final relevant code for each surface.
 
 ## Branch governance
 
 At the time of this audit both `main` and `backend-v1-dev` are unprotected. The connected GitHub tool exposes protection reads but not protection writes.
 
 Before production release, configure protection/rulesets appropriate to the workflow, at minimum preventing accidental force-push/deletion of `main` and requiring the intended release checks before merge.
+
+## Dependency and security maintenance
+
+- `.github/dependabot.yml` performs grouped monthly update checks for backend Python packages, Admin npm packages, Android Gradle dependencies and GitHub Actions, targeting `backend-v1-dev` with a low open-PR limit.
+- `SECURITY.md` directs vulnerability reports away from public issues and prohibits committing production secrets, signing material and real user data.
+- Admin direct dependencies are pinned to approved exact versions; a registry-resolved lockfile should still be generated when npm registry access is available.
 
 ## Repository hygiene completed
 
@@ -69,6 +75,8 @@ Before production release, configure protection/rulesets appropriate to the work
 - `.gitignore` expanded for Python, Node/Next, Android, IDE, log and OS-generated files;
 - root README updated from prototype-era planning language to the actual mature architecture;
 - direct Admin dependencies pinned to approved exact versions pending generation of a real registry-resolved lockfile;
+- Player CI now syntax-checks every top-level runtime JavaScript file automatically and guards against removed legacy modules returning;
 - production player service-worker loader aligned with the canonical runtime and stale prototype fallback data scrubbed before hydration;
 - production backend edge hardened with explicit trusted hosts, hidden API documentation, baseline response security headers and production preflight coverage;
-- Admin portal configured with baseline browser security headers and CI smoke checks.
+- Admin portal configured with baseline browser security headers and CI smoke checks;
+- grouped dependency maintenance and a repository security-reporting policy added.
