@@ -107,10 +107,10 @@ test('venue switch clears front-desk player selection', async ({ page }) => {
   await expect(page.locator('.sectionNote').filter({ hasText: 'Select a registered player from the search results.' })).toBeVisible();
 });
 
-test('Players and Scan Pass keep the complete operations navigation and return to requested tab', async ({ page }) => {
+test('Players and Scan Pass keep the complete operations navigation and return without login flash', async ({ page }) => {
   await mockOperations(page);
   await page.goto('/');
-  await expect(page.locator('.nav button').filter({ hasText: /^Players$/ })).toBeVisible();
+  await expect(page.locator('header.top h1')).toHaveText('Court Schedule');
   await page.locator('.nav button').filter({ hasText: /^Players$/ }).click();
   await expect(page).toHaveURL(/\/players$/);
 
@@ -119,7 +119,8 @@ test('Players and Scan Pass keep the complete operations navigation and return t
   }
 
   await page.locator('.nav button').filter({ hasText: /^Payments & Refunds$/ }).click();
-  await expect(page).toHaveURL(/\/?tab=payments$/);
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator('.loginCard')).toHaveCount(0);
   await expect(page.locator('header.top h1')).toHaveText('Payments & Refunds');
 
   await page.locator('.nav button').filter({ hasText: /^Scan Pass$/ }).click();
@@ -127,4 +128,9 @@ test('Players and Scan Pass keep the complete operations navigation and return t
   for (const label of ['Court Schedule','Bookings','New Booking','Payments & Refunds','Bookable Hours & Pricing','Closures & Maintenance','Courts','Reports']) {
     await expect(page.locator('.nav button').filter({ hasText: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`) })).toBeVisible();
   }
+
+  await page.getByRole('link', { name: /Back to Operations/i }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator('.loginCard')).toHaveCount(0);
+  await expect(page.locator('header.top h1')).toBeVisible();
 });
