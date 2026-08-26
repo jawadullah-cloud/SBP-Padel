@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,7 @@ from app.models.domain import (
     RefundStatus,
     User,
 )
-from app.payments.providers import payment_provider
+from app.payments.providers import PaymentCallbackEvent, payment_provider
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -71,6 +71,37 @@ async def _ensure_confirmation_notification(booking: Booking, user: User, db: As
     )
 
 
+async def _ensure_late_payment_refund(payment: Payment, booking: Booking, db: AsyncSession) -> Refund:
+    existing = await db.scalar(
+        select(Refund)
+        .where(Refund.payment_id == payment.id)
+        .order_by(Refund.created_at.desc())
+    )
+    if existing:
+        return existing
+    refund = Refund(
+        payment_id=payment.id,
+        booking_id=booking.id,
+        amount=payment.amount,
+        currency=payment.currency,
+        status=RefundStatus.requested,
+        reason="Payment received after booking could no longer be safely confirmed",
+    )
+    db.add(refund)
+    player = await db.get(User, booking.user_id)
+    if player:
+        db.add(
+            Notification(
+                user_id=player.id,
+                kind="payment_reconciliation_required",
+                title="Payment received after booking expiry",
+                body=f"Payment was received for {booking.booking_code} after the booking could no longer be confirmed. A refund review has been opened.",
+                payload={"booking_id": str(booking.id), "payment_id": str(payment.id), "refund_id": str(refund.id)},
+            )
+        )
+    return refund
+
+
 def _payment_response(payment: Payment, booking: Booking) -> dict:
     metadata = dict(payment.provider_metadata or {})
     return {
@@ -87,6 +118,17 @@ def _payment_response(payment: Payment, booking: Booking) -> dict:
         "client_payload": metadata.get("client_payload") or {},
         "requires_provider_integration": payment.provider == "unconfigured",
     }
+
+
+def _record_callback_metadata(payment: Payment, event: PaymentCallbackEvent) -> None:
+    metadata = dict(payment.provider_metadata or {})
+    metadata["last_callback"] = {
+        "status": event.status,
+        "received_at": datetime.now(timezone.utc).isoformat(),
+        "transaction_reference": event.transaction_reference,
+        **dict(event.provider_metadata or {}),
+    }
+    payment.provider_metadata = metadata
 
 
 @router.post("/initiate")
@@ -150,6 +192,114 @@ async def initiate_payment(
     await db.commit()
     await db.refresh(payment)
     return _payment_response(payment, booking)
+
+
+@router.post("/provider-callback", include_in_schema=False)
+async def provider_callback(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
+    raw_payload = await request.body()
+    headers = {key.lower(): value for key, value in request.headers.items()}
+    try:
+        event = await payment_provider.verify_callback(raw_payload, headers)
+    except Exception as exc:
+        raise HTTPException(401, "Payment callback verification failed") from exc
+
+    status = event.status.strip().lower()
+    if status not in {"pending", "paid", "failed"}:
+        raise HTTPException(400, "Unsupported payment callback status")
+
+    payment = await db.scalar(
+        select(Payment)
+        .where(
+            Payment.provider == payment_provider.name,
+            Payment.provider_reference == event.provider_reference,
+        )
+        .order_by(Payment.created_at.desc())
+    )
+    if not payment:
+        raise HTTPException(404, "Payment reference not found")
+    booking = await db.get(Booking, payment.booking_id)
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+
+    if event.amount is not None and event.amount != payment.amount:
+        raise HTTPException(409, "Payment callback amount does not match the booking")
+    if event.currency is not None and event.currency.upper() != payment.currency.upper():
+        raise HTTPException(409, "Payment callback currency does not match the booking")
+
+    _record_callback_metadata(payment, event)
+
+    if status == "pending":
+        await db.commit()
+        return {
+            "accepted": True,
+            "payment_status": payment.status.value,
+            "booking_status": booking.status.value,
+            "reconciliation_required": False,
+        }
+
+    if status == "failed":
+        if payment.status in {PaymentStatus.paid, PaymentStatus.refunded, PaymentStatus.partially_refunded}:
+            await db.commit()
+            return {
+                "accepted": True,
+                "payment_status": payment.status.value,
+                "booking_status": booking.status.value,
+                "reconciliation_required": False,
+            }
+        payment.status = PaymentStatus.failed
+        if booking.status == BookingStatus.pending_payment:
+            booking.status = BookingStatus.payment_failed
+        await db.commit()
+        await slot_locks.release_booking(booking.id)
+        return {
+            "accepted": True,
+            "payment_status": payment.status.value,
+            "booking_status": booking.status.value,
+            "reconciliation_required": False,
+        }
+
+    # Paid callbacks are authoritative only after provider verification above.
+    # Never re-open inventory that is no longer safely held for this booking.
+    if booking.status in {BookingStatus.confirmed, BookingStatus.rescheduled, BookingStatus.completed}:
+        if payment.status not in {PaymentStatus.refunded, PaymentStatus.partially_refunded}:
+            payment.status = PaymentStatus.paid
+        await db.commit()
+        return {
+            "accepted": True,
+            "payment_status": payment.status.value,
+            "booking_status": booking.status.value,
+            "reconciliation_required": False,
+        }
+
+    if booking.status == BookingStatus.pending_payment and not _hold_expired(booking):
+        payment.status = PaymentStatus.paid
+        booking.status = BookingStatus.confirmed
+        player = await db.get(User, booking.user_id)
+        if player:
+            await _ensure_confirmation_notification(booking, player, db)
+        await db.commit()
+        await slot_locks.release_booking(booking.id)
+        return {
+            "accepted": True,
+            "payment_status": payment.status.value,
+            "booking_status": booking.status.value,
+            "reconciliation_required": False,
+        }
+
+    payment.status = PaymentStatus.paid
+    if booking.status == BookingStatus.pending_payment:
+        booking.status = BookingStatus.expired
+    refund = await _ensure_late_payment_refund(payment, booking, db)
+    await db.commit()
+    await slot_locks.release_booking(booking.id)
+    return {
+        "accepted": True,
+        "payment_status": payment.status.value,
+        "booking_status": booking.status.value,
+        "reconciliation_required": True,
+        "refund_id": str(refund.id),
+        "refund_status": refund.status.value,
+    }
 
 
 @router.get("/{payment_id}")
