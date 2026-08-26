@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.api.account import router as account_router
 from app.api.admin import router as admin_router
 from app.api.admin_finance import router as admin_finance_router
@@ -12,6 +14,7 @@ from app.api.booking_participants import router as booking_participants_router
 from app.api.booking_passes import router as booking_passes_router
 from app.api.bookings import router as bookings_router
 from app.api.cancellations import router as cancellations_router
+from app.api.health import router as health_router
 from app.api.notifications import router as notifications_router
 from app.api.operations import router as operations_router
 from app.api.operations_courts import router as operations_courts_router
@@ -29,21 +32,71 @@ from app.core.audit_middleware import AdministrationAuditMiddleware
 from app.core.config import settings, validate_runtime_settings
 from app.core.slot_locks import slot_locks
 from app.db.seed import seed_reference_data
-from app.db.session import SessionLocal,engine
+from app.db.session import SessionLocal, engine
 from app.models import booking_participants as booking_participant_models  # noqa:F401
 from app.models import operations as operations_models  # noqa:F401
 from app.models import platform as platform_models  # noqa:F401
 from app.models.domain import Base
+
+
 @asynccontextmanager
-async def lifespan(app:FastAPI):
+async def lifespan(app: FastAPI):
     validate_runtime_settings(settings)
-    if settings.environment=="development":
-        async with engine.begin() as connection: await connection.run_sync(Base.metadata.create_all)
-        async with SessionLocal() as session: await seed_reference_data(session)
-    yield; await slot_locks.close()
-app=FastAPI(title=settings.app_name,version="0.11.0",description="Sports Board Punjab Padel booking and venue management API",lifespan=lifespan)
+    if settings.environment == "development":
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        async with SessionLocal() as session:
+            await seed_reference_data(session)
+    yield
+    await slot_locks.close()
+
+
+app = FastAPI(
+    title=settings.app_name,
+    version="0.11.0",
+    description="Sports Board Punjab Padel booking and venue management API",
+    lifespan=lifespan,
+)
 app.add_middleware(AdministrationAuditMiddleware)
-app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origin_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
-for r in [router,auth_router,account_router,policies_router,booking_passes_router,bookings_router,booking_participants_router,cancellations_router,reschedules_router,player_payments_router,payments_router,notifications_router,admin_router,admin_hq_router,admin_governance_router,admin_finance_router,admin_reports_router,venue_gallery_router,operations_router,operations_courts_router,operations_management_router,operations_reschedules_router,operations_passes_router,operations_players_router]: app.include_router(r,prefix=settings.api_prefix)
-@app.get("/",include_in_schema=False)
-async def root()->dict:return {"service":settings.app_name,"api":settings.api_prefix,"docs":"/docs"}
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+for api_router in [
+    router,
+    auth_router,
+    account_router,
+    policies_router,
+    booking_passes_router,
+    bookings_router,
+    booking_participants_router,
+    cancellations_router,
+    reschedules_router,
+    player_payments_router,
+    payments_router,
+    notifications_router,
+    admin_router,
+    admin_hq_router,
+    admin_governance_router,
+    admin_finance_router,
+    admin_reports_router,
+    venue_gallery_router,
+    operations_router,
+    operations_courts_router,
+    operations_management_router,
+    operations_reschedules_router,
+    operations_passes_router,
+    operations_players_router,
+]:
+    app.include_router(api_router, prefix=settings.api_prefix)
+
+app.include_router(health_router)
+
+
+@app.get("/", include_in_schema=False)
+async def root() -> dict:
+    return {"service": settings.app_name, "api": settings.api_prefix, "docs": "/docs"}
