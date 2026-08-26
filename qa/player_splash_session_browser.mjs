@@ -21,15 +21,17 @@ try{
  assert(await loggedOut.locator('.glassActions').isVisible(),'Logged-out splash did not show Sign In/Create Account actions.');
  await loggedOut.close();
 
- // Inspect the logged-in splash without racing its deliberate redirect. Block only the
- // root navigation request triggered by location.replace('./'); auth-preview itself and
- // all of its assets still load normally.
- const loggedIn=await browser.newPage({viewport:{width:412,height:915}});
- await routeApi(loggedIn);
- await loggedIn.addInitScript(()=>{
-  localStorage.setItem('sbpPadelAccessToken','qa-token');
-  localStorage.setItem('sbpPadelUser',JSON.stringify({full_name:'Splash QA'}));
+ // Seed the already-authenticated session at the origin level before any document exists.
+ // This matches Android WebView reopening the app with persisted localStorage.
+ const loggedInContext=await browser.newContext({
+  viewport:{width:412,height:915},
+  storageState:{cookies:[],origins:[{origin:base,localStorage:[
+   {name:'sbpPadelAccessToken',value:'qa-token'},
+   {name:'sbpPadelUser',value:JSON.stringify({full_name:'Splash QA'})}
+  ]}]}
  });
+ const loggedIn=await loggedInContext.newPage();
+ await routeApi(loggedIn);
  await loggedIn.route(`${base}/`,route=>route.abort());
  await loggedIn.goto(`${base}/auth-preview.html`,{waitUntil:'domcontentloaded'});
  await loggedIn.waitForFunction(()=>document.documentElement.classList.contains('sbp-session-splash'),null,{timeout:1500});
@@ -48,5 +50,6 @@ try{
  assert(splashState.token==='qa-token','Session-aware splash cleared a valid stored session.');
  await loggedIn.waitForTimeout(1200);
  assert(new URL(loggedIn.url()).pathname.endsWith('/auth-preview.html'),'Blocked session splash unexpectedly left the splash page.');
+ await loggedInContext.close();
  console.log('Player session-aware splash browser QA passed.');
 }finally{await browser.close()}
