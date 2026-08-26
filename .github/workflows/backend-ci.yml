@@ -17,6 +17,18 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sbp
+          POSTGRES_PASSWORD: sbp
+          POSTGRES_DB: sbp_padel_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U sbp -d sbp_padel_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       REDIS_URL: redis://127.0.0.1:6379/0
       REDIS_REQUIRED: 'true'
@@ -50,12 +62,11 @@ jobs:
           retention-days: 3
       - name: Migration graph check
         run: alembic heads
-      - name: Fresh database migration smoke test
+      - name: Fresh PostgreSQL migration smoke test
         env:
-          DATABASE_URL: sqlite+aiosqlite:////tmp/sbp-padel-migration-ci.db
+          DATABASE_URL: postgresql+asyncpg://sbp:sbp@127.0.0.1:5432/sbp_padel_ci
           ENVIRONMENT: development
         run: |
-          rm -f /tmp/sbp-padel-migration-ci.db
           alembic upgrade head
           alembic current
           alembic check
