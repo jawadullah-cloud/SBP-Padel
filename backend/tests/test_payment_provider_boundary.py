@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 from fastapi.testclient import TestClient
 
 from app.api import payments as payments_api
