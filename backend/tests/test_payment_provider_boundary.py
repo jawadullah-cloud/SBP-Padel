@@ -207,3 +207,34 @@ def test_callback_rejects_bad_verification_and_financial_mismatch(monkeypatch):
             headers={"X-Provider-Test": "verified"},
         )
         assert mismatch.status_code == 409
+
+
+def test_verified_failed_callback_releases_booking_inventory(monkeypatch):
+    provider = FakeProvider()
+    monkeypatch.setattr(payments_api, "payment_provider", provider)
+
+    with TestClient(app) as client:
+        headers = player_headers(client)
+        booking = create_booking(client, headers, booking_date="2026-12-24", start_time="17:00")
+        payment = initiate(client, headers, booking)
+        detail = client.get(f"/api/v1/bookings/{booking['id']}", headers=headers).json()
+        quote_payload = {
+            "venue_id": detail["venue_id"],
+            "court_id": detail["court_id"],
+            "booking_date": detail["date"],
+            "slots": [{"start_time": slot["start_time"]} for slot in detail["slots"]],
+        }
+        assert client.post("/api/v1/bookings/quote", json=quote_payload).status_code == 409
+
+        provider.callback_event = PaymentCallbackEvent(
+            provider_reference=payment["provider_reference"],
+            status="failed",
+            amount=Decimal(payment["amount"]),
+            currency="PKR",
+            transaction_reference="BANK-FAIL-001",
+        )
+        failed = callback(client)
+        assert failed["payment_status"] == "failed"
+        assert failed["booking_status"] == "payment_failed"
+        assert failed["reconciliation_required"] is False
+        assert client.post("/api/v1/bookings/quote", json=quote_payload).status_code == 200
