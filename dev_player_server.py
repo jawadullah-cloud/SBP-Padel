@@ -30,6 +30,7 @@ COMMON_SCRIPTS = [
     "android-back.js",
     "back-icons.js",
     "app-branding.js",
+    "bookings-activation-guard.js",
 ]
 PAGE_SCRIPTS = {
     "index.html": ["player-venues-live.js", "player-discovery-live.js", "favourites-migration.js", "player-profile-live.js", "profile-modules.js", "notifications-live.js", "booking-date-more.js", "player-bookings-live.js", "discovery-tools.js", "bookings-search.js", "visual-live.js", "player-stability.js", "native-pass-qr-live.js"],
