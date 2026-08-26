@@ -25,6 +25,7 @@ await page.route('**/api/v1/**',async route=>{
 await page.addInitScript(()=>{
   localStorage.setItem('sbpPadelAccessToken','review-mobile-qa');
   localStorage.setItem('sbpPadelUser',JSON.stringify({id:'user-1',full_name:'Mobile QA'}));
+  localStorage.removeItem('sbpPadelSavedPlayers');
   localStorage.setItem('sbpPadelBookingSessionV2',JSON.stringify({version:2,venueId:'venue-1',venueName:'Nishtar Park Sports Complex',date:'2026-08-27',courtId:'court-1',courtName:'Court 01',courtType:'Training',slotStarts:['18:00','19:00'],quote:{court_fee:4200,service_fee:100,total:4300,slots:[{start_time:'18:00',end_time:'19:00'},{start_time:'19:00',end_time:'20:00'}]},policyAccepted:false,status:'selecting'}));
 });
 
@@ -61,16 +62,11 @@ try{
   const after=await review.evaluate(el=>el.scrollTop);
   assert(after>100,`Android-owned canonical Review scrolling did not move the screen (${after}).`);
 
-  // Abandon the unfinished booking directly from Review. This is the exact
-  // regression that previously left an invisible Review screen over the app.
   await page.evaluate(()=>window.SBPNavigate('home'));
   await page.waitForFunction(()=>document.getElementById('home')?.classList.contains('active'));
   const escaped=await page.evaluate(()=>{
     const review=document.getElementById('reviewNative');
-    return {
-      reviewActive:!!review?.classList.contains('active'),
-      reviewPointer:review?getComputedStyle(review).pointerEvents:'none',
-    };
+    return {reviewActive:!!review?.classList.contains('active'),reviewPointer:review?getComputedStyle(review).pointerEvents:'none'};
   });
   assert(!escaped.reviewActive,'Review remained active after abandoning the booking flow.');
   assert(escaped.reviewPointer==='none','Invisible Review still intercepted clicks after abandoning the booking flow.');
@@ -81,15 +77,28 @@ try{
     const blocker=await page.evaluate(()=>getComputedStyle(document.getElementById('reviewNative')).pointerEvents);
     assert(blocker==='none',`Review intercepted ${target} after booking-flow escape.`);
   }
-  await page.locator('#home .primary[data-nav="venues"]').click();
-  await page.waitForFunction(()=>document.getElementById('venues')?.classList.contains('active'));
 
-  // Canonical Review must still work normally after a later fresh entry.
   await openAndAssertCanonical();
   await review.evaluate(el=>{el.scrollTop=0});
   await swipe(page.locator('#reviewNative .rnCard').first());
   assert((await review.evaluate(el=>el.scrollTop))>100,'Canonical Review stopped scrolling after re-entry.');
 
+  // A partner explicitly added during booking must become a real profile-level
+  // Saved Player, not merely remain in the current checkout participant list.
+  await page.locator('#rnAdd').click();
+  await page.locator('#rnName').fill('Saved Partner QA');
+  await page.locator('#rnAddGo').click();
+  await page.waitForFunction(()=>{
+    try{return JSON.parse(localStorage.getItem('sbpPadelSavedPlayers')||'[]').includes('Saved Partner QA')}catch{return false}
+  });
+  await page.evaluate(()=>window.SBPNavigate('profile'));
+  await page.waitForFunction(()=>document.getElementById('profile')?.classList.contains('active'));
+  await page.locator('#profile .menu button').filter({hasText:'Saved Players'}).click();
+  await page.waitForFunction(()=>document.getElementById('savedPlayers')?.classList.contains('active'));
+  assert((await page.locator('#savedPlayers').innerText()).includes('Saved Partner QA'),'Partner added during booking did not appear in Profile → Saved Players.');
+  await page.locator('#savedPlayers [data-pm-back]').click();
+
+  await openAndAssertCanonical();
   await page.locator('#rnAccept').scrollIntoViewIfNeeded();
   await page.locator('#rnAccept').check();
   assert(!(await page.locator('#rnPay').isDisabled()),'Continue to Payment did not enable after policy acceptance.');
@@ -115,7 +124,7 @@ try{
   await page.locator('#home .primary[data-nav="venues"]').click();
   await page.waitForFunction(()=>document.getElementById('venues')?.classList.contains('active'));
 
-  console.log('Player canonical Review QA passed: one Step-5 implementation, Android scrolling, safe unfinished-flow escape, all persistent tabs, Payment transition and repeat entry all work.');
+  console.log('Player canonical Review QA passed: canonical Review, Android scrolling, safe escape, Saved Players persistence, Payment and repeat entry all work.');
 }finally{
   await browser.close();
 }
