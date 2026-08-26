@@ -34,6 +34,13 @@
       html.sbp-native-mobile body>.phone{width:100%!important;max-width:none!important;height:100%!important;min-height:100%!important;border:0!important;border-radius:0!important;box-shadow:none!important}
       html.sbp-native-mobile body>.phone>.status{display:none!important}
       html.sbp-native-mobile body>.phone>.screen{height:100%!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;touch-action:pan-y!important;overscroll-behavior-y:contain!important;-webkit-overflow-scrolling:touch!important}
+      html.sbp-native-mobile body>.phone>.screen button,
+      html.sbp-native-mobile body>.phone>.screen a,
+      html.sbp-native-mobile body>.phone>.screen input,
+      html.sbp-native-mobile body>.phone>.screen label,
+      html.sbp-native-mobile body>.phone>.screen select,
+      html.sbp-native-mobile body>.phone>.screen textarea,
+      html.sbp-native-mobile body>.phone>.screen [role="button"]{touch-action:manipulation}
       html.sbp-native-mobile .authLayer{overflow:hidden!important}
       html.sbp-native-mobile .authScreen.authPage{overflow-y:auto!important;touch-action:pan-y!important;-webkit-overflow-scrolling:touch!important;padding-bottom:36px!important}
       html.sbp-native-mobile .authTop{padding-top:8px!important;margin-bottom:20px!important}
@@ -81,23 +88,27 @@
 
     // Android System WebView can fail nested CSS scrolling on absolutely
     // positioned screens and on standalone booking pages hosted in the
-    // deep-route iframe. Own vertical touch movement for both shapes so a
-    // long Review/Payment screen cannot trap the rest of the app.
-    let scroller=null,startY=0,lastY=0,moved=false;
+    // deep-route iframe. Own vertical touch movement for both shapes, but
+    // preserve normal taps on buttons/inputs. Real taps often drift a few
+    // pixels, so interactive controls use a deliberately larger threshold
+    // before the gesture is promoted from a tap to a manual scroll.
+    let scroller=null,startY=0,lastY=0,moved=false,moveThreshold=6;
     const ownedScroller=target=>target?.closest?.('#venues,#bookings,#profile,#nishtar,.phone>.screen');
+    const interactiveTarget=target=>!!target?.closest?.('button,a,input,label,select,textarea,[role="button"],[onclick]');
     document.addEventListener('touchstart',e=>{
       if(e.touches.length!==1)return;
       scroller=ownedScroller(e.target);
       if(!scroller)return;
       startY=lastY=e.touches[0].clientY;moved=false;
+      moveThreshold=interactiveTarget(e.target)?16:6;
     },{passive:true,capture:true});
     document.addEventListener('touchmove',e=>{
       if(!scroller||e.touches.length!==1)return;
       const y=e.touches[0].clientY,delta=lastY-y;
-      if(Math.abs(y-startY)>4)moved=true;
+      if(!moved&&Math.abs(y-startY)>moveThreshold)moved=true;
       if(moved&&Math.abs(delta)>0.5){scroller.scrollTop+=delta;lastY=y;e.preventDefault()}
     },{passive:false,capture:true});
-    const clearScroller=()=>{scroller=null;moved=false};
+    const clearScroller=()=>{scroller=null;moved=false;moveThreshold=6};
     document.addEventListener('touchend',clearScroller,{passive:true,capture:true});
     document.addEventListener('touchcancel',clearScroller,{passive:true,capture:true});
     window.addEventListener('pagehide',clearScroller);
