@@ -33,7 +33,7 @@
 
       html.sbp-native-mobile body>.phone{width:100%!important;max-width:none!important;height:100%!important;min-height:100%!important;border:0!important;border-radius:0!important;box-shadow:none!important}
       html.sbp-native-mobile body>.phone>.status{display:none!important}
-      html.sbp-native-mobile body>.phone>.screen{height:100%!important;min-height:0!important;overflow-y:auto!important;touch-action:auto!important;-webkit-overflow-scrolling:touch!important}
+      html.sbp-native-mobile body>.phone>.screen{height:100%!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;touch-action:pan-y!important;overscroll-behavior-y:contain!important;-webkit-overflow-scrolling:touch!important}
       html.sbp-native-mobile .authLayer{overflow:hidden!important}
       html.sbp-native-mobile .authScreen.authPage{overflow-y:auto!important;touch-action:pan-y!important;-webkit-overflow-scrolling:touch!important;padding-bottom:36px!important}
       html.sbp-native-mobile .authTop{padding-top:8px!important;margin-bottom:20px!important}
@@ -80,10 +80,11 @@
     document.addEventListener('focusout',()=>setTimeout(syncKeyboard,120));
 
     // Android System WebView can fail nested CSS scrolling on absolutely
-    // positioned screens. For these player screens we own vertical touch
-    // movement explicitly so long lists always remain usable on real devices.
+    // positioned screens and on standalone booking pages hosted in the
+    // deep-route iframe. Own vertical touch movement for both shapes so a
+    // long Review/Payment screen cannot trap the rest of the app.
     let scroller=null,startY=0,lastY=0,moved=false;
-    const ownedScroller=target=>target?.closest?.('#venues,#bookings,#profile,#nishtar');
+    const ownedScroller=target=>target?.closest?.('#venues,#bookings,#profile,#nishtar,.phone>.screen');
     document.addEventListener('touchstart',e=>{
       if(e.touches.length!==1)return;
       scroller=ownedScroller(e.target);
@@ -96,8 +97,11 @@
       if(Math.abs(y-startY)>4)moved=true;
       if(moved&&Math.abs(delta)>0.5){scroller.scrollTop+=delta;lastY=y;e.preventDefault()}
     },{passive:false,capture:true});
-    document.addEventListener('touchend',()=>{scroller=null;moved=false},{passive:true,capture:true});
-    document.addEventListener('touchcancel',()=>{scroller=null;moved=false},{passive:true,capture:true});
+    const clearScroller=()=>{scroller=null;moved=false};
+    document.addEventListener('touchend',clearScroller,{passive:true,capture:true});
+    document.addEventListener('touchcancel',clearScroller,{passive:true,capture:true});
+    window.addEventListener('pagehide',clearScroller);
+    window.addEventListener('blur',clearScroller);
     syncKeyboard();
   }catch(err){console.warn('SBP mobile runtime setup failed',err)}
 })();
