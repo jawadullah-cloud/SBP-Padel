@@ -24,7 +24,7 @@ COMMON_SCRIPTS = [
     "review-entry.js",
     "booking-contiguous-slots.js",
     "review-native.js",
-    "saved-player-sync.js",
+    "saved-players-sync.js",
     "pass-route-live.js",
     "android-back.js",
     "back-icons.js",
