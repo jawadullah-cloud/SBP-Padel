@@ -51,9 +51,8 @@
     for(let i=0;i<40&&!stopped;i++){await sleep(i===0?900:3000);try{stopped=await paymentState(state,statusEl)}catch(err){console.warn('[SBP payment provider poll]',err)}}
     if(!stopped&&statusEl)statusEl.textContent='Still awaiting confirmation. You may check again after completing payment.';
   }
-  function installProviderCheckout(){
-    const btn=document.getElementById('payButton');if(!btn||btn.dataset.providerOwner==='1')return;btn.dataset.providerOwner='1';
-    btn.onclick=async e=>{e.preventDefault();if(btn.disabled)return;let state=load();const label=btn.querySelector('span');btn.disabled=true;if(label)label.textContent='PROCESSING…';try{
+  async function handleProviderCheckout(btn){
+    if(btn.disabled)return;let state=load();const label=btn.querySelector('span');btn.disabled=true;if(label)label.textContent='PROCESSING…';try{
       if(!state.quote||!state.policyAccepted)throw new Error('Please review and accept the booking policy first.');
       const quote=await api('/bookings/quote',{method:'POST',body:JSON.stringify({venue_id:state.venueId,court_id:state.courtId,booking_date:state.date,slots:(state.slotStarts||[]).map(start_time=>({start_time}))})});state.quote=quote;save(state);
       let booking=null;
@@ -65,7 +64,10 @@
       if(init.requires_provider_integration){const paid=await api(`/payments/${init.payment_id}/simulate-success`,{method:'POST'});state.paymentStatus=paid.payment_status;state.status='confirmed';save(state);localStorage.setItem('sbpPadelNotificationsVersion',String(Date.now()));try{window.parent?.SBPRefreshNotifications?.()}catch{}try{await window.parent?.SBPBookingFlowSync?.()}catch{}go('payment-success.html');return}
       if(label)label.textContent='AWAITING PAYMENT';await waitForProvider(state,init)
     }catch(err){btn.disabled=false;if(label)label.textContent='PAY & CONFIRM';if(err.status===409||/available|booked|conflict|past|started|expired|no longer awaiting payment/i.test(err.message)){state=load();state.slotStarts=[];state.quote=null;state.policyAccepted=false;state.status='selecting';save(state);toast(err.message||'That slot is no longer available.',true);setTimeout(()=>{if(window.parent&&window.parent!==window&&window.parent.SBPNavigate)window.parent.SBPNavigate('time');else location.href='index.html?open=time'},1000)}else toast(err.message,true)}
-    };
+  }
+  function installProviderCheckout(){
+    if(window.__SBPProviderCheckoutCapture)return;window.__SBPProviderCheckoutCapture=true;
+    document.addEventListener('click',e=>{const btn=e.target?.closest?.('#payButton');if(!btn)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();handleProviderCheckout(btn)},true);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(normalize,0),{once:true});else setTimeout(normalize,0);
 })();
