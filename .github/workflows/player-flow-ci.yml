@@ -68,7 +68,9 @@ jobs:
           grep -q '#reviewNative' docs/mobile-runtime.js
           grep -q 'CANONICAL_REVIEW_BOOTSTRAP' dev_player_server.py
           grep -q '__reviewNative' docs/review-native.js
-          grep -q '20260826-production-runtime-v1' docs/sw.js
+          grep -q '20260826-production-runtime-v2' docs/sw.js
+          grep -q 'function versionLocalAssets' docs/sw.js
+          grep -q 'versionLocalAssets(scrubPrototypeFallback' docs/sw.js
           grep -q "'runtime-api.js'" docs/sw.js
           grep -q "'saved-players-sync.js'" docs/sw.js
           grep -q 'Loading the current cancellation window' docs/sw.js
