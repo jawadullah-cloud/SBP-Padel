@@ -21,20 +21,19 @@ try{
  assert(await loggedOut.locator('.glassActions').isVisible(),'Logged-out splash did not show Sign In/Create Account actions.');
  await loggedOut.close();
 
- // Seed the already-authenticated session at the origin level before any document exists.
- // This matches Android WebView reopening the app with persisted localStorage.
- const loggedInContext=await browser.newContext({
-  viewport:{width:412,height:915},
-  storageState:{cookies:[],origins:[{origin:base,localStorage:[
-   {name:'sbpPadelAccessToken',value:'qa-token'},
-   {name:'sbpPadelUser',value:JSON.stringify({full_name:'Splash QA'})}
-  ]}]}
- });
- const loggedIn=await loggedInContext.newPage();
+ // Establish the real player origin first, then persist the same localStorage keys Android
+ // WebView keeps between launches. Block only the later root redirect so we can inspect the
+ // session-aware splash without racing its 900ms navigation timer.
+ const loggedIn=await browser.newPage({viewport:{width:412,height:915}});
  await routeApi(loggedIn);
+ await loggedIn.goto(`${base}/sw.js`,{waitUntil:'domcontentloaded'});
+ await loggedIn.evaluate(()=>{
+  localStorage.setItem('sbpPadelAccessToken','qa-token');
+  localStorage.setItem('sbpPadelUser',JSON.stringify({full_name:'Splash QA'}));
+ });
+ assert((await loggedIn.evaluate(()=>localStorage.getItem('sbpPadelAccessToken')))==='qa-token','Could not persist splash QA session on player origin.');
  await loggedIn.route(`${base}/`,route=>route.abort());
  await loggedIn.goto(`${base}/auth-preview.html`,{waitUntil:'domcontentloaded'});
- await loggedIn.waitForFunction(()=>document.documentElement.classList.contains('sbp-session-splash'),null,{timeout:1500});
  const splashState=await loggedIn.evaluate(()=>{
   const actions=document.querySelector('.glassActions'),splash=document.querySelector('#splash');
   return {
@@ -50,6 +49,5 @@ try{
  assert(splashState.token==='qa-token','Session-aware splash cleared a valid stored session.');
  await loggedIn.waitForTimeout(1200);
  assert(new URL(loggedIn.url()).pathname.endsWith('/auth-preview.html'),'Blocked session splash unexpectedly left the splash page.');
- await loggedInContext.close();
  console.log('Player session-aware splash browser QA passed.');
 }finally{await browser.close()}
