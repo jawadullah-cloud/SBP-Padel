@@ -21,6 +21,7 @@ export default function PlayersSidebarLink(){
   const pathname=usePathname();
   const router=useRouter();
   const[host,setHost]=useState<Element|null>(null);
+  const utilityRoute=pathname==='/players'||pathname==='/scan-pass';
 
   useEffect(()=>{
     setHost(null);
@@ -37,6 +38,13 @@ export default function PlayersSidebarLink(){
   },[pathname]);
 
   useEffect(()=>{
+    if(!utilityRoute||!host)return;
+    const native=[...host.children].filter(el=>!el.classList.contains('sbpCanonicalUtilityNav')) as HTMLElement[];
+    native.forEach(el=>el.hidden=true);
+    return()=>native.forEach(el=>el.hidden=false);
+  },[utilityRoute,host]);
+
+  useEffect(()=>{
     if(pathname!=='/')return;
     const requested=(sessionStorage.getItem('sbp_padel_ops_target_tab')||new URLSearchParams(location.search).get('tab')||'') as OpsTab;
     if(!operationalTabs.some(([id])=>id===requested))return;
@@ -51,34 +59,17 @@ export default function PlayersSidebarLink(){
     open();
   },[pathname]);
 
-  useEffect(()=>{
-    if(pathname!=='/players'&&pathname!=='/scan-pass')return;
-    const intercept=(event:MouseEvent)=>{
-      const anchor=(event.target as Element|null)?.closest?.('a[href="/"]');
-      if(!anchor)return;
-      event.preventDefault();
-      if(sessionStorage.getItem('sbp_padel_ops_utility_origin')==='console'){
-        sessionStorage.removeItem('sbp_padel_ops_utility_origin');
-        router.back();
-      }else router.push('/');
-    };
-    document.addEventListener('click',intercept,true);
-    return()=>document.removeEventListener('click',intercept,true);
-  },[pathname,router]);
-
   if(!host)return null;
 
-  if(pathname==='/players'||pathname==='/scan-pass'){
+  if(utilityRoute){
     const go=(tab:OpsTab)=>{
       sessionStorage.setItem('sbp_padel_ops_target_tab',tab);
-      if(sessionStorage.getItem('sbp_padel_ops_utility_origin')==='console'){
-        sessionStorage.removeItem('sbp_padel_ops_utility_origin');
-        router.back();
-      }else router.push(`/?tab=${tab}`);
+      router.push(`/?tab=${tab}`);
     };
-    return createPortal(<div className="opsRouteNavExtension">{operationalTabs.map(([id,label])=><button type="button" key={id} onClick={()=>go(id)}>{label}</button>)}{pathname==='/players'&&<button type="button" onClick={()=>router.push('/scan-pass')}>Scan Pass</button>}</div>,host);
+    const utility=(path:string)=>router.push(path);
+    return createPortal(<div className="sbpCanonicalUtilityNav">{operationalTabs.map(([id,label])=><button type="button" key={id} onClick={()=>go(id)}>{label}</button>)}<button type="button" className={pathname==='/players'?'active':''} onClick={()=>utility('/players')}>Players</button><button type="button" className={pathname==='/scan-pass'?'active':''} onClick={()=>utility('/scan-pass')}>Scan Pass</button></div>,host);
   }
 
-  const openUtility=(path:string)=>{sessionStorage.setItem('sbp_padel_ops_utility_origin','console');router.push(path)};
+  const openUtility=(path:string)=>router.push(path);
   return createPortal(<><button type="button" className="sidebarRouteLink" onClick={()=>openUtility('/players')}>Players</button><button type="button" className="sidebarRouteLink" onClick={()=>openUtility('/scan-pass')}>Scan Pass</button></>,host);
 }
