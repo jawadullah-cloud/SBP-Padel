@@ -31,6 +31,9 @@
     if(layer){
       const stale=layer.classList.contains('on')||layer.classList.contains('leaving')||layer.classList.contains('swapping')||layer.classList.contains('backing')||layer.classList.contains('sbp-preload-detail')||layer.classList.contains('sbp-reveal-detail');
       if(stale&&typeof window.SBPDeepClose==='function'){
+        // Run only after the destination screen has become active. SBPDeepClose
+        // restores the current active scroller, so doing this before navigation
+        // can accidentally re-enable the screen being left.
         try{window.SBPDeepClose(false)}catch{}
       }else if(stale){
         layer.classList.remove('on','leaving','swapping','backing','native','sbp-preload-detail','sbp-reveal-detail');
@@ -45,7 +48,6 @@
     const original=window.SBPNavigate;
     if(typeof original!=='function'||original.__sbpHardened)return false;
     const wrapped=function(target,...args){
-      if(recoveryScreens.has(target))clearStaleInteractionState(target);
       const result=original.call(this,target,...args);
       if(recoveryScreens.has(target))requestAnimationFrame(()=>clearStaleInteractionState(target));
       return result;
