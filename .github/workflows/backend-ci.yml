@@ -5,12 +5,15 @@ on:
     paths: ['backend/**','.github/workflows/backend-ci.yml']
   pull_request:
     paths: ['backend/**','.github/workflows/backend-ci.yml']
+permissions:
+  contents: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       redis:
         image: redis:7-alpine
