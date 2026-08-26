@@ -69,6 +69,11 @@ jobs:
           grep -q 'CANONICAL_REVIEW_BOOTSTRAP' dev_player_server.py
           grep -q '__reviewNative' docs/review-native.js
           grep -q '20260826-production-runtime-v2' docs/sw.js
+          grep -q '20260826-production-runtime-v2' docs/app.js
+          grep -q '20260826-production-runtime-v2' docs/index.html
+          grep -q "register('./sw.js?v=20260826-production-runtime-v2'" docs/app.js
+          ! grep -q '20260824-runtime' docs/app.js
+          ! grep -q '20260824-runtime' docs/index.html
           grep -q 'function versionLocalAssets' docs/sw.js
           grep -q 'versionLocalAssets(scrubPrototypeFallback' docs/sw.js
           grep -q "'runtime-api.js'" docs/sw.js
