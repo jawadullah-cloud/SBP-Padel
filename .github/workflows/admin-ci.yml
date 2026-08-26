@@ -33,6 +33,14 @@ jobs:
           npm run dev -- --hostname 127.0.0.1 > /tmp/sbp-padel-admin.log 2>&1 &
           for i in {1..60}; do if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then exit 0; fi; sleep 1; done
           cat /tmp/sbp-padel-admin.log; exit 1
+      - name: Security header smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(curl -fsSI http://127.0.0.1:3000/)"
+          printf '%s\n' "$headers" | grep -qi '^x-content-type-options: nosniff'
+          printf '%s\n' "$headers" | grep -qi '^x-frame-options: DENY'
+          printf '%s\n' "$headers" | grep -qi '^referrer-policy: strict-origin-when-cross-origin'
       - name: Admin browser runtime QA
         shell: bash
         run: |
