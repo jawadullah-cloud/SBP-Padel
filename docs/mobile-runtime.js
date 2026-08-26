@@ -26,8 +26,8 @@
       html.sbp-native-mobile .app>.screen{inset:56px 0 68px!important;overflow-y:auto!important;overflow-x:hidden!important;touch-action:auto!important;overscroll-behavior-y:auto!important;-webkit-overflow-scrolling:touch!important}
       html.sbp-native-mobile .app>nav{bottom:0!important;height:68px!important;padding-bottom:4px!important}
       html.sbp-native-mobile .screen::-webkit-scrollbar,html.sbp-native-mobile .formPanel::-webkit-scrollbar{display:none}
-      html.sbp-native-mobile #venues,html.sbp-native-mobile #bookings,html.sbp-native-mobile #profile,html.sbp-native-mobile #nishtar,html.sbp-native-mobile #reviewNative{overflow-y:auto!important;touch-action:pan-y!important;-webkit-overflow-scrolling:touch!important}
-      html.sbp-native-mobile #venues>.content,html.sbp-native-mobile #bookings .bkWrap,html.sbp-native-mobile #profile>.content,html.sbp-native-mobile #nishtar>.content{padding-bottom:40px!important;min-height:max-content!important}
+      html.sbp-native-mobile #venues,html.sbp-native-mobile #bookings,html.sbp-native-mobile #profile,html.sbp-native-mobile #nishtar,html.sbp-native-mobile #select,html.sbp-native-mobile #time,html.sbp-native-mobile #reviewNative{overflow-y:auto!important;touch-action:pan-y!important;-webkit-overflow-scrolling:touch!important}
+      html.sbp-native-mobile #venues>.content,html.sbp-native-mobile #bookings .bkWrap,html.sbp-native-mobile #profile>.content,html.sbp-native-mobile #nishtar>.content,html.sbp-native-mobile #select>.content,html.sbp-native-mobile #time>.content{padding-bottom:40px!important;min-height:max-content!important}
       html.sbp-native-mobile #home .homeContent{padding-bottom:8px!important}
       html.sbp-native-mobile #home .homeFeature{margin-bottom:0!important}
 
@@ -90,11 +90,11 @@
     document.addEventListener('focusout',()=>setTimeout(syncKeyboard,120));
 
     // Android System WebView can fail nested CSS scrolling on absolutely
-    // positioned screens. Own vertical touch movement for the main long
-    // screens and for the canonical native Step-5 Review screen. Preserve
-    // taps by giving interactive controls a larger movement threshold.
+    // positioned screens. Own vertical touch movement for every long player
+    // surface, including Date/Court and Time slot selection. Preserve taps by
+    // giving interactive controls a larger movement threshold.
     let scroller=null,startY=0,lastY=0,moved=false,moveThreshold=6;
-    const ownedScroller=target=>target?.closest?.('#venues,#bookings,#profile,#nishtar,#reviewNative,.phone>.screen');
+    const ownedScroller=target=>target?.closest?.('#venues,#bookings,#profile,#nishtar,#select,#time,#reviewNative,.phone>.screen');
     const interactiveTarget=target=>!!target?.closest?.('button,a,input,label,select,textarea,[role="button"],[onclick]');
     document.addEventListener('touchstart',e=>{
       if(e.touches.length!==1)return;
