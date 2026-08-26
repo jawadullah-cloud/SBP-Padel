@@ -39,7 +39,7 @@ PAGE_SCRIPTS = {
     "wallet.html": ["player-wallet-live.js"],
     "digital-pass.html": ["digital-pass-live.js"],
     "auth-preview.html": ["player-live.js", "auth-enhancements.js", "google-auth-disabled.js"],
-    "booking-detail.html": ["player-booking-detail-live.js", "player-booking-integrity.js", "booking-detail-polish.js"],
+    "booking-detail.html": ["booking-detail-polish.js", "player-booking-detail-live.js", "player-booking-integrity.js"],
 }
 
 NOOP_SERVICE_WORKER = """\
@@ -55,6 +55,21 @@ EARLY_RUNTIME_BOOTSTRAP = """<script>
   localStorage.setItem('sbpPadelApiBase',api);
   window.SBPApiBase=()=>`${location.protocol}//${location.hostname}:8000/api/v1`;
 }catch(e){console.warn('SBP early runtime bootstrap',e)}})();
+</script>"""
+
+AUTH_SESSION_SPLASH_BOOTSTRAP = """<style>
+html.sbp-session-splash .glassActions{display:none!important}
+html.sbp-session-splash .splashContent{padding-bottom:34px}
+</style><script>
+(()=>{try{
+ const token=localStorage.getItem('sbpPadelAccessToken');
+ if(!token)return;
+ document.documentElement.classList.add('sbp-session-splash');
+ window.__SBP_SESSION_SPLASH__=true;
+ window.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{
+   if(localStorage.getItem('sbpPadelAccessToken'))location.replace('./');
+ },900),{once:true});
+}catch(e){console.warn('SBP session splash',e)}})();
 </script>"""
 
 CANONICAL_REVIEW_BOOTSTRAP = (
@@ -92,9 +107,6 @@ def mask_prototype_booking_content(page: str, html: str) -> str:
         html = html.replace("NISHTAR PARK SPORTS COMPLEX", "LOADING BOOKING…")
         html = html.replace("COURT 01", "LOADING…")
     elif page == "booking-detail.html":
-        # The static prototype contains active actions before the live booking status is known.
-        # Hide both the container and each prototype action before first paint. The live
-        # integrity runtime replaces the entire action set once the real booking has hydrated.
         html = html.replace('<div class="tools" id="tools">', '<div class="tools" id="tools" style="visibility:hidden">', 1)
         for marker in (
             '<button class="primary" id="passBtn">',
@@ -141,6 +153,8 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
             html = mask_prototype_booking_content(page, html)
             if 'SBP early runtime bootstrap' not in html:
                 html = html.replace("<head>", "<head>" + EARLY_RUNTIME_BOOTSTRAP, 1)
+            if page == "auth-preview.html" and 'SBP session splash' not in html:
+                html = html.replace("<head>", "<head>" + AUTH_SESSION_SPLASH_BOOTSTRAP, 1)
             mobile_bootstrap = '<script src="mobile-runtime.js?dev=1"></script>'
             if 'src="mobile-runtime.js' not in html and "src='mobile-runtime.js" not in html:
                 html = html.replace("</head>", mobile_bootstrap + "</head>")
