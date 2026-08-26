@@ -67,7 +67,7 @@
   }
   function installProviderCheckout(){
     if(window.__SBPProviderCheckoutCapture)return;window.__SBPProviderCheckoutCapture=true;
-    window.addEventListener('click',e=>{const btn=e.target?.closest?.('#payButton');if(!btn)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();handleProviderCheckout(btn)},true);
+    document.addEventListener('click',e=>{const btn=e.target?.closest?.('#payButton');if(!btn)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();handleProviderCheckout(btn)},true);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(normalize,0),{once:true});else setTimeout(normalize,0);
 })();
