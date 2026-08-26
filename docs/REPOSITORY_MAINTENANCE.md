@@ -1,17 +1,20 @@
 # Repository Maintenance
 
-Last updated: 26 August 2026
+Last updated: 27 August 2026
 
 This file records repository-level cleanup that is separate from product feature acceptance.
 
 ## Active branches
 
+The remote branch set has now been intentionally reduced to three branches:
+
 - `backend-v1-dev` — current development source of truth.
 - `main` — release/Pages branch. It is currently behind active development and must not be advanced until the active branch is accepted for release.
+- `ui-preview` — retained archive of four unique early prototype commits. Its product implementation is superseded, but the branch is intentionally kept for historical reference rather than deleting unique history solely to reduce branch count.
 
-## Branches verified as redundant
+## Completed branch cleanup — 27 Aug 2026
 
-The following branches have no unique work ahead of `backend-v1-dev`, or only contain old Pages setup already superseded by the active tree. They are safe repository-cleanup candidates:
+The user removed the previously verified redundant remote refs and pruned the local remote-tracking list. Deleted branches were:
 
 - `tmp-visual-assets-staging`
 - `pages-fix`
@@ -32,11 +35,7 @@ The following branches have no unique work ahead of `backend-v1-dev`, or only co
 - `visual-system-implementation-15`
 - `visual-system-implementation-16`
 
-All numbered visual branches currently point to the same already-absorbed historical commit. `tmp-visual-assets-staging` points to that same state.
-
-The connected GitHub mutation surface does not expose Git ref deletion, so these refs have not been falsely reported as deleted. When ref deletion is available, remove the redundant set above rather than carrying them into release governance.
-
-`ui-preview` has four unique early prototype commits even though its files are superseded by the current product. Keep it as an archive until branch deletion can intentionally preserve or discard that prototype history.
+Final verified local/remote view after `git fetch --prune` contained only `backend-v1-dev`, `origin/backend-v1-dev`, `origin/main`, `origin/ui-preview`, and `origin/HEAD -> origin/main`.
 
 ## Workflows
 
@@ -71,6 +70,7 @@ Before production release, configure protection/rulesets appropriate to the work
 - broken deferred-Google loader reference resolved and ambiguously named old shim removed;
 - superseded `HQHomeRouteBridge.tsx` removed after canonical Staff routing moved into `HQTabBridge`;
 - unused `HQVenueEditShortcut.tsx` removed after Venue Directory became the accepted Manage/Edit entry point;
+- redundant historical remote branches removed and local remote refs pruned;
 - `.gitignore` expanded for Python, Node/Next, Android, IDE, log and OS-generated files;
 - root README updated from prototype-era planning language to the actual mature architecture;
 - direct Admin dependencies pinned to approved exact versions;
@@ -82,7 +82,7 @@ Before production release, configure protection/rulesets appropriate to the work
 - payment initiation routed through the provider abstraction instead of hard-coding an `unconfigured` payment row in the API route;
 - PayZen preparation documented separately in `docs/PAYZEN_INTEGRATION.md` without guessing private departmental endpoints or credentials;
 - service-fee financial snapshot regression coverage added for historical bookings and new quotes;
-- shared quote path now refreshes the persisted HQ service fee before front-desk booking creation so worker-local fee state cannot drift after an HQ update.
+- shared quote path refreshes the persisted HQ service fee before front-desk booking creation so worker-local fee state cannot drift after an HQ update.
 
 ## Do not over-clean runtime bridges
 
