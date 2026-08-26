@@ -48,5 +48,14 @@ jobs:
           path: backend/pytest-results.xml
           if-no-files-found: ignore
           retention-days: 3
-      - name: Migration import check
+      - name: Migration graph check
         run: alembic heads
+      - name: Fresh database migration smoke test
+        env:
+          DATABASE_URL: sqlite+aiosqlite:////tmp/sbp-padel-migration-ci.db
+          ENVIRONMENT: development
+        run: |
+          rm -f /tmp/sbp-padel-migration-ci.db
+          alembic upgrade head
+          alembic current
+          alembic check
