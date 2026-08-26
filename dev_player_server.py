@@ -56,6 +56,11 @@ EARLY_RUNTIME_BOOTSTRAP = """<script>
 }catch(e){console.warn('SBP early runtime bootstrap',e)}})();
 </script>"""
 
+CANONICAL_REVIEW_BOOTSTRAP = (
+    '<script src="deep-router.js?dev=canonical-review"></script>'
+    '<script src="review-native.js?dev=canonical-review"></script>'
+)
+
 
 def current_build_id() -> str:
     try:
@@ -126,8 +131,21 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
             mobile_bootstrap = '<script src="mobile-runtime.js?dev=1"></script>'
             if 'src="mobile-runtime.js' not in html and "src='mobile-runtime.js" not in html:
                 html = html.replace("</head>", mobile_bootstrap + "</head>")
-            if page == "index.html" and 'native-tall-layout.css' not in html:
-                html = html.replace("</head>", '<link rel="stylesheet" href="native-tall-layout.css?dev=1"></head>')
+            if page == "index.html":
+                if 'native-tall-layout.css' not in html:
+                    html = html.replace("</head>", '<link rel="stylesheet" href="native-tall-layout.css?dev=1"></head>')
+                # The player shell used to load review-native.js late through the
+                # generic footer injection. That created a race where the first
+                # Review navigation could reach legacy review-booking.html while
+                # later visits used the native Step-5 Review. Install the deep
+                # router and native Review wrapper before app.js so every Review
+                # request has one deterministic destination.
+                if 'canonical-review' not in html:
+                    marker = '<script src="app.js'
+                    if marker in html:
+                        html = html.replace(marker, CANONICAL_REVIEW_BOOTSTRAP + marker, 1)
+                    else:
+                        html = html.replace("</head>", CANONICAL_REVIEW_BOOTSTRAP + "</head>")
             scripts: list[str] = []
             for name in [*COMMON_SCRIPTS, *PAGE_SCRIPTS.get(page, [])]:
                 if name not in scripts and f'src="{name}' not in html and f"src='{name}" not in html:
