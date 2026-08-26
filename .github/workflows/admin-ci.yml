@@ -5,12 +5,15 @@ on:
     paths: ['admin/**','run_admin_dev.ps1','.github/workflows/admin-ci.yml']
   pull_request:
     paths: ['admin/**','run_admin_dev.ps1','.github/workflows/admin-ci.yml']
+permissions:
+  contents: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build-and-admin-runtime:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     defaults:
       run: {working-directory: admin}
     steps:
