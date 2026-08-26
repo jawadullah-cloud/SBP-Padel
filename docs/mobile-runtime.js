@@ -26,7 +26,7 @@
       html.sbp-native-mobile .app>.screen{inset:56px 0 68px!important;overflow-y:auto!important;overflow-x:hidden!important;touch-action:auto!important;overscroll-behavior-y:auto!important;-webkit-overflow-scrolling:touch!important}
       html.sbp-native-mobile .app>nav{bottom:0!important;height:68px!important;padding-bottom:4px!important}
       html.sbp-native-mobile .screen::-webkit-scrollbar,html.sbp-native-mobile .formPanel::-webkit-scrollbar{display:none}
-      html.sbp-native-mobile #venues,html.sbp-native-mobile #bookings,html.sbp-native-mobile #profile,html.sbp-native-mobile #nishtar{overflow-y:auto!important;touch-action:auto!important;-webkit-overflow-scrolling:touch!important}
+      html.sbp-native-mobile #venues,html.sbp-native-mobile #bookings,html.sbp-native-mobile #profile,html.sbp-native-mobile #nishtar,html.sbp-native-mobile #reviewNative{overflow-y:auto!important;touch-action:pan-y!important;-webkit-overflow-scrolling:touch!important}
       html.sbp-native-mobile #venues>.content,html.sbp-native-mobile #bookings .bkWrap,html.sbp-native-mobile #profile>.content,html.sbp-native-mobile #nishtar>.content{padding-bottom:40px!important;min-height:max-content!important}
       html.sbp-native-mobile #home .homeContent{padding-bottom:8px!important}
       html.sbp-native-mobile #home .homeFeature{margin-bottom:0!important}
@@ -40,7 +40,10 @@
       html.sbp-native-mobile body>.phone>.screen label,
       html.sbp-native-mobile body>.phone>.screen select,
       html.sbp-native-mobile body>.phone>.screen textarea,
-      html.sbp-native-mobile body>.phone>.screen [role="button"]{touch-action:manipulation}
+      html.sbp-native-mobile body>.phone>.screen [role="button"],
+      html.sbp-native-mobile #reviewNative button,
+      html.sbp-native-mobile #reviewNative input,
+      html.sbp-native-mobile #reviewNative label{touch-action:manipulation}
       html.sbp-native-mobile .authLayer{overflow:hidden!important}
       html.sbp-native-mobile .authScreen.authPage{overflow-y:auto!important;touch-action:pan-y!important;-webkit-overflow-scrolling:touch!important;padding-bottom:36px!important}
       html.sbp-native-mobile .authTop{padding-top:8px!important;margin-bottom:20px!important}
@@ -87,13 +90,11 @@
     document.addEventListener('focusout',()=>setTimeout(syncKeyboard,120));
 
     // Android System WebView can fail nested CSS scrolling on absolutely
-    // positioned screens and on standalone booking pages hosted in the
-    // deep-route iframe. Own vertical touch movement for both shapes, but
-    // preserve normal taps on buttons/inputs. Real taps often drift a few
-    // pixels, so interactive controls use a deliberately larger threshold
-    // before the gesture is promoted from a tap to a manual scroll.
+    // positioned screens. Own vertical touch movement for the main long
+    // screens and for the canonical native Step-5 Review screen. Preserve
+    // taps by giving interactive controls a larger movement threshold.
     let scroller=null,startY=0,lastY=0,moved=false,moveThreshold=6;
-    const ownedScroller=target=>target?.closest?.('#venues,#bookings,#profile,#nishtar,.phone>.screen');
+    const ownedScroller=target=>target?.closest?.('#venues,#bookings,#profile,#nishtar,#reviewNative,.phone>.screen');
     const interactiveTarget=target=>!!target?.closest?.('button,a,input,label,select,textarea,[role="button"],[onclick]');
     document.addEventListener('touchstart',e=>{
       if(e.touches.length!==1)return;
