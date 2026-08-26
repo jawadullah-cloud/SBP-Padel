@@ -115,6 +115,12 @@ async def quote_payload(payload: QuoteRequest, db: AsyncSession) -> tuple[Venue,
             raise HTTPException(409, f"No active price is configured for {start.isoformat(timespec='minutes')}")
         details.append({"start_time": start, "end_time": end, "rate": rate})
         total += rate
+
+    # Operations/front-desk booking reuses this quote path and historically read
+    # settings.service_fee immediately afterwards. Refresh the worker-local cache
+    # from the persisted HQ setting here so multi-worker deployments cannot use a
+    # stale service fee for staff-created bookings.
+    settings.service_fee = int(await get_service_fee(db))
     return venue, court, details, total
 
 
