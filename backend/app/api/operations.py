@@ -93,8 +93,6 @@ async def operational_bookings(
                 User.phone.ilike(needle),
             )
         )
-    # General Bookings is an activity/history view: newest booking created first.
-    # Court Schedule remains the chronological session view.
     bookings = (await db.scalars(stmt.order_by(Booking.created_at.desc(), Booking.booking_date.desc()).limit(200))).all()
     result = []
     for booking in bookings:
@@ -200,6 +198,27 @@ async def create_block(
         court = await db.get(Court, payload.court_id)
         if not court or court.venue_id != payload.venue_id:
             raise HTTPException(400, "Court does not belong to the selected venue")
+
+    conflict_stmt = (
+        select(Booking.id)
+        .join(BookingSlot, BookingSlot.booking_id == Booking.id)
+        .where(
+            Booking.venue_id == payload.venue_id,
+            Booking.booking_date == payload.block_date,
+            Booking.status.in_([BookingStatus.pending_payment, BookingStatus.confirmed, BookingStatus.rescheduled]),
+            BookingSlot.start_time < payload.end_time,
+            BookingSlot.end_time > payload.start_time,
+        )
+    )
+    if payload.court_id:
+        conflict_stmt = conflict_stmt.where(Booking.court_id == payload.court_id)
+    impacted = set((await db.scalars(conflict_stmt)).all())
+    if impacted:
+        raise HTTPException(
+            409,
+            f"This closure conflicts with {len(impacted)} active booking(s). Reschedule or cancel those bookings before blocking this time.",
+        )
+
     row = VenueBlock(
         venue_id=payload.venue_id,
         court_id=payload.court_id,
