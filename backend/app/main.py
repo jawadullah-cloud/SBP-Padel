@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.account import router as account_router
 from app.api.admin import router as admin_router
@@ -51,13 +52,19 @@ async def lifespan(app: FastAPI):
     await slot_locks.close()
 
 
+non_local = settings.environment.strip().lower() not in {"development", "test"}
 app = FastAPI(
     title=settings.app_name,
     version="0.11.0",
     description="Sports Board Punjab Padel booking and venue management API",
     lifespan=lifespan,
+    docs_url=None if non_local else "/docs",
+    redoc_url=None if non_local else "/redoc",
+    openapi_url=None if non_local else "/openapi.json",
 )
 app.add_middleware(AdministrationAuditMiddleware)
+if non_local:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_host_list)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -65,6 +72,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def baseline_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Cache-Control", "no-store")
+    return response
+
 
 for api_router in [
     router,
@@ -99,4 +117,7 @@ app.include_router(health_router)
 
 @app.get("/", include_in_schema=False)
 async def root() -> dict:
-    return {"service": settings.app_name, "api": settings.api_prefix, "docs": "/docs"}
+    payload = {"service": settings.app_name, "api": settings.api_prefix}
+    if not non_local:
+        payload["docs"] = "/docs"
+    return payload
