@@ -24,6 +24,7 @@ from app.api.operations_courts import router as operations_courts_router
 from app.api.operations_management import router as operations_management_router
 from app.api.operations_passes import router as operations_passes_router
 from app.api.operations_players import router as operations_players_router
+from app.api.operations_refunds import router as operations_refunds_router
 from app.api.operations_reschedules import router as operations_reschedules_router
 from app.api.payments import router as payments_router
 from app.api.player_payments import router as player_payments_router
@@ -126,6 +127,7 @@ for api_router in [
     operations_reschedules_router,
     operations_passes_router,
     operations_players_router,
+    operations_refunds_router,
 ]:
     app.include_router(api_router, prefix=settings.api_prefix)
 
