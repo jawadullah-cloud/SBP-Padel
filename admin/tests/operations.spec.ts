@@ -106,3 +106,25 @@ test('venue switch clears front-desk player selection', async ({ page }) => {
   await expect(page.locator('.formGrid select').first()).toHaveValue('');
   await expect(page.locator('.sectionNote').filter({ hasText: 'Select a registered player from the search results.' })).toBeVisible();
 });
+
+test('Players and Scan Pass keep the complete operations navigation and return to requested tab', async ({ page }) => {
+  await mockOperations(page);
+  await page.goto('/');
+  await expect(page.locator('.nav button').filter({ hasText: /^Players$/ })).toBeVisible();
+  await page.locator('.nav button').filter({ hasText: /^Players$/ }).click();
+  await expect(page).toHaveURL(/\/players$/);
+
+  for (const label of ['Court Schedule','Bookings','New Booking','Payments & Refunds','Bookable Hours & Pricing','Closures & Maintenance','Courts','Reports','Scan Pass']) {
+    await expect(page.locator('.nav button').filter({ hasText: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`) })).toBeVisible();
+  }
+
+  await page.locator('.nav button').filter({ hasText: /^Payments & Refunds$/ }).click();
+  await expect(page).toHaveURL(/\/?tab=payments$/);
+  await expect(page.locator('header.top h1')).toHaveText('Payments & Refunds');
+
+  await page.locator('.nav button').filter({ hasText: /^Scan Pass$/ }).click();
+  await expect(page).toHaveURL(/\/scan-pass$/);
+  for (const label of ['Court Schedule','Bookings','New Booking','Payments & Refunds','Bookable Hours & Pricing','Closures & Maintenance','Courts','Reports']) {
+    await expect(page.locator('.nav button').filter({ hasText: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`) })).toBeVisible();
+  }
+});
