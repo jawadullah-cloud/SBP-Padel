@@ -34,9 +34,15 @@ await page.addInitScript(()=>{
 try{
   await page.goto(`${base}/payment.html`,{waitUntil:'networkidle'});
   await page.locator('#payButton').waitFor({state:'visible'});
+  await page.waitForTimeout(100);
+  const runtime=await page.evaluate(()=>({live:!!window.__SBPPaymentMethodsLive,capture:!!window.__SBPProviderCheckoutCapture,scripts:[...document.scripts].map(s=>s.src).filter(Boolean)}));
+  assert(runtime.live,`payment-methods-live.js did not execute. scripts=${runtime.scripts.join(' | ')}; pageErrors=${pageErrors.join(' | ')}`);
+  assert(runtime.capture,`Provider checkout owner was not installed. scripts=${runtime.scripts.join(' | ')}; pageErrors=${pageErrors.join(' | ')}`);
   await page.locator('#payButton').click();
-  await page.locator('#providerAwaiting').waitFor({state:'visible'});
-  assert(initiateCalls===1,`Expected one provider initiation, got ${initiateCalls}.`);
+  await page.waitForTimeout(1200);
+  const providerVisible=await page.locator('#providerAwaiting').isVisible().catch(()=>false);
+  assert(providerVisible,`Provider awaiting panel did not appear. requests=${apiRequests.join(' | ')}; simulateCalled=${simulateCalled}; pageErrors=${pageErrors.join(' | ')}; scripts=${runtime.scripts.join(' | ')}`);
+  assert(initiateCalls===1,`Expected one provider initiation, got ${initiateCalls}. requests=${apiRequests.join(' | ')}`);
   assert(!simulateCalled,'Configured provider checkout called the development simulator.');
   assert((await page.locator('#providerAwaiting').innerText()).includes('PSID-2026-000123'),'Provider PSID/reference was not shown to the player.');
   assert(await page.locator('#copyProviderReference').isVisible(),'Provider reference Copy control is missing.');
