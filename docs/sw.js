@@ -1,4 +1,4 @@
-const BUILD='20260826-production-runtime-v2';
+const BUILD='20260826-production-runtime-v3';
 self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',event=>{event.waitUntil(self.clients.claim())});
 
@@ -19,6 +19,7 @@ const COMMON_SCRIPTS=[
   'android-back.js',
   'back-icons.js',
   'app-branding.js',
+  'bookings-activation-guard.js',
 ];
 
 const PAGE_SCRIPTS={
