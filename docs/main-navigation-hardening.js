@@ -3,13 +3,44 @@
   if(window.__SBPMainNavigationHardening)return;
   window.__SBPMainNavigationHardening=true;
 
-  // Recovery belongs only to the persistent bottom-navigation destinations.
-  // Booking-flow screens have their own transition/scroll lifecycle and must not
-  // be reset by this guard.
+  // Recovery belongs to the persistent bottom-navigation destinations.
+  // Booking-flow choreography remains owned by its flow modules. The only
+  // booking-flow state we explicitly clear here is stale interaction state
+  // from a screen being abandoned for a persistent destination.
   const recoveryScreens=new Set(['home','bookings','venues','profile']);
+
+  function deactivateAbandonedFlowScreens(target){
+    if(!recoveryScreens.has(target))return;
+
+    // Canonical Step-5 Review intentionally sets pointerEvents inline while
+    // active. A normal SBPNavigate() only changes .active classes, so without
+    // this cleanup Review can become invisible yet remain above the whole app
+    // and intercept every tap after the user abandons the booking flow.
+    const review=document.getElementById('reviewNative');
+    if(review&&review.id!==target){
+      review.classList.remove('active');
+      review.style.pointerEvents='none';
+      review.style.touchAction='';
+      review.style.webkitOverflowScrolling='';
+    }
+
+    // Future flow screens must not retain an explicit interactive override
+    // when they are no longer active. Do not alter their normal transition,
+    // scrolling or back/forward logic while they remain active.
+    document.querySelectorAll('.app>.screen:not(.active)').forEach(screen=>{
+      if(recoveryScreens.has(screen.id))return;
+      if(screen.style.pointerEvents==='auto')screen.style.pointerEvents='none';
+    });
+
+    const nav=document.querySelector('.app>nav,nav');
+    if(nav)nav.classList.remove('flowHidden');
+  }
 
   function clearStaleInteractionState(target){
     if(!recoveryScreens.has(target))return;
+
+    deactivateAbandonedFlowScreens(target);
+
     recoveryScreens.forEach(id=>{
       const screen=document.getElementById(id);
       if(!screen)return;
