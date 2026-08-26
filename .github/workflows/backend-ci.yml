@@ -59,3 +59,14 @@ jobs:
           alembic upgrade head
           alembic current
           alembic check
+      - name: Production configuration preflight
+        env:
+          ENVIRONMENT: production
+          DATABASE_URL: postgresql+asyncpg://sbp:ci-only@db.example/sbp_padel
+          JWT_SECRET: ci-only-production-preflight-secret-000000000000
+          CORS_ORIGINS: https://admin.example,https://player.example
+          SMTP_HOST: smtp.example
+          SMTP_FROM_EMAIL: no-reply@example
+          REDIS_REQUIRED: 'false'
+          REDIS_URL: ''
+        run: python scripts/production_preflight.py
