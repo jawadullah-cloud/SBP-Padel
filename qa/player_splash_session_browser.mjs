@@ -21,19 +21,25 @@ try{
  assert(await loggedOut.locator('.glassActions').isVisible(),'Logged-out splash did not show Sign In/Create Account actions.');
  await loggedOut.close();
 
- // Seed the session before the document is created. This is the real app-start condition
- // that the pre-paint session splash bootstrap is designed to detect.
+ // Seed the session before the document is created. Capture the splash state synchronously
+ // after DOMContentLoaded, before its deliberate redirect timer can leave auth-preview.html.
  const loggedIn=await browser.newPage({viewport:{width:412,height:915}});
  await routeApi(loggedIn);
  await loggedIn.addInitScript(()=>{
   localStorage.setItem('sbpPadelAccessToken','qa-token');
   localStorage.setItem('sbpPadelUser',JSON.stringify({full_name:'Splash QA'}));
  });
- await loggedIn.goto(`${base}/auth-preview.html`,{waitUntil:'commit'});
- await loggedIn.waitForFunction(()=>document.documentElement.classList.contains('sbp-session-splash'),null,{timeout:1500});
- const display=await loggedIn.locator('.glassActions').evaluate(el=>getComputedStyle(el).display);
- assert(display==='none','Logged-in splash still rendered Sign In/Create Account actions.');
- assert(await loggedIn.locator('#splash').isVisible(),'Logged-in session skipped the branded splash entirely.');
+ await loggedIn.goto(`${base}/auth-preview.html`,{waitUntil:'domcontentloaded'});
+ const splashState=await loggedIn.evaluate(()=>({
+  sessionMode:document.documentElement.classList.contains('sbp-session-splash'),
+  actionDisplay:getComputedStyle(document.querySelector('.glassActions')).display,
+  splashVisible:!!document.querySelector('#splash')&&getComputedStyle(document.querySelector('#splash')).display!=='none',
+  token:localStorage.getItem('sbpPadelAccessToken')
+ }));
+ assert(splashState.sessionMode,'Logged-in splash did not enter session-aware mode before paint.');
+ assert(splashState.actionDisplay==='none','Logged-in splash still rendered Sign In/Create Account actions.');
+ assert(splashState.splashVisible,'Logged-in session skipped the branded splash entirely.');
+ assert(splashState.token==='qa-token','Session-aware splash cleared a valid stored session before redirect.');
  await loggedIn.waitForURL(url=>!url.pathname.endsWith('/auth-preview.html'),{timeout:4000});
  assert((await loggedIn.evaluate(()=>localStorage.getItem('sbpPadelAccessToken')))==='qa-token','Session-aware splash cleared a valid stored session.');
  console.log('Player session-aware splash browser QA passed.');
