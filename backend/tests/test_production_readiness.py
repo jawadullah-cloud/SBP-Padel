@@ -9,6 +9,7 @@ def production_settings(**overrides) -> Settings:
         "database_url": "postgresql+asyncpg://sbp:secret@db.example/sbp_padel",
         "jwt_secret": "x" * 48,
         "cors_origins": "https://admin.example,https://player.example",
+        "trusted_hosts": "api.example",
         "smtp_host": "smtp.example",
         "smtp_from_email": "no-reply@example",
     }
@@ -35,6 +36,13 @@ def test_nonlocal_runtime_rejects_insecure_or_local_cors() -> None:
         validate_runtime_settings(production_settings(cors_origins="http://admin.example"))
     with pytest.raises(RuntimeError, match="localhost"):
         validate_runtime_settings(production_settings(cors_origins="https://localhost:3000"))
+
+
+def test_nonlocal_runtime_requires_explicit_trusted_hosts() -> None:
+    with pytest.raises(RuntimeError, match="TRUSTED_HOSTS"):
+        validate_runtime_settings(production_settings(trusted_hosts="*"))
+    with pytest.raises(RuntimeError, match="local/test hosts"):
+        validate_runtime_settings(production_settings(trusted_hosts="localhost"))
 
 
 def test_production_requires_password_reset_email_delivery() -> None:
