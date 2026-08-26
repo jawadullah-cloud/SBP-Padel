@@ -48,6 +48,9 @@ jobs:
           grep -q 'saved-players-sync.js' dev_player_server.py
           grep -q 'google-auth-disabled.js' dev_player_server.py
           test -f docs/google-auth-disabled.js
+          test ! -f docs/google-auth.js
+          test ! -f docs/saved-player-sync.js
+          test ! -f docs/saved-players-bridge.js
           grep -q 'player-booking-integrity.js' dev_player_server.py
           grep -q 'booking-detail-polish.js' dev_player_server.py
           grep -q 'auth-session-splash-guard.js' dev_player_server.py
@@ -65,6 +68,11 @@ jobs:
           grep -q '#reviewNative' docs/mobile-runtime.js
           grep -q 'CANONICAL_REVIEW_BOOTSTRAP' dev_player_server.py
           grep -q '__reviewNative' docs/review-native.js
+          grep -q '20260826-production-runtime-v1' docs/sw.js
+          grep -q "'runtime-api.js'" docs/sw.js
+          grep -q "'saved-players-sync.js'" docs/sw.js
+          grep -q 'Loading the current cancellation window' docs/sw.js
+          ! grep -q "'dev-runtime.js'" docs/sw.js
           ! grep -q 'Adeel Raza' docs/player-profile-live.js
           ! grep -q 'PDL-002381' docs/digital-pass-live.js
           ! grep -qi 'Continue with Google' docs/auth-preview.html
