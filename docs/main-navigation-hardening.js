@@ -10,12 +10,21 @@
 
   function clearStaleInteractionState(target){
     if(!recoveryScreens.has(target))return;
-    const active=document.getElementById(target);
-    if(active){
-      active.style.pointerEvents='auto';
-      active.style.touchAction='pan-y';
-      active.style.webkitOverflowScrolling='touch';
-    }
+    recoveryScreens.forEach(id=>{
+      const screen=document.getElementById(id);
+      if(!screen)return;
+      if(id===target){
+        screen.style.pointerEvents='auto';
+        screen.style.touchAction='pan-y';
+        screen.style.webkitOverflowScrolling='touch';
+      }else{
+        // Remove inline values left behind by an earlier active state so the
+        // normal inactive-screen CSS can make the screen non-interactive again.
+        screen.style.pointerEvents='';
+        screen.style.touchAction='';
+        screen.style.webkitOverflowScrolling='';
+      }
+    });
     document.querySelectorAll('.sbp-pressed').forEach(el=>el.classList.remove('sbp-pressed'));
 
     const layer=document.getElementById('sbpDeepLayer');
