@@ -76,7 +76,7 @@ def current_build_id() -> str:
 
 
 def mask_prototype_booking_content(page: str, html: str) -> str:
-    """Do not flash prototype identities/bookings before the live runtime hydrates."""
+    """Do not flash prototype identities/bookings/actions before the live runtime hydrates."""
     if page == "review-booking.html":
         html = html.replace("<div class=\"avatar\">AR</div><div><h3>Adeel Raza</h3>", "<div class=\"avatar\">P</div><div><h3>Player</h3>")
     elif page == "payment-success.html":
@@ -91,6 +91,11 @@ def mask_prototype_booking_content(page: str, html: str) -> str:
         html = html.replace("7:00 PM – 8:00 PM", "LOADING…")
         html = html.replace("NISHTAR PARK SPORTS COMPLEX", "LOADING BOOKING…")
         html = html.replace("COURT 01", "LOADING…")
+    elif page == "booking-detail.html":
+        # The static prototype contains active actions before the live booking status is known.
+        # Keep the container hidden from first paint; player-booking-integrity.js reveals the
+        # correct action set only after the real booking has hydrated.
+        html = html.replace('<div class="tools" id="tools">', '<div class="tools" id="tools" style="visibility:hidden">', 1)
     return html
 
 
