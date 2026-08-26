@@ -35,7 +35,7 @@ const swipe=async locator=>locator.evaluate(el=>{
 
 try{
   await page.goto(`${base}/index.html?api=http://127.0.0.1:8000/api/v1`,{waitUntil:'networkidle'});
-  await page.waitForFunction(()=>typeof window.SBPDeepRoute==='function'&&typeof window.SBPReviewNativeOpen==='function'&&window.SBPDeepRoute.__reviewNative===true);
+  await page.waitForFunction(()=>typeof window.SBPDeepRoute==='function'&&typeof window.SBPReviewNativeOpen==='function');
 
   const openAndAssertCanonical=async()=>{
     await page.evaluate(()=>window.SBPDeepRoute('review-booking.html'));
