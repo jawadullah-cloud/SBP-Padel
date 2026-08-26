@@ -5,16 +5,23 @@ backend/.env.*
 backend/*.db
 backend/*.db-*
 
-# Python caches
+# Python caches, coverage and environments
 **/__pycache__/
 **/.pytest_cache/
+**/.ruff_cache/
 *.pyc
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
 
-# Admin dependencies/build output
+# Admin dependencies/build/test output
 admin/node_modules/
 admin/.next/
 admin/playwright-report/
 admin/test-results/
+admin/coverage/
 
 # Android generated/signing material. The committed dev-signing-key.b64 is a
 # disposable debug fixture; real release keys must never be committed.
@@ -22,6 +29,7 @@ android/*.keystore
 android/*.jks
 android/*.p12
 android/key.properties
+android/local.properties
 android/.gradle/
 android/**/build/
 
@@ -29,3 +37,10 @@ android/**/build/
 .env
 .env.*
 !.env.example
+
+# Local logs and editor/OS metadata
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
