@@ -15,6 +15,10 @@ await page.route('**/api/v1/**',async route=>{
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({id:'user-1',full_name:'Mobile QA'})});
     return;
   }
+  if(url.pathname.endsWith('/bookings/me')||url.pathname.endsWith('/notifications/me')||url.pathname.endsWith('/venues')){
+    await route.fulfill({status:200,contentType:'application/json',body:'[]'});
+    return;
+  }
   await route.fulfill({status:200,contentType:'application/json',body:'{}'});
 });
 
@@ -57,6 +61,35 @@ try{
   const after=await review.evaluate(el=>el.scrollTop);
   assert(after>100,`Android-owned canonical Review scrolling did not move the screen (${after}).`);
 
+  // Abandon the unfinished booking directly from Review. This is the exact
+  // regression that previously left an invisible Review screen over the app.
+  await page.evaluate(()=>window.SBPNavigate('home'));
+  await page.waitForFunction(()=>document.getElementById('home')?.classList.contains('active'));
+  const escaped=await page.evaluate(()=>{
+    const review=document.getElementById('reviewNative');
+    return {
+      reviewActive:!!review?.classList.contains('active'),
+      reviewPointer:review?getComputedStyle(review).pointerEvents:'none',
+    };
+  });
+  assert(!escaped.reviewActive,'Review remained active after abandoning the booking flow.');
+  assert(escaped.reviewPointer==='none','Invisible Review still intercepted clicks after abandoning the booking flow.');
+
+  for(const target of ['bookings','venues','profile','home']){
+    await page.locator(`nav [data-nav="${target}"]`).click();
+    await page.waitForFunction(id=>document.getElementById(id)?.classList.contains('active'),target);
+    const blocker=await page.evaluate(()=>getComputedStyle(document.getElementById('reviewNative')).pointerEvents);
+    assert(blocker==='none',`Review intercepted ${target} after booking-flow escape.`);
+  }
+  await page.locator('#home .primary[data-nav="venues"]').click();
+  await page.waitForFunction(()=>document.getElementById('venues')?.classList.contains('active'));
+
+  // Canonical Review must still work normally after a later fresh entry.
+  await openAndAssertCanonical();
+  await review.evaluate(el=>{el.scrollTop=0});
+  await swipe(page.locator('#reviewNative .rnCard').first());
+  assert((await review.evaluate(el=>el.scrollTop))>100,'Canonical Review stopped scrolling after re-entry.');
+
   await page.locator('#rnAccept').scrollIntoViewIfNeeded();
   await page.locator('#rnAccept').check();
   assert(!(await page.locator('#rnPay').isDisabled()),'Continue to Payment did not enable after policy acceptance.');
@@ -77,12 +110,12 @@ try{
 
   await page.locator('#rnBack').click();
   await page.waitForFunction(()=>document.getElementById('time')?.classList.contains('active'));
-  await page.locator('nav [data-nav="home"]').click();
+  await page.evaluate(()=>window.SBPNavigate('home'));
   await page.waitForFunction(()=>document.getElementById('home')?.classList.contains('active'));
   await page.locator('#home .primary[data-nav="venues"]').click();
   await page.waitForFunction(()=>document.getElementById('venues')?.classList.contains('active'));
 
-  console.log('Player canonical Review QA passed: one Step-5 implementation, Android touch scrolling, Payment transition, repeat entry and post-Review navigation all work.');
+  console.log('Player canonical Review QA passed: one Step-5 implementation, Android scrolling, safe unfinished-flow escape, all persistent tabs, Payment transition and repeat entry all work.');
 }finally{
   await browser.close();
 }
