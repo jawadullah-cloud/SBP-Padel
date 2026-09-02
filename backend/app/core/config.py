@@ -22,9 +22,13 @@ class Settings(BaseSettings):
     jwt_secret: str = DEFAULT_JWT_SECRET
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 60 * 24 * 7
+    staff_access_token_minutes: int = 60 * 8
     service_fee: int = 100
     slot_hold_minutes: int = 10
     password_reset_minutes: int = 10
+    auth_rate_limit_window_seconds: int = 300
+    login_rate_limit_attempts: int = 10
+    reset_rate_limit_attempts: int = 6
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None
@@ -84,16 +88,23 @@ def validate_runtime_settings(config: Settings) -> None:
     if config.redis_required and not config.redis_url:
         problems.append("REDIS_URL is required when REDIS_REQUIRED=true")
 
-    if config.access_token_minutes <= 0:
-        problems.append("ACCESS_TOKEN_MINUTES must be positive")
-    if config.slot_hold_minutes <= 0:
-        problems.append("SLOT_HOLD_MINUTES must be positive")
-    if config.password_reset_minutes <= 0:
-        problems.append("PASSWORD_RESET_MINUTES must be positive")
+    for name, value in {
+        "ACCESS_TOKEN_MINUTES": config.access_token_minutes,
+        "STAFF_ACCESS_TOKEN_MINUTES": config.staff_access_token_minutes,
+        "SLOT_HOLD_MINUTES": config.slot_hold_minutes,
+        "PASSWORD_RESET_MINUTES": config.password_reset_minutes,
+        "AUTH_RATE_LIMIT_WINDOW_SECONDS": config.auth_rate_limit_window_seconds,
+        "LOGIN_RATE_LIMIT_ATTEMPTS": config.login_rate_limit_attempts,
+        "RESET_RATE_LIMIT_ATTEMPTS": config.reset_rate_limit_attempts,
+    }.items():
+        if value <= 0:
+            problems.append(f"{name} must be positive")
 
     if environment == "production":
         if not config.smtp_host or not config.smtp_from_email:
             problems.append("SMTP_HOST and SMTP_FROM_EMAIL are required in production")
+        if not config.smtp_starttls:
+            problems.append("SMTP_STARTTLS must be enabled in production")
 
     if problems:
         raise RuntimeError("Invalid SBP-Padel runtime configuration: " + "; ".join(problems))
