@@ -1,4 +1,4 @@
-name: Android Debug APK
+name: Android APKs
 
 on:
   push:
@@ -49,27 +49,30 @@ jobs:
       - name: Verify development signing key
         working-directory: android
         run: keytool -list -keystore dev-signing.keystore -storepass sbppadeldev -alias sbppadeldev
-      - name: Print development signing SHA-1
+      - name: Build debug and secure release-candidate APKs
         working-directory: android
+        run: gradle :app:assembleDebug :app:assembleReleaseCandidate --stacktrace
+      - name: Verify APKs exist
+        run: |
+          test -f android/app/build/outputs/apk/debug/app-debug.apk
+          test -f android/app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk
+      - name: Verify release-candidate manifest security
         shell: bash
         run: |
-          echo '============================================================'
-          echo 'SBP PADEL ANDROID DEVELOPMENT SIGNING SHA-1'
-          keytool -list -v \
-            -keystore dev-signing.keystore \
-            -storepass sbppadeldev \
-            -alias sbppadeldev | grep 'SHA1:'
-          echo 'Package name: pk.gov.punjab.sbp.padel'
-          echo 'Use this SHA-1 when creating the Android OAuth client.'
-          echo '============================================================'
-      - name: Build debug APK
-        working-directory: android
-        run: gradle :app:assembleDebug --stacktrace
-      - name: Verify APK exists
-        run: test -f android/app/build/outputs/apk/debug/app-debug.apk
-      - name: Upload APK
+          set -euo pipefail
+          aapt dump xmltree android/app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk AndroidManifest.xml > /tmp/manifest.txt
+          if grep -q 'usesCleartextTraffic.*0xffffffff' /tmp/manifest.txt; then
+            echo 'Release candidate unexpectedly permits cleartext traffic'; exit 1
+          fi
+      - name: Upload debug APK
         uses: actions/upload-artifact@v6
         with:
           name: sbp-padel-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - name: Upload release-candidate APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: sbp-padel-1.0.0-rc1-apk
+          path: android/app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk
           if-no-files-found: error
