@@ -49,6 +49,8 @@ async def enforce_rate_limit(action: str, subject: str, limit: int) -> None:
     Local fallback keeps development/UAT safe from accidental hammering but is
     intentionally not a substitute for Redis in a horizontally scaled deployment.
     """
+    if settings.environment.strip().lower() == "test":
+        return
     window = settings.auth_rate_limit_window_seconds
     key = _bucket_key(action, subject)
     redis = await _redis_client()
