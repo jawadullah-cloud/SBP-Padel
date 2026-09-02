@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import validate_password_policy
 from app.core.security import hash_password, require_roles
 from app.db.session import get_db
 from app.models.domain import (
@@ -150,6 +151,7 @@ async def list_staff(_: User = Depends(admin_user), db: AsyncSession = Depends(g
 @router.post("/staff")
 async def create_staff(payload: StaffCreateRequest, _: User = Depends(admin_user), db: AsyncSession = Depends(get_db)) -> dict:
     if payload.role not in {UserRole.admin,UserRole.venue_manager,UserRole.venue_operator}: raise HTTPException(400,"Staff role is required")
+    validate_password_policy(payload.password)
     email=payload.email.strip().lower()
     if "@" not in email or email.startswith("@") or email.endswith("@"): raise HTTPException(400,"Invalid email address")
     if await db.scalar(select(User.id).where(User.email==email)): raise HTTPException(409,"Email is already in use")
