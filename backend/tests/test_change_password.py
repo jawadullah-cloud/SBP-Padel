@@ -55,6 +55,9 @@ def test_authenticated_password_change() -> None:
         )
         assert updated.status_code == 200
 
+        revoked = client.get("/api/v1/auth/me", headers=headers)
+        assert revoked.status_code == 401
+
         old_login = client.post(
             "/api/v1/auth/login", json={"identifier": email, "password": original}
         )
@@ -116,12 +119,17 @@ def test_manager_and_operator_self_service_change_password_and_admin_reset_remai
                 json={"current_password": original, "new_password": changed},
             )
             assert updated.status_code == 200
+            assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
             assert client.post(
                 "/api/v1/auth/login", json={"identifier": email, "password": original}
             ).status_code == 401
-            assert client.post(
+            changed_login = client.post(
                 "/api/v1/auth/login", json={"identifier": email, "password": changed}
-            ).status_code == 200
+            )
+            assert changed_login.status_code == 200
+            changed_headers = {
+                "Authorization": f"Bearer {changed_login.json()['access_token']}"
+            }
 
             admin_reset = client.patch(
                 f"/api/v1/admin/staff/{user_id}/password",
@@ -130,6 +138,7 @@ def test_manager_and_operator_self_service_change_password_and_admin_reset_remai
             )
             assert admin_reset.status_code == 200
             assert admin_reset.json()["password_reset"] is True
+            assert client.get("/api/v1/auth/me", headers=changed_headers).status_code == 401
             assert client.post(
                 "/api/v1/auth/login", json={"identifier": email, "password": changed}
             ).status_code == 401
