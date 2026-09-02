@@ -10,7 +10,10 @@ logger = logging.getLogger(__name__)
 
 def _send_sync(to_email: str, subject: str, body: str) -> bool:
     if not settings.smtp_host or not settings.smtp_from_email:
-        logger.warning("SMTP is not configured. Email for %s:\n%s", to_email, body)
+        if settings.environment == "development":
+            logger.warning("SMTP is not configured. Development email for %s:\n%s", to_email, body)
+        else:
+            logger.warning("SMTP is not configured; email delivery was skipped for %s", to_email)
         return False
     message = EmailMessage()
     message["Subject"] = subject
