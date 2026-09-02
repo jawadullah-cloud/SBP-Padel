@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Repository-structure prose misclassified as a generic API key"
+regexTarget = "match"
+regexes = [
+  '''FastAPI application, SQLAlchemy/Alembic persistence, booking/payment/operations APIs and backend tests'''
+]
+paths = [
+  '''README\.md'''
+]
