@@ -1,3 +1,4 @@
+import base64
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -17,6 +18,22 @@ class ImageCreate(BaseModel):
 class ImageOrder(BaseModel):
     image_ids:list[UUID]=Field(min_length=1,max_length=20)
 
+def _validate_image(value:str)->str:
+    allowed={
+        'data:image/jpeg;base64,':'jpeg',
+        'data:image/png;base64,':'png',
+        'data:image/webp;base64,':'webp',
+    }
+    prefix=next((p for p in allowed if value.startswith(p)),None)
+    if prefix is None: raise HTTPException(400,'Venue image must be JPEG, PNG or WebP')
+    try: raw=base64.b64decode(value[len(prefix):],validate=True)
+    except Exception: raise HTTPException(400,'Venue image is not valid base64 image data')
+    if not raw or len(raw)>6_000_000: raise HTTPException(400,'Venue image is too large')
+    kind=allowed[prefix]
+    valid=(kind=='jpeg' and raw.startswith(b'\xff\xd8\xff')) or (kind=='png' and raw.startswith(b'\x89PNG\r\n\x1a\n')) or (kind=='webp' and len(raw)>=12 and raw[:4]==b'RIFF' and raw[8:12]==b'WEBP')
+    if not valid: raise HTTPException(400,'Venue image content does not match its declared image type')
+    return value
+
 @router.get('/venues/{venue_id}/gallery',tags=['venues'])
 async def public_gallery(venue_id:UUID,db:AsyncSession=Depends(get_db))->list[dict]:
     venue=await db.get(Venue,venue_id)
@@ -32,11 +49,11 @@ async def admin_images(venue_id:UUID,_:User=Depends(admin_user),db:AsyncSession=
 @router.post('/admin/venues/{venue_id}/images',tags=['administration'])
 async def add_image(venue_id:UUID,payload:ImageCreate,_:User=Depends(admin_user),db:AsyncSession=Depends(get_db))->dict:
     if not await db.get(Venue,venue_id): raise HTTPException(404,'Venue not found')
-    if not payload.image_data_url.startswith('data:image/'): raise HTTPException(400,'Only image files are supported')
+    image_data=_validate_image(payload.image_data_url)
     count=await db.scalar(select(func.count()).select_from(VenueImage).where(VenueImage.venue_id==venue_id)) or 0
     if count>=12: raise HTTPException(409,'A venue can have up to 12 gallery images')
     if payload.is_cover or count==0: await db.execute(update(VenueImage).where(VenueImage.venue_id==venue_id).values(is_cover=False))
-    row=VenueImage(venue_id=venue_id,image_data_url=payload.image_data_url,caption=payload.caption.strip() if payload.caption else None,position=count,is_cover=payload.is_cover or count==0)
+    row=VenueImage(venue_id=venue_id,image_data_url=image_data,caption=payload.caption.strip() if payload.caption else None,position=count,is_cover=payload.is_cover or count==0)
     db.add(row); await db.commit(); await db.refresh(row)
     return {"id":str(row.id),"position":row.position,"is_cover":row.is_cover}
 
@@ -44,9 +61,6 @@ async def _apply_order(db:AsyncSession, rows:list[VenueImage], image_ids:list[UU
     by_id={r.id:r for r in rows}
     if len(image_ids)!=len(rows) or len(set(image_ids))!=len(image_ids) or set(image_ids)!=set(by_id):
         raise HTTPException(400,'Image order must include every venue image exactly once')
-    # venue_id + position is unique. Move every row to a temporary, collision-free
-    # range first, flush, then apply the final positions. Direct 0<->1 swaps can
-    # otherwise violate the unique constraint midway through the UPDATE sequence.
     for pos,image_id in enumerate(image_ids): by_id[image_id].position=1000+pos
     await db.flush()
     for pos,image_id in enumerate(image_ids): by_id[image_id].position=pos
