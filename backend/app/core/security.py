@@ -24,9 +24,21 @@ def verify_password(password: str, password_hash: str | None) -> bool:
     return bool(password_hash) and pwd_context.verify(password, password_hash)
 
 
-def create_access_token(user_id: UUID, role: str) -> str:
-    expires = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_minutes)
-    payload = {"sub": str(user_id), "role": role, "exp": expires}
+def _token_minutes_for(role: str) -> int:
+    if role in {UserRole.admin.value, UserRole.venue_manager.value, UserRole.venue_operator.value}:
+        return settings.staff_access_token_minutes
+    return settings.access_token_minutes
+
+
+def create_access_token(user_id: UUID, role: str, token_version: int = 0) -> str:
+    expires = datetime.now(timezone.utc) + timedelta(minutes=_token_minutes_for(role))
+    payload = {
+        "sub": str(user_id),
+        "role": role,
+        "ver": int(token_version),
+        "iat": datetime.now(timezone.utc),
+        "exp": expires,
+    }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
@@ -41,10 +53,11 @@ async def current_user(
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
         user_id = UUID(payload.get("sub", ""))
-    except (JWTError, ValueError):
+        token_version = int(payload.get("ver", -1))
+    except (JWTError, ValueError, TypeError):
         raise credentials_error
     user = await db.get(User, user_id)
-    if not user or not user.is_active:
+    if not user or not user.is_active or token_version != int(user.token_version or 0):
         raise credentials_error
     return user
 
