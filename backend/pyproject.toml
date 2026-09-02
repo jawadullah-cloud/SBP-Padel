@@ -30,6 +30,9 @@ dev = [
   "pip-audit>=2.9,<3.0"
 ]
 
+[tool.vercel]
+entrypoint = "app.main:app"
+
 [tool.setuptools.packages.find]
 include = ["app*"]
 exclude = ["alembic*"]
