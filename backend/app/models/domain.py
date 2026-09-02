@@ -18,7 +18,7 @@ class TimestampMixin:
     created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc),nullable=False)
     updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc),onupdate=lambda:datetime.now(timezone.utc),nullable=False)
 class User(TimestampMixin,Base):
-    __tablename__="users"; id:Mapped[uuid.UUID]=mapped_column(Uuid,primary_key=True,default=uuid.uuid4); full_name:Mapped[str]=mapped_column(String(150),nullable=False); phone:Mapped[str|None]=mapped_column(String(30),unique=True); email:Mapped[str|None]=mapped_column(String(254),unique=True); password_hash:Mapped[str|None]=mapped_column(String(255)); role:Mapped[UserRole]=mapped_column(Enum(UserRole),default=UserRole.player,nullable=False); is_active:Mapped[bool]=mapped_column(Boolean,default=True,nullable=False)
+    __tablename__="users"; id:Mapped[uuid.UUID]=mapped_column(Uuid,primary_key=True,default=uuid.uuid4); full_name:Mapped[str]=mapped_column(String(150),nullable=False); phone:Mapped[str|None]=mapped_column(String(30),unique=True); email:Mapped[str|None]=mapped_column(String(254),unique=True); password_hash:Mapped[str|None]=mapped_column(String(255)); role:Mapped[UserRole]=mapped_column(Enum(UserRole),default=UserRole.player,nullable=False); is_active:Mapped[bool]=mapped_column(Boolean,default=True,nullable=False); token_version:Mapped[int]=mapped_column(Integer,default=0,nullable=False)
 class UserProfile(TimestampMixin,Base):
     __tablename__="user_profiles"; user_id:Mapped[uuid.UUID]=mapped_column(ForeignKey("users.id",ondelete="CASCADE"),primary_key=True); avatar_data_url:Mapped[str|None]=mapped_column(Text)
 class Venue(TimestampMixin,Base):
