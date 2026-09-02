@@ -4,9 +4,10 @@ import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 
+import jwt
+from jwt.exceptions import PyJWTError
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
-from jose import JWTError, jwt
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -102,11 +103,7 @@ class ResetPasswordRequest(BaseModel):
 
 async def authenticate(identifier: str, password: str, db: AsyncSession) -> User:
     normalized = identifier.strip()
-    user = await db.scalar(
-        select(User).where(
-            or_(User.email == normalized.lower(), User.phone == normalized)
-        )
-    )
+    user = await db.scalar(select(User).where(or_(User.email == normalized.lower(), User.phone == normalized)))
     if not user or not verify_password(password, user.password_hash):
         raise HTTPException(401, "Invalid login credentials")
     if not user.is_active:
@@ -150,13 +147,7 @@ async def register(payload: RegisterRequest, request: Request, db: AsyncSession 
     existing = await db.scalar(select(User).where(or_(*clauses)))
     if existing:
         raise HTTPException(409, "An account already exists with these details")
-    user = User(
-        full_name=payload.full_name.strip(),
-        email=payload.email.lower() if payload.email else None,
-        phone=payload.phone,
-        password_hash=hash_password(payload.password),
-        role=UserRole.player,
-    )
+    user = User(full_name=payload.full_name.strip(), email=payload.email.lower() if payload.email else None, phone=payload.phone, password_hash=hash_password(payload.password), role=UserRole.player)
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -173,10 +164,7 @@ async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depe
 
 @router.get("/google/config")
 async def google_config() -> dict:
-    return {
-        "enabled": bool(settings.google_client_id),
-        "client_id": settings.google_client_id if settings.google_client_id else None,
-    }
+    return {"enabled": bool(settings.google_client_id), "client_id": settings.google_client_id if settings.google_client_id else None}
 
 
 @router.post("/google")
@@ -194,13 +182,7 @@ async def google_login(payload: GoogleLoginRequest, request: Request, db: AsyncS
             user.full_name = claims["name"][:150]
             await db.commit()
     else:
-        user = User(
-            full_name=(claims.get("name") or email.split("@", 1)[0])[:150],
-            email=email,
-            phone=None,
-            password_hash=None,
-            role=UserRole.player,
-        )
+        user = User(full_name=(claims.get("name") or email.split("@", 1)[0])[:150], email=email, phone=None, password_hash=None, role=UserRole.player)
         db.add(user)
         await db.commit()
         await db.refresh(user)
@@ -227,15 +209,7 @@ async def forgot_password(payload: ForgotPasswordRequest, request: Request, db: 
     challenge = jwt.encode(challenge_payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
     delivered = False
     if user and user.email:
-        delivered = await send_email(
-            user.email,
-            "SBP Padel password reset code",
-            (
-                f"Your SBP Padel password reset code is: {code}\n\n"
-                f"This code expires in {settings.password_reset_minutes} minutes. "
-                "If you did not request this reset, you can ignore this email."
-            ),
-        )
+        delivered = await send_email(user.email, "SBP Padel password reset code", f"Your SBP Padel password reset code is: {code}\n\nThis code expires in {settings.password_reset_minutes} minutes. If you did not request this reset, you can ignore this email.")
     return {
         "message": "If that email is registered, a reset code has been sent.",
         "challenge": challenge,
@@ -250,7 +224,7 @@ async def reset_password(payload: ResetPasswordRequest, request: Request, db: As
     validate_password_policy(payload.new_password)
     try:
         data = jwt.decode(payload.challenge, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-    except JWTError:
+    except PyJWTError:
         raise HTTPException(400, "Reset code has expired or is invalid")
     if data.get("purpose") != "password_reset":
         raise HTTPException(400, "Invalid password reset challenge")
@@ -261,7 +235,6 @@ async def reset_password(payload: ResetPasswordRequest, request: Request, db: As
         raise HTTPException(400, "Incorrect reset code")
     try:
         from uuid import UUID
-
         user = await db.get(User, UUID(user_id))
     except ValueError:
         user = None
@@ -278,41 +251,20 @@ async def reset_password(payload: ResetPasswordRequest, request: Request, db: As
 
 
 @router.post("/token")
-async def token(
-    request: Request,
-    form: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
+async def token(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)) -> dict:
     subject = f"{client_ip(request)}|{form.username.strip().lower()}"
     await enforce_rate_limit("token", subject, settings.login_rate_limit_attempts)
     user = await authenticate(form.username, form.password, db)
-    return {
-        "access_token": create_access_token(user.id, user.role.value, user.token_version),
-        "token_type": "bearer",
-    }
+    return {"access_token": create_access_token(user.id, user.role.value, user.token_version), "token_type": "bearer"}
 
 
 @router.get("/me")
-async def me(
-    user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    return {
-        "id": str(user.id),
-        "full_name": user.full_name,
-        "email": user.email,
-        "phone": user.phone,
-        "role": user.role.value,
-        "avatar_data_url": await avatar_for(user.id, db),
-    }
+async def me(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> dict:
+    return {"id": str(user.id), "full_name": user.full_name, "email": user.email, "phone": user.phone, "role": user.role.value, "avatar_data_url": await avatar_for(user.id, db)}
 
 
 @router.put("/me/avatar")
-async def update_avatar(
-    payload: AvatarRequest,
-    user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
+async def update_avatar(payload: AvatarRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> dict:
     value = _validate_image_data_url(payload.avatar_data_url.strip())
     profile = await db.get(UserProfile, user.id)
     if profile is None:
@@ -325,10 +277,7 @@ async def update_avatar(
 
 
 @router.delete("/me/avatar")
-async def delete_avatar(
-    user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
+async def delete_avatar(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)) -> dict:
     profile = await db.get(UserProfile, user.id)
     if profile is not None:
         profile.avatar_data_url = None
