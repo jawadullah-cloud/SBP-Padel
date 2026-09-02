@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import jwt
+from jwt.exceptions import PyJWTError
 from fastapi import Request
-from jose import JWTError, jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.audit import write_audit
@@ -38,7 +39,7 @@ class AdministrationAuditMiddleware(BaseHTTPMiddleware):
                         payload={"path": path, "method": request.method, "status_code": response.status_code},
                     )
                     await session.commit()
-            except (JWTError, ValueError, TypeError):
+            except (PyJWTError, ValueError, TypeError):
                 pass
             except Exception:
                 # Audit capture must never make a successful operational action fail.
