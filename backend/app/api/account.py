@@ -27,5 +27,6 @@ async def change_password(
     if verify_password(payload.new_password, user.password_hash):
         raise HTTPException(400, "New password must be different from the current password")
     user.password_hash = hash_password(payload.new_password)
+    user.token_version = int(user.token_version or 0) + 1
     await db.commit()
-    return {"message": "Password changed successfully"}
+    return {"message": "Password changed successfully. Please sign in again."}
