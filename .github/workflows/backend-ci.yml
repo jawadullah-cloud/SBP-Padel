@@ -36,6 +36,8 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     env:
+      ENVIRONMENT: test
+      JWT_SECRET: ci-test-secret-for-sbp-padel-security-000000000000
       REDIS_URL: redis://127.0.0.1:6379/0
       REDIS_REQUIRED: 'true'
     defaults:
