@@ -4,7 +4,6 @@ import asyncio
 import hashlib
 import hmac
 import time
-from collections import defaultdict
 
 from fastapi import HTTPException, Request
 from redis.asyncio import Redis
