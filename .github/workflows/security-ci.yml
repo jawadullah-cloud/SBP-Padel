@@ -28,4 +28,12 @@ jobs:
           tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
           sudo install /tmp/gitleaks /usr/local/bin/gitleaks
       - name: Scan complete Git history
-        run: gitleaks git . --redact --no-banner
+        run: gitleaks git . --redact --no-banner --report-format json --report-path /tmp/gitleaks-report.json
+      - name: Upload redacted scan diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: gitleaks-redacted-report
+          path: /tmp/gitleaks-report.json
+          if-no-files-found: ignore
+          retention-days: 3
