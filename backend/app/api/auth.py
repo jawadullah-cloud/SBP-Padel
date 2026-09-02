@@ -1,9 +1,10 @@
+import base64
 import hashlib
 import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.email import send_email
 from app.core.google_auth import verify_google_id_token
+from app.core.rate_limit import client_ip, enforce_rate_limit
 from app.core.security import create_access_token, current_user, hash_password, verify_password
 from app.db.session import get_db
 from app.models.domain import User, UserProfile, UserRole
@@ -42,6 +44,32 @@ def _password_fingerprint(password_hash: str | None) -> str:
     return hashlib.sha256((password_hash or "").encode()).hexdigest()
 
 
+def _validate_image_data_url(value: str) -> str:
+    allowed = {
+        "data:image/jpeg;base64,": "jpeg",
+        "data:image/png;base64,": "png",
+        "data:image/webp;base64,": "webp",
+    }
+    prefix = next((p for p in allowed if value.startswith(p)), None)
+    if prefix is None:
+        raise HTTPException(400, "Profile picture must be JPEG, PNG or WebP")
+    try:
+        raw = base64.b64decode(value[len(prefix):], validate=True)
+    except Exception:
+        raise HTTPException(400, "Profile picture is not valid base64 image data")
+    if not raw or len(raw) > 375_000:
+        raise HTTPException(400, "Profile picture is too large")
+    kind = allowed[prefix]
+    valid = (
+        (kind == "jpeg" and raw.startswith(b"\xff\xd8\xff"))
+        or (kind == "png" and raw.startswith(b"\x89PNG\r\n\x1a\n"))
+        or (kind == "webp" and len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WEBP")
+    )
+    if not valid:
+        raise HTTPException(400, "Profile picture content does not match its declared image type")
+    return value
+
+
 class RegisterRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=150)
     email: str | None = Field(default=None, max_length=254)
@@ -50,8 +78,8 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    identifier: str
-    password: str
+    identifier: str = Field(min_length=1, max_length=254)
+    password: str = Field(min_length=1, max_length=128)
 
 
 class GoogleLoginRequest(BaseModel):
@@ -67,7 +95,7 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    challenge: str
+    challenge: str = Field(min_length=20, max_length=5000)
     otp: str = Field(min_length=6, max_length=6)
     new_password: str = Field(min_length=8, max_length=128)
 
@@ -93,7 +121,7 @@ async def avatar_for(user_id, db: AsyncSession) -> str | None:
 
 async def auth_response(user: User, db: AsyncSession) -> dict:
     return {
-        "access_token": create_access_token(user.id, user.role.value),
+        "access_token": create_access_token(user.id, user.role.value, user.token_version),
         "token_type": "bearer",
         "user": {
             "id": str(user.id),
@@ -107,7 +135,8 @@ async def auth_response(user: User, db: AsyncSession) -> dict:
 
 
 @router.post("/register")
-async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def register(payload: RegisterRequest, request: Request, db: AsyncSession = Depends(get_db)) -> dict:
+    await enforce_rate_limit("register", client_ip(request), settings.login_rate_limit_attempts)
     validate_password_policy(payload.password)
     if not payload.email and not payload.phone:
         raise HTTPException(400, "Email or phone is required")
@@ -135,7 +164,9 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/login")
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)) -> dict:
+    subject = f"{client_ip(request)}|{payload.identifier.strip().lower()}"
+    await enforce_rate_limit("login", subject, settings.login_rate_limit_attempts)
     user = await authenticate(payload.identifier, payload.password, db)
     return await auth_response(user, db)
 
@@ -149,7 +180,8 @@ async def google_config() -> dict:
 
 
 @router.post("/google")
-async def google_login(payload: GoogleLoginRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def google_login(payload: GoogleLoginRequest, request: Request, db: AsyncSession = Depends(get_db)) -> dict:
+    await enforce_rate_limit("google", client_ip(request), settings.login_rate_limit_attempts)
     claims = await verify_google_id_token(payload.credential)
     email = claims["email"]
     user = await db.scalar(select(User).where(User.email == email))
@@ -176,8 +208,10 @@ async def google_login(payload: GoogleLoginRequest, db: AsyncSession = Depends(g
 
 
 @router.post("/forgot-password")
-async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def forgot_password(payload: ForgotPasswordRequest, request: Request, db: AsyncSession = Depends(get_db)) -> dict:
     email = payload.email.strip().lower()
+    subject = f"{client_ip(request)}|{email}"
+    await enforce_rate_limit("forgot", subject, settings.reset_rate_limit_attempts)
     user = await db.scalar(select(User).where(User.email == email))
     code = f"{secrets.randbelow(1_000_000):06d}"
     expires = datetime.now(timezone.utc) + timedelta(minutes=settings.password_reset_minutes)
@@ -187,11 +221,10 @@ async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Dep
         "email": email,
         "otp_hash": _otp_hash(code),
         "pwd": _password_fingerprint(user.password_hash if user else secrets.token_hex(16)),
+        "ver": int(user.token_version) if user else -1,
         "exp": expires,
     }
-    challenge = jwt.encode(
-        challenge_payload, settings.jwt_secret, algorithm=settings.jwt_algorithm
-    )
+    challenge = jwt.encode(challenge_payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
     delivered = False
     if user and user.email:
         delivered = await send_email(
@@ -212,12 +245,11 @@ async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Dep
 
 
 @router.post("/reset-password")
-async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)) -> dict:
+async def reset_password(payload: ResetPasswordRequest, request: Request, db: AsyncSession = Depends(get_db)) -> dict:
+    await enforce_rate_limit("reset", client_ip(request), settings.reset_rate_limit_attempts)
     validate_password_policy(payload.new_password)
     try:
-        data = jwt.decode(
-            payload.challenge, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
-        )
+        data = jwt.decode(payload.challenge, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except JWTError:
         raise HTTPException(400, "Reset code has expired or is invalid")
     if data.get("purpose") != "password_reset":
@@ -235,23 +267,27 @@ async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depen
         user = None
     if not user or user.email != str(data.get("email", "")).lower():
         raise HTTPException(400, "Reset code has expired or is invalid")
-    if not hmac.compare_digest(
-        str(data.get("pwd", "")), _password_fingerprint(user.password_hash)
-    ):
+    if int(data.get("ver", -1)) != int(user.token_version or 0):
+        raise HTTPException(400, "This reset code has already been used")
+    if not hmac.compare_digest(str(data.get("pwd", "")), _password_fingerprint(user.password_hash)):
         raise HTTPException(400, "This reset code has already been used")
     user.password_hash = hash_password(payload.new_password)
+    user.token_version = int(user.token_version or 0) + 1
     await db.commit()
     return {"message": "Password updated successfully"}
 
 
 @router.post("/token")
 async def token(
+    request: Request,
     form: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    subject = f"{client_ip(request)}|{form.username.strip().lower()}"
+    await enforce_rate_limit("token", subject, settings.login_rate_limit_attempts)
     user = await authenticate(form.username, form.password, db)
     return {
-        "access_token": create_access_token(user.id, user.role.value),
+        "access_token": create_access_token(user.id, user.role.value, user.token_version),
         "token_type": "bearer",
     }
 
@@ -277,9 +313,7 @@ async def update_avatar(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    value = payload.avatar_data_url.strip()
-    if not value.startswith(("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,")):
-        raise HTTPException(400, "Profile picture must be JPEG, PNG or WebP")
+    value = _validate_image_data_url(payload.avatar_data_url.strip())
     profile = await db.get(UserProfile, user.id)
     if profile is None:
         profile = UserProfile(user_id=user.id, avatar_data_url=value)
