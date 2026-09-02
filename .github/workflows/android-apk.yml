@@ -60,8 +60,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          aapt dump xmltree android/app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk AndroidManifest.xml > /tmp/manifest.txt
-          if grep -q 'usesCleartextTraffic.*0xffffffff' /tmp/manifest.txt; then
+          AAPT="${ANDROID_HOME}/build-tools/35.0.0/aapt"
+          "$AAPT" dump xmltree android/app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk AndroidManifest.xml > /tmp/manifest.txt
+          grep -q 'android:usesCleartextTraffic' /tmp/manifest.txt
+          if grep 'android:usesCleartextTraffic' /tmp/manifest.txt | grep -q '0xffffffff'; then
             echo 'Release candidate unexpectedly permits cleartext traffic'; exit 1
           fi
       - name: Upload debug APK
