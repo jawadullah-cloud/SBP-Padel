@@ -2,9 +2,10 @@ from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+import jwt
+from jwt.exceptions import PyJWTError
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,12 +32,13 @@ def _token_minutes_for(role: str) -> int:
 
 
 def create_access_token(user_id: UUID, role: str, token_version: int = 0) -> str:
-    expires = datetime.now(timezone.utc) + timedelta(minutes=_token_minutes_for(role))
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(minutes=_token_minutes_for(role))
     payload = {
         "sub": str(user_id),
         "role": role,
         "ver": int(token_version),
-        "iat": datetime.now(timezone.utc),
+        "iat": now,
         "exp": expires,
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
@@ -54,7 +56,7 @@ async def current_user(
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
         user_id = UUID(payload.get("sub", ""))
         token_version = int(payload.get("ver", -1))
-    except (JWTError, ValueError, TypeError):
+    except (PyJWTError, ValueError, TypeError):
         raise credentials_error
     user = await db.get(User, user_id)
     if not user or not user.is_active or token_version != int(user.token_version or 0):
