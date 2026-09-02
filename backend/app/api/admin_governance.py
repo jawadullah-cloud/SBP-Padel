@@ -3,6 +3,7 @@ from fastapi import APIRouter,Depends,HTTPException
 from pydantic import BaseModel,Field
 from sqlalchemy import func,select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.api.auth import validate_password_policy
 from app.core.booking_policy import booking_change_context
 from app.core.security import hash_password,require_roles
 from app.db.session import get_db
@@ -43,13 +44,18 @@ async def set_staff_active(user_id:UUID,payload:ActiveRequest,current:User=Depen
     user=await db.get(User,user_id)
     if not user or user.role==UserRole.player: raise HTTPException(404,'Staff account not found')
     if user.id==current.id and not payload.is_active: raise HTTPException(409,'You cannot disable your own HQ account')
-    user.is_active=payload.is_active; await db.commit(); return {"id":str(user.id),"is_active":user.is_active}
+    if user.is_active != payload.is_active:
+        user.is_active=payload.is_active
+        user.token_version=int(user.token_version or 0)+1
+    await db.commit(); return {"id":str(user.id),"is_active":user.is_active}
 
 @router.patch('/staff/{user_id}/password')
 async def reset_staff_password(user_id:UUID,payload:PasswordResetRequest,_:User=Depends(admin_user),db:AsyncSession=Depends(get_db))->dict:
     user=await db.get(User,user_id)
     if not user or user.role==UserRole.player: raise HTTPException(404,'Staff account not found')
+    validate_password_policy(payload.password)
     user.password_hash=hash_password(payload.password)
+    user.token_version=int(user.token_version or 0)+1
     await db.commit()
     return {"id":str(user.id),"password_reset":True}
 
