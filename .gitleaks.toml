@@ -2,11 +2,7 @@
 useDefault = true
 
 [[allowlists]]
-description = "Repository-structure prose misclassified as a generic API key"
-regexTarget = "match"
-regexes = [
-  '''FastAPI application, SQLAlchemy/Alembic persistence, booking/payment/operations APIs and backend tests'''
-]
-paths = [
-  '''README\.md'''
+description = "Reviewed README-only commit misclassified as a generic API key; commit 21c95e8 modifies README.md only and contains no credential material."
+commits = [
+  "21c95e8a1828cfc690be76caed1c4baa73a9d5cf"
 ]
