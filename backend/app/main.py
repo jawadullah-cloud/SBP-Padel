@@ -47,7 +47,7 @@ from app.models.platform import PlatformSetting
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     validate_runtime_settings(settings)
-    if settings.environment == "development":
+    if settings.environment in {"development", "test"}:
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
         async with SessionLocal() as session:
