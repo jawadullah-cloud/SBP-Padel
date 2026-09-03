@@ -206,21 +206,14 @@ jobs:
           grep -qi '^x-content-type-options: *nosniff' <<<"$headers"
           grep -qi '^x-frame-options: *DENY' <<<"$headers"
 
-      - name: Record RC Player target and trigger Android build
+      - name: Trigger Android release-candidate build
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           rc_url="https://$PLAYER_HOST/staging-entry.html"
-          gh api --method PATCH \
-            -H 'Accept: application/vnd.github+json' \
-            "/repos/${GITHUB_REPOSITORY}/actions/variables/SBP_PADEL_RC_PLAYER_URL" \
-            -f name='SBP_PADEL_RC_PLAYER_URL' -f value="$rc_url" >/dev/null 2>&1 || \
-          gh api --method POST \
-            -H 'Accept: application/vnd.github+json' \
-            "/repos/${GITHUB_REPOSITORY}/actions/variables" \
-            -f name='SBP_PADEL_RC_PLAYER_URL' -f value="$rc_url" >/dev/null
+          curl -fsS --max-time 20 "$rc_url" | grep -q "https://$API_HOST/api/v1"
           gh workflow run android-apk.yml --ref backend-v1-dev
           echo "Android RC target: $rc_url"
 
