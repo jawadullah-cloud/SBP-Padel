@@ -201,7 +201,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          headers="$(curl -fsSI --max-time 20 "https://$ADMIN_HOST/")"
+          headers="$(curl -fsS -D - -o /dev/null --max-time 20 "https://$ADMIN_HOST/")"
           grep -qi '^content-security-policy:' <<<"$headers"
           grep -qi '^x-content-type-options: *nosniff' <<<"$headers"
           grep -qi '^x-frame-options: *DENY' <<<"$headers"
