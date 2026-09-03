@@ -1,5 +1,5 @@
 from functools import lru_cache
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -51,6 +51,31 @@ class Settings(BaseSettings):
     @property
     def trusted_host_list(self) -> list[str]:
         return [host.strip() for host in self.trusted_hosts.split(",") if host.strip()]
+
+    @property
+    def async_database_url(self) -> str:
+        """Return a SQLAlchemy asyncpg-compatible database URL.
+
+        Hosted PostgreSQL providers commonly emit libpq query parameters such as
+        ``sslmode`` and ``channel_binding``. asyncpg does not accept those keyword
+        arguments directly, so translate the TLS requirement and drop the libpq-only
+        channel-binding hint while preserving all credentials and other parameters.
+        """
+        parsed = urlparse(self.database_url)
+        if not parsed.scheme.lower().startswith("postgresql"):
+            return self.database_url
+
+        scheme = "postgresql+asyncpg"
+        query = []
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+            if key == "sslmode":
+                if value.lower() not in {"disable", "allow", "prefer"}:
+                    query.append(("ssl", "require"))
+                continue
+            if key == "channel_binding":
+                continue
+            query.append((key, value))
+        return urlunparse(parsed._replace(scheme=scheme, query=urlencode(query)))
 
 
 def validate_runtime_settings(config: Settings) -> None:
