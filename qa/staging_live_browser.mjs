@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { chromium } from 'playwright';
 
 const playerEntry = process.env.SBP_STAGING_PLAYER_ENTRY;
@@ -7,6 +9,7 @@ const playerEmail = process.env.SBP_STAGING_PLAYER_EMAIL;
 const playerPassword = process.env.SBP_STAGING_PLAYER_PASSWORD;
 const adminEmail = process.env.SBP_STAGING_ADMIN_EMAIL;
 const adminPassword = process.env.SBP_STAGING_ADMIN_PASSWORD;
+const diagnosticsDir = path.resolve('test-results');
 
 for (const [name, value] of Object.entries({
   playerEntry,
@@ -20,63 +23,125 @@ for (const [name, value] of Object.entries({
   if (!value) throw new Error(`Missing required staging browser variable: ${name}`);
 }
 
+await fs.mkdir(diagnosticsDir, { recursive: true });
+
+async function dumpPage(page, name, events = []) {
+  const safe = name.replace(/[^a-z0-9_-]/gi, '-').toLowerCase();
+  const state = await page.evaluate(() => ({
+    url: location.href,
+    title: document.title,
+    bodyText: document.body?.innerText || '',
+    apiBase: localStorage.getItem('sbpPadelApiBase'),
+    hasPlayerToken: Boolean(localStorage.getItem('sbpPadelAccessToken')),
+    hasOpsToken: Boolean(localStorage.getItem('sbp_padel_ops_token')),
+    hasHqToken: Boolean(localStorage.getItem('sbp_padel_hq_token')),
+    serviceWorkerController: Boolean(navigator.serviceWorker?.controller),
+  }));
+  await fs.writeFile(path.join(diagnosticsDir, `${safe}-state.json`), JSON.stringify({ state, events }, null, 2));
+  await fs.writeFile(path.join(diagnosticsDir, `${safe}.html`), await page.content());
+  await page.screenshot({ path: path.join(diagnosticsDir, `${safe}.png`), fullPage: true });
+}
+
+function observe(page, events) {
+  page.on('pageerror', error => events.push({ type: 'pageerror', message: String(error) }));
+  page.on('console', message => {
+    if (message.type() === 'error' || message.type() === 'warning') {
+      events.push({ type: `console-${message.type()}`, message: message.text() });
+    }
+  });
+  page.on('requestfailed', request => {
+    events.push({ type: 'requestfailed', url: request.url(), method: request.method(), failure: request.failure()?.errorText || null });
+  });
+  page.on('response', response => {
+    if (response.url().startsWith(apiBase)) {
+      events.push({ type: 'api-response', url: response.url(), status: response.status() });
+    }
+  });
+}
+
 const browser = await chromium.launch({ headless: true });
 try {
   const playerContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const playerPage = await playerContext.newPage();
-  const playerErrors = [];
-  playerPage.on('pageerror', error => playerErrors.push(String(error)));
-  playerPage.on('console', message => {
-    if (message.type() === 'error') playerErrors.push(message.text());
-  });
+  const playerEvents = [];
+  observe(playerPage, playerEvents);
 
-  await playerPage.goto(playerEntry, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-  await playerPage.waitForURL(/auth-preview\.html/, { timeout: 15_000 });
-  const configuredApi = await playerPage.evaluate(() => localStorage.getItem('sbpPadelApiBase'));
-  if (configuredApi !== apiBase) {
-    throw new Error(`Player bootstrap API mismatch: ${configuredApi}`);
+  try {
+    await playerPage.goto(playerEntry, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await playerPage.waitForURL(/auth-preview\.html/, { timeout: 15_000 });
+    const configuredApi = await playerPage.evaluate(() => localStorage.getItem('sbpPadelApiBase'));
+    if (configuredApi !== apiBase) {
+      throw new Error(`Player bootstrap API mismatch: ${configuredApi}`);
+    }
+
+    await playerPage.locator('#splash [data-go="signin"]').click();
+    const signIn = playerPage.locator('#signin');
+    await signIn.locator('input').nth(0).fill(playerEmail);
+    await signIn.locator('input').nth(1).fill(playerPassword);
+    const loginResponsePromise = playerPage.waitForResponse(response => response.url() === `${apiBase}/auth/login`, { timeout: 20_000 });
+    await signIn.locator('[data-go="done"]').click();
+    const loginResponse = await loginResponsePromise;
+    if (loginResponse.status() !== 200) throw new Error(`Player UI login returned HTTP ${loginResponse.status()}`);
+
+    await playerPage.waitForURL(url => !url.pathname.endsWith('/auth-preview.html'), { timeout: 20_000 });
+    await playerPage.waitForSelector('#home', { timeout: 20_000 });
+    const meResponse = await playerPage.waitForResponse(response => response.url() === `${apiBase}/auth/me`, { timeout: 20_000 });
+    if (meResponse.status() !== 200) throw new Error(`Player /auth/me returned HTTP ${meResponse.status()}`);
+    const venuesResponse = await playerPage.waitForResponse(response => response.url() === `${apiBase}/venues`, { timeout: 20_000 });
+    if (venuesResponse.status() !== 200) throw new Error(`Player /venues returned HTTP ${venuesResponse.status()}`);
+    const venues = await venuesResponse.json();
+    if (!Array.isArray(venues) || !venues.some(v => v.name === 'Nishtar Park Sports Complex')) {
+      throw new Error(`Player /venues response did not include Nishtar Park Sports Complex: ${JSON.stringify(venues)}`);
+    }
+    const venueDetailResponse = await playerPage.waitForResponse(
+      response => response.url().startsWith(`${apiBase}/venues/`) && !response.url().includes('/availability'),
+      { timeout: 20_000 },
+    );
+    if (venueDetailResponse.status() !== 200) throw new Error(`Player venue detail returned HTTP ${venueDetailResponse.status()}`);
+
+    await playerPage.waitForFunction(() => document.body.innerText.includes('Nishtar Park Sports Complex'), null, { timeout: 20_000 });
+    await playerPage.waitForFunction(() => document.body.innerText.includes('5 COURTS LIVE'), null, { timeout: 20_000 });
+    const playerToken = await playerPage.evaluate(() => localStorage.getItem('sbpPadelAccessToken'));
+    if (!playerToken) throw new Error('Player UI did not persist an authenticated access token.');
+    const hardErrors = playerEvents.filter(event => event.type === 'pageerror' || event.type === 'console-error' || event.type === 'requestfailed');
+    if (hardErrors.length) throw new Error(`Player browser errors: ${JSON.stringify(hardErrors)}`);
+  } catch (error) {
+    await dumpPage(playerPage, 'player-failure', playerEvents);
+    throw error;
+  } finally {
+    await playerContext.close();
   }
-
-  await playerPage.locator('#splash [data-go="signin"]').click();
-  const signIn = playerPage.locator('#signin');
-  await signIn.locator('input').nth(0).fill(playerEmail);
-  await signIn.locator('input').nth(1).fill(playerPassword);
-  await signIn.locator('[data-go="done"]').click();
-  await playerPage.waitForURL(url => !url.pathname.endsWith('/auth-preview.html'), { timeout: 20_000 });
-  await playerPage.waitForSelector('#home', { timeout: 20_000 });
-  await playerPage.waitForFunction(() => document.body.innerText.includes('Nishtar Park Sports Complex'), null, { timeout: 20_000 });
-  await playerPage.waitForFunction(() => document.body.innerText.includes('5 COURTS LIVE'), null, { timeout: 20_000 });
-  const playerToken = await playerPage.evaluate(() => localStorage.getItem('sbpPadelAccessToken'));
-  if (!playerToken) throw new Error('Player UI did not persist an authenticated access token.');
-  if (playerErrors.length) throw new Error(`Player browser errors: ${playerErrors.join(' | ')}`);
-  await playerContext.close();
 
   const adminContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const adminPage = await adminContext.newPage();
-  const adminErrors = [];
-  adminPage.on('pageerror', error => adminErrors.push(String(error)));
-  adminPage.on('console', message => {
-    if (message.type() === 'error') adminErrors.push(message.text());
-  });
+  const adminEvents = [];
+  observe(adminPage, adminEvents);
 
-  await adminPage.goto(adminBase, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-  await adminPage.getByPlaceholder('Email').fill(adminEmail);
-  await adminPage.getByPlaceholder('Password').fill(adminPassword);
-  await adminPage.getByRole('button', { name: 'SIGN IN' }).click();
-  await adminPage.waitForFunction(() => document.body.innerText.includes('Nishtar Park Sports Complex'), null, { timeout: 20_000 });
-  const operationsToken = await adminPage.evaluate(() => localStorage.getItem('sbp_padel_ops_token'));
-  if (!operationsToken) throw new Error('Admin operations UI did not persist an authenticated access token.');
+  try {
+    await adminPage.goto(adminBase, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await adminPage.getByPlaceholder('Email').fill(adminEmail);
+    await adminPage.getByPlaceholder('Password').fill(adminPassword);
+    await adminPage.getByRole('button', { name: 'SIGN IN' }).click();
+    await adminPage.waitForFunction(() => document.body.innerText.includes('Nishtar Park Sports Complex'), null, { timeout: 20_000 });
+    const operationsToken = await adminPage.evaluate(() => localStorage.getItem('sbp_padel_ops_token'));
+    if (!operationsToken) throw new Error('Admin operations UI did not persist an authenticated access token.');
 
-  await adminPage.goto(`${adminBase}/hq`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-  await adminPage.getByPlaceholder('Email').fill(adminEmail);
-  await adminPage.getByPlaceholder('Password').fill(adminPassword);
-  await adminPage.getByRole('button', { name: 'SIGN IN' }).click();
-  await adminPage.waitForFunction(() => document.body.innerText.includes('Central Dashboard'), null, { timeout: 20_000 });
-  await adminPage.waitForFunction(() => document.body.innerText.includes('Nishtar Park Sports Complex'), null, { timeout: 20_000 });
-  const hqToken = await adminPage.evaluate(() => localStorage.getItem('sbp_padel_hq_token'));
-  if (!hqToken) throw new Error('HQ UI did not persist an authenticated access token.');
-  if (adminErrors.length) throw new Error(`Admin browser errors: ${adminErrors.join(' | ')}`);
-  await adminContext.close();
+    await adminPage.goto(`${adminBase}/hq`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await adminPage.getByPlaceholder('Email').fill(adminEmail);
+    await adminPage.getByPlaceholder('Password').fill(adminPassword);
+    await adminPage.getByRole('button', { name: 'SIGN IN' }).click();
+    await adminPage.waitForFunction(() => document.body.innerText.includes('Central Dashboard'), null, { timeout: 20_000 });
+    await adminPage.waitForFunction(() => document.body.innerText.includes('Nishtar Park Sports Complex'), null, { timeout: 20_000 });
+    const hqToken = await adminPage.evaluate(() => localStorage.getItem('sbp_padel_hq_token'));
+    if (!hqToken) throw new Error('HQ UI did not persist an authenticated access token.');
+    const hardErrors = adminEvents.filter(event => event.type === 'pageerror' || event.type === 'console-error' || event.type === 'requestfailed');
+    if (hardErrors.length) throw new Error(`Admin browser errors: ${JSON.stringify(hardErrors)}`);
+  } catch (error) {
+    await dumpPage(adminPage, 'admin-failure', adminEvents);
+    throw error;
+  } finally {
+    await adminContext.close();
+  }
 
   console.log('Deployed Player, Admin operations and HQ browser smoke passed.');
 } finally {
