@@ -27,6 +27,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      SBP_PADEL_RC_PLAYER_URL: ${{ vars.SBP_PADEL_RC_PLAYER_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -49,19 +51,43 @@ jobs:
       - name: Verify development signing key
         working-directory: android
         run: keytool -list -keystore dev-signing.keystore -storepass sbppadeldev -alias sbppadeldev
-      - name: Build debug and secure release-candidate APKs
-        working-directory: android
-        run: gradle :app:assembleDebug :app:assembleReleaseCandidate --stacktrace
-      - name: Verify APKs exist
-        run: |
-          test -f android/app/build/outputs/apk/debug/app-debug.apk
-          test -f android/app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk
-      - name: Verify release-candidate manifest security
+      - name: Validate release-candidate target
+        id: rc
         shell: bash
         run: |
           set -euo pipefail
+          url="${SBP_PADEL_RC_PLAYER_URL:-}"
+          if [[ -z "$url" ]]; then
+            echo 'No SBP_PADEL_RC_PLAYER_URL repository variable is configured; secure RC build will be skipped.'
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$url" != https://* ]]; then
+            echo 'Release-candidate Player URL must use HTTPS.'; exit 1
+          fi
+          if [[ "$url" == *sbp-padel-live-preview-sbp7.vercel.app* || "$url" == *sbp-padel-live-preview.vercel.app* ]]; then
+            echo 'The old Vercel connectivity-test page must not be used as an Android release-candidate target.'; exit 1
+          fi
+          echo 'enabled=true' >> "$GITHUB_OUTPUT"
+      - name: Build debug APK
+        working-directory: android
+        run: gradle :app:assembleDebug --stacktrace
+      - name: Build secure release-candidate APK
+        if: steps.rc.outputs.enabled == 'true'
+        working-directory: android
+        run: gradle :app:assembleReleaseCandidate --stacktrace
+      - name: Verify debug APK exists
+        run: test -f android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Verify release-candidate output and manifest security
+        if: steps.rc.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk
+          test -f "$APK"
+          test -f android/app/build/outputs/mapping/releaseCandidate/mapping.txt
           AAPT="${ANDROID_HOME}/build-tools/35.0.0/aapt"
-          "$AAPT" dump xmltree android/app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk AndroidManifest.xml > /tmp/manifest.txt
+          "$AAPT" dump xmltree "$APK" AndroidManifest.xml > /tmp/manifest.txt
           grep -q 'android:usesCleartextTraffic' /tmp/manifest.txt
           if grep 'android:usesCleartextTraffic' /tmp/manifest.txt | grep -q '0xffffffff'; then
             echo 'Release candidate unexpectedly permits cleartext traffic'; exit 1
@@ -73,6 +99,7 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - name: Upload release-candidate APK
+        if: steps.rc.outputs.enabled == 'true'
         uses: actions/upload-artifact@v6
         with:
           name: sbp-padel-1.0.0-rc1-apk
