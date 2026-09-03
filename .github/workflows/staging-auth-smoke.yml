@@ -18,7 +18,7 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       STAGING_DATABASE_URL: ${{ secrets.SBP_PADEL_STAGING_DATABASE_URL }}
       STAGING_JWT_SECRET: ${{ secrets.SBP_PADEL_STAGING_JWT_SECRET }}
@@ -43,9 +43,20 @@ jobs:
           cache: pip
           cache-dependency-path: backend/pyproject.toml
 
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
       - name: Install backend
         working-directory: backend
         run: pip install -e .
+
+      - name: Install Chromium browser harness
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
 
       - name: Generate masked ephemeral credentials
         shell: bash
@@ -125,6 +136,19 @@ jobs:
           print('Live player registration/authentication and active-policy smoke passed.')
           PY
 
+      - name: Exercise deployed Player and Admin browser flows
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SBP_STAGING_PLAYER_ENTRY='https://sbp-padel-player-staging.vercel.app/staging-entry.html'
+          export SBP_STAGING_ADMIN_BASE='https://sbp-padel-admin-staging.vercel.app'
+          export SBP_STAGING_API_BASE="$API_BASE"
+          export SBP_STAGING_ADMIN_EMAIL="$(cat "$RUNNER_TEMP/admin-email")"
+          export SBP_STAGING_ADMIN_PASSWORD="$(cat "$RUNNER_TEMP/admin-password")"
+          export SBP_STAGING_PLAYER_EMAIL="$(cat "$RUNNER_TEMP/player-email")"
+          export SBP_STAGING_PLAYER_PASSWORD="$(cat "$RUNNER_TEMP/player-password")"
+          node qa/staging_live_browser.mjs
+
       - name: Remove ephemeral staging accounts
         if: always()
         working-directory: backend
@@ -161,3 +185,12 @@ jobs:
             test "$status" = "401"
           done
           echo 'Ephemeral UAT credentials were removed and no longer authenticate.'
+
+      - name: Upload staging browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: staging-live-browser-diagnostics
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 3
