@@ -1,0 +1,78 @@
+name: Staging Reference Bootstrap
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - backend-v1-dev
+    paths:
+      - .github/staging-reference-bootstrap-trigger
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sbp-padel-staging-reference-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      STAGING_DATABASE_URL: ${{ secrets.SBP_PADEL_STAGING_DATABASE_URL }}
+      STAGING_JWT_SECRET: ${{ secrets.SBP_PADEL_STAGING_JWT_SECRET }}
+    steps:
+      - name: Validate required staging secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${STAGING_DATABASE_URL:-}" || { echo 'SBP_PADEL_STAGING_DATABASE_URL is required.'; exit 1; }
+          test ${#STAGING_JWT_SECRET} -ge 32 || { echo 'SBP_PADEL_STAGING_JWT_SECRET must be at least 32 characters.'; exit 1; }
+
+      - name: Checkout backend-v1-dev
+        uses: actions/checkout@v6
+        with:
+          ref: backend-v1-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend
+        working-directory: backend
+        run: pip install -e .
+
+      - name: Bootstrap reference data
+        working-directory: backend
+        shell: bash
+        env:
+          ENVIRONMENT: staging
+          DATABASE_URL: ${{ secrets.SBP_PADEL_STAGING_DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.SBP_PADEL_STAGING_JWT_SECRET }}
+          CORS_ORIGINS: https://sbp-padel-player-staging.vercel.app,https://sbp-padel-admin-staging.vercel.app
+          TRUSTED_HOSTS: sbp-padel-api-staging.vercel.app
+          SBP_PADEL_STAGING_BOOTSTRAP_CONFIRM: SBP_PADEL_STAGING_REFERENCE_ONLY
+        run: |
+          set -euo pipefail
+          python scripts/production_preflight.py
+          alembic current
+          python scripts/bootstrap_staging_reference.py
+
+      - name: Verify reference venue through public staging API
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..6}; do
+            body="$(curl -fsS --max-time 20 https://sbp-padel-api-staging.vercel.app/api/v1/venues || true)"
+            if grep -q 'Nishtar Park Sports Complex' <<<"$body"; then
+              echo 'Staging reference venue is visible through the live API.'
+              exit 0
+            fi
+            sleep 3
+          done
+          echo 'Reference venue was not visible through the live API.'
+          exit 1
