@@ -19,29 +19,49 @@ class AdministrationAuditMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
             return response
-        if not (path.startswith(f"{settings.api_prefix}/admin") or path.startswith(f"{settings.api_prefix}/operations")):
+
+        admin_or_operations = path.startswith(f"{settings.api_prefix}/admin") or path.startswith(
+            f"{settings.api_prefix}/operations"
+        )
+        payment_operation = path.startswith(f"{settings.api_prefix}/payments")
+        if not (admin_or_operations or payment_operation):
             return response
 
+        actor = None
         auth = request.headers.get("authorization", "")
         if auth.lower().startswith("bearer "):
             try:
-                payload = jwt.decode(auth.split(" ", 1)[1], settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+                payload = jwt.decode(
+                    auth.split(" ", 1)[1],
+                    settings.jwt_secret,
+                    algorithms=[settings.jwt_algorithm],
+                )
                 user_id = UUID(payload.get("sub", ""))
                 async with SessionLocal() as session:
                     actor = await session.get(User, user_id)
-                    await write_audit(
-                        session,
-                        actor,
-                        f"{request.method.lower()}.{path.removeprefix(settings.api_prefix).strip('/').replace('/', '.')}",
-                        "api_operation",
-                        None,
-                        f"{request.method} {path} returned {response.status_code}",
-                        payload={"path": path, "method": request.method, "status_code": response.status_code},
-                    )
-                    await session.commit()
             except (PyJWTError, ValueError, TypeError):
-                pass
+                actor = None
             except Exception:
-                # Audit capture must never make a successful operational action fail.
-                pass
+                actor = None
+
+        try:
+            async with SessionLocal() as session:
+                action_prefix = "payment" if payment_operation else "administration"
+                await write_audit(
+                    session,
+                    actor,
+                    f"{action_prefix}.{request.method.lower()}.{path.removeprefix(settings.api_prefix).strip('/').replace('/', '.')}",
+                    "payment_api_operation" if payment_operation else "api_operation",
+                    None,
+                    f"{request.method} {path} returned {response.status_code}",
+                    payload={
+                        "path": path,
+                        "method": request.method,
+                        "status_code": response.status_code,
+                    },
+                )
+                await session.commit()
+        except Exception:
+            # Audit capture must never make a successful operational or payment action fail.
+            pass
         return response
