@@ -228,6 +228,8 @@ async def reset_password(payload: ResetPasswordRequest, request: Request, db: As
         raise HTTPException(400, "Reset code has expired or is invalid")
     if data.get("purpose") != "password_reset":
         raise HTTPException(400, "Invalid password reset challenge")
+    challenge_subject = hashlib.sha256(payload.challenge.encode()).hexdigest()
+    await enforce_rate_limit("reset-challenge", challenge_subject, settings.reset_code_attempts)
     if not hmac.compare_digest(str(data.get("otp_hash", "")), _otp_hash(payload.otp)):
         raise HTTPException(400, "Incorrect reset code")
     user_id = data.get("sub")
