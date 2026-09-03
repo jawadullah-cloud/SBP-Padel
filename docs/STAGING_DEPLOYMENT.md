@@ -6,17 +6,27 @@ This is the provider-neutral deployment sequence. PITB/government production hos
 
 The connected Vercel team currently contains only the earlier `sbp-padel-live-preview` connectivity-test project. It is not the SBP-Padel application and must not be used as the Android release-candidate target.
 
+A dedicated managed PostgreSQL staging resource has now been provisioned in Neon for SBP-Padel staging:
+
+- project: `SBP-Padel Staging` (`late-scene-06157581`);
+- default branch: `staging` (`br-hidden-wave-ax5rz20a`);
+- database: `sbp_padel_staging`;
+- PostgreSQL 17;
+- TLS is required by the issued connection string;
+- credentials/connection URI are held only in the connected secret-bearing service and must not be committed to Git.
+
+Connectivity to the new database has been verified. The application schema has not yet been migrated into it because the current connected Vercel/GitHub tool surfaces do not expose a safe path to inject the database secret into a runnable repository checkout or Vercel environment. Run Alembic only after the real API project exists and the `DATABASE_URL` is stored in its deployment secret/config store.
+
 The repository is prepared for separate Vercel API, Player and optional Admin projects, but a real staging deployment still requires:
 
 - Vercel project creation/import for the relevant repository roots;
-- a persistent PostgreSQL staging database and `DATABASE_URL`;
-- deployment environment variables, including a strong staging `JWT_SECRET`, exact HTTPS `CORS_ORIGINS` and `TRUSTED_HOSTS`;
-- migrations against that PostgreSQL database;
+- deployment environment variables, including the provisioned PostgreSQL `DATABASE_URL`, a strong staging `JWT_SECRET`, exact HTTPS `CORS_ORIGINS` and `TRUSTED_HOSTS`;
+- migrations against the provisioned PostgreSQL database;
 - an explicit Player-to-API staging URL configuration;
 - SMTP if password-recovery delivery is to be tested;
 - Redis with `REDIS_REQUIRED=true` if staging is expected to exercise shared locking/rate limiting across more than one backend instance.
 
-The connected Vercel tool surface can inspect/deploy already-linked projects but does not currently expose project creation, environment-variable mutation or PostgreSQL provisioning for this workspace. Do not claim a real SBP-Padel Vercel environment exists until those external resources are actually provisioned and health-tested.
+The connected Vercel tool surface can inspect/deploy already-linked projects but does not currently expose project creation or environment-variable mutation for this workspace. Do not claim a real SBP-Padel Vercel application environment exists until those projects are actually created/configured and health-tested.
 
 ## 1. Provision dependencies
 
