@@ -192,7 +192,7 @@ jobs:
         run: |
           set -euo pipefail
           vercel link --yes --project "$ADMIN_PROJECT" --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
-          vercel project update "$ADMIN_PROJECT" --framework nextjs --auto-detect output-directory --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN" >/dev/null
+          vercel project update "$ADMIN_PROJECT" --framework nextjs --auto-detect output-directory --yes --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN" >/dev/null
           url="$(vercel deploy --prod --yes --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Admin deployed to $url"
