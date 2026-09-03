@@ -324,7 +324,7 @@ async def simulate_success(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    if settings.environment != "development":
+    if settings.environment not in {"development", "test"}:
         raise HTTPException(404, "Not found")
     payment = await db.get(Payment, payment_id)
     if not payment:
@@ -357,7 +357,7 @@ async def simulate_failure(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    if settings.environment != "development":
+    if settings.environment not in {"development", "test"}:
         raise HTTPException(404, "Not found")
     payment = await db.get(Payment, payment_id)
     if not payment:
