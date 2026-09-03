@@ -28,9 +28,9 @@ jobs:
         run: npm run build
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-      - name: Start admin runtime
+      - name: Start production admin runtime
         run: |
-          npm run dev -- --hostname 127.0.0.1 > /tmp/sbp-padel-admin.log 2>&1 &
+          npm run start -- --hostname 127.0.0.1 > /tmp/sbp-padel-admin.log 2>&1 &
           for i in {1..60}; do if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then exit 0; fi; sleep 1; done
           cat /tmp/sbp-padel-admin.log; exit 1
       - name: Security header smoke test
