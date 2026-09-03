@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     auth_rate_limit_window_seconds: int = 300
     login_rate_limit_attempts: int = 10
     reset_rate_limit_attempts: int = 6
+    reset_code_attempts: int = 5
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None
@@ -96,6 +97,7 @@ def validate_runtime_settings(config: Settings) -> None:
         "AUTH_RATE_LIMIT_WINDOW_SECONDS": config.auth_rate_limit_window_seconds,
         "LOGIN_RATE_LIMIT_ATTEMPTS": config.login_rate_limit_attempts,
         "RESET_RATE_LIMIT_ATTEMPTS": config.reset_rate_limit_attempts,
+        "RESET_CODE_ATTEMPTS": config.reset_code_attempts,
     }.items():
         if value <= 0:
             problems.append(f"{name} must be positive")
