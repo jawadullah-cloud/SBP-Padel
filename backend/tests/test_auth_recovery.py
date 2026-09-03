@@ -86,3 +86,53 @@ def test_password_policy_and_email_otp_reset(monkeypatch) -> None:
         )
         assert reused.status_code == 400
         assert "already been used" in reused.json()["detail"]
+
+
+def test_reset_challenge_has_its_own_attempt_limit(monkeypatch) -> None:
+    async def fake_send_email(_to_email: str, _subject: str, _body: str) -> bool:
+        return True
+
+    monkeypatch.setattr(auth_api, "send_email", fake_send_email)
+    monkeypatch.setattr(auth_api.secrets, "randbelow", lambda _limit: 123456)
+
+    with TestClient(app) as client:
+        registered = client.post(
+            "/api/v1/auth/register",
+            json={
+                "full_name": "OTP Guess Test",
+                "email": "otp-guess-test@sbppadel.local",
+                "password": "Original2026!",
+            },
+        )
+        assert registered.status_code == 200
+
+        forgot = client.post(
+            "/api/v1/auth/forgot-password",
+            json={"email": "otp-guess-test@sbppadel.local"},
+        )
+        assert forgot.status_code == 200
+        challenge = forgot.json()["challenge"]
+
+        monkeypatch.setattr(auth_api.settings, "environment", "staging")
+        monkeypatch.setattr(auth_api.settings, "reset_code_attempts", 2)
+
+        for otp in ("000001", "000002"):
+            attempt = client.post(
+                "/api/v1/auth/reset-password",
+                json={
+                    "challenge": challenge,
+                    "otp": otp,
+                    "new_password": "Changed2026!",
+                },
+            )
+            assert attempt.status_code == 400
+
+        blocked = client.post(
+            "/api/v1/auth/reset-password",
+            json={
+                "challenge": challenge,
+                "otp": "123456",
+                "new_password": "Changed2026!",
+            },
+        )
+        assert blocked.status_code == 429
