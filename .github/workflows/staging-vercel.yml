@@ -2,6 +2,11 @@ name: Vercel Staging Deployment
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - backend-v1-dev
+    paths:
+      - .github/staging-vercel-trigger
 
 permissions:
   contents: read
