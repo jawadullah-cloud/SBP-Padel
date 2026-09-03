@@ -1,0 +1,163 @@
+name: Staging Auth Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - backend-v1-dev
+    paths:
+      - .github/staging-auth-smoke-trigger
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sbp-padel-staging-auth-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      STAGING_DATABASE_URL: ${{ secrets.SBP_PADEL_STAGING_DATABASE_URL }}
+      STAGING_JWT_SECRET: ${{ secrets.SBP_PADEL_STAGING_JWT_SECRET }}
+      API_BASE: https://sbp-padel-api-staging.vercel.app/api/v1
+    steps:
+      - name: Validate required staging secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${STAGING_DATABASE_URL:-}" || { echo 'SBP_PADEL_STAGING_DATABASE_URL is required.'; exit 1; }
+          test ${#STAGING_JWT_SECRET} -ge 32 || { echo 'SBP_PADEL_STAGING_JWT_SECRET must be at least 32 characters.'; exit 1; }
+
+      - name: Checkout backend-v1-dev
+        uses: actions/checkout@v6
+        with:
+          ref: backend-v1-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend
+        working-directory: backend
+        run: pip install -e .
+
+      - name: Generate masked ephemeral credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          admin_email="admin-${suffix}@sbp-padel-uat.invalid"
+          player_email="player-${suffix}@sbp-padel-uat.invalid"
+          admin_password="Aa1!$(python -c 'import secrets; print(secrets.token_urlsafe(24))')"
+          player_password="Aa1!$(python -c 'import secrets; print(secrets.token_urlsafe(24))')"
+          echo "::add-mask::$admin_password"
+          echo "::add-mask::$player_password"
+          printf '%s' "$admin_email" > "$RUNNER_TEMP/admin-email"
+          printf '%s' "$player_email" > "$RUNNER_TEMP/player-email"
+          printf '%s' "$admin_password" > "$RUNNER_TEMP/admin-password"
+          printf '%s' "$player_password" > "$RUNNER_TEMP/player-password"
+
+      - name: Create ephemeral admin directly in staging data store
+        working-directory: backend
+        shell: bash
+        env:
+          ENVIRONMENT: staging
+          DATABASE_URL: ${{ secrets.SBP_PADEL_STAGING_DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.SBP_PADEL_STAGING_JWT_SECRET }}
+          CORS_ORIGINS: https://sbp-padel-player-staging.vercel.app,https://sbp-padel-admin-staging.vercel.app
+          TRUSTED_HOSTS: sbp-padel-api-staging.vercel.app
+          SBP_PADEL_EPHEMERAL_CONFIRM: SBP_PADEL_EPHEMERAL_UAT_ONLY
+        run: |
+          set -euo pipefail
+          export SBP_PADEL_EPHEMERAL_EMAIL="$(cat "$RUNNER_TEMP/admin-email")"
+          export SBP_PADEL_EPHEMERAL_PASSWORD="$(cat "$RUNNER_TEMP/admin-password")"
+          python scripts/staging_ephemeral_user.py create admin
+
+      - name: Exercise live admin authentication and protected API
+        shell: bash
+        run: |
+          set -euo pipefail
+          email="$(cat "$RUNNER_TEMP/admin-email")"
+          password="$(cat "$RUNNER_TEMP/admin-password")"
+          login_payload="$(EMAIL="$email" PASSWORD="$password" python -c 'import json,os; print(json.dumps({"identifier":os.environ["EMAIL"],"password":os.environ["PASSWORD"]}))')"
+          login_response="$(curl -fsS --max-time 20 -H 'Content-Type: application/json' -d "$login_payload" "$API_BASE/auth/login")"
+          token="$(LOGIN_RESPONSE="$login_response" python -c 'import json,os; print(json.loads(os.environ["LOGIN_RESPONSE"])["access_token"])')"
+          echo "::add-mask::$token"
+          me="$(curl -fsS --max-time 20 -H "Authorization: Bearer $token" "$API_BASE/auth/me")"
+          venues="$(curl -fsS --max-time 20 -H "Authorization: Bearer $token" "$API_BASE/admin/venues")"
+          dashboard="$(curl -fsS --max-time 20 -H "Authorization: Bearer $token" "$API_BASE/admin/dashboard")"
+          ME="$me" VENUES="$venues" DASHBOARD="$dashboard" python - <<'PY'
+          import json, os
+          me = json.loads(os.environ['ME'])
+          venues = json.loads(os.environ['VENUES'])
+          dashboard = json.loads(os.environ['DASHBOARD'])
+          assert me['role'] == 'admin'
+          assert any(v['name'] == 'Nishtar Park Sports Complex' for v in venues)
+          assert int(dashboard['venues']) >= 1
+          assert int(dashboard['courts']) >= 5
+          print('Live admin authentication and protected HQ API smoke passed.')
+          PY
+
+      - name: Exercise live player registration and authenticated identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          email="$(cat "$RUNNER_TEMP/player-email")"
+          password="$(cat "$RUNNER_TEMP/player-password")"
+          register_payload="$(EMAIL="$email" PASSWORD="$password" python -c 'import json,os; print(json.dumps({"full_name":"Ephemeral Staging Player UAT","email":os.environ["EMAIL"],"password":os.environ["PASSWORD"]}))')"
+          register_response="$(curl -fsS --max-time 20 -H 'Content-Type: application/json' -d "$register_payload" "$API_BASE/auth/register")"
+          token="$(REGISTER_RESPONSE="$register_response" python -c 'import json,os; print(json.loads(os.environ["REGISTER_RESPONSE"])["access_token"])')"
+          echo "::add-mask::$token"
+          me="$(curl -fsS --max-time 20 -H "Authorization: Bearer $token" "$API_BASE/auth/me")"
+          policy="$(curl -fsS --max-time 20 "$API_BASE/policies/active")"
+          ME="$me" POLICY="$policy" python - <<'PY'
+          import json, os
+          me = json.loads(os.environ['ME'])
+          policy = json.loads(os.environ['POLICY'])
+          assert me['role'] == 'player'
+          assert policy['version'] == '2026-staging-uat-1'
+          print('Live player registration/authentication and active-policy smoke passed.')
+          PY
+
+      - name: Remove ephemeral staging accounts
+        if: always()
+        working-directory: backend
+        shell: bash
+        env:
+          ENVIRONMENT: staging
+          DATABASE_URL: ${{ secrets.SBP_PADEL_STAGING_DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.SBP_PADEL_STAGING_JWT_SECRET }}
+          CORS_ORIGINS: https://sbp-padel-player-staging.vercel.app,https://sbp-padel-admin-staging.vercel.app
+          TRUSTED_HOSTS: sbp-padel-api-staging.vercel.app
+          SBP_PADEL_EPHEMERAL_CONFIRM: SBP_PADEL_EPHEMERAL_UAT_ONLY
+        run: |
+          set -euo pipefail
+          if [[ -f "$RUNNER_TEMP/admin-email" ]]; then
+            export SBP_PADEL_EPHEMERAL_EMAIL="$(cat "$RUNNER_TEMP/admin-email")"
+            export SBP_PADEL_EPHEMERAL_PASSWORD=""
+            python scripts/staging_ephemeral_user.py delete
+          fi
+          if [[ -f "$RUNNER_TEMP/player-email" ]]; then
+            export SBP_PADEL_EPHEMERAL_EMAIL="$(cat "$RUNNER_TEMP/player-email")"
+            export SBP_PADEL_EPHEMERAL_PASSWORD=""
+            python scripts/staging_ephemeral_user.py delete
+          fi
+
+      - name: Confirm ephemeral accounts no longer authenticate
+        shell: bash
+        run: |
+          set -euo pipefail
+          for kind in admin player; do
+            email="$(cat "$RUNNER_TEMP/${kind}-email")"
+            password="$(cat "$RUNNER_TEMP/${kind}-password")"
+            payload="$(EMAIL="$email" PASSWORD="$password" python -c 'import json,os; print(json.dumps({"identifier":os.environ["EMAIL"],"password":os.environ["PASSWORD"]}))')"
+            status="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d "$payload" "$API_BASE/auth/login")"
+            test "$status" = "401"
+          done
+          echo 'Ephemeral UAT credentials were removed and no longer authenticate.'
