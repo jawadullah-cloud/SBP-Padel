@@ -2,6 +2,14 @@ plugins {
     id("com.android.application")
 }
 
+val rcPlayerUrl = providers.gradleProperty("SBP_PADEL_RC_PLAYER_URL")
+    .orElse(providers.environmentVariable("SBP_PADEL_RC_PLAYER_URL"))
+    .getOrElse("")
+val releasePlayerUrl = providers.gradleProperty("SBP_PADEL_PLAYER_URL")
+    .orElse(providers.environmentVariable("SBP_PADEL_PLAYER_URL"))
+    .getOrElse("")
+fun buildConfigString(value: String) = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
 android {
     namespace = "pk.gov.punjab.sbp.padel"
     compileSdk = 35
@@ -46,8 +54,11 @@ android {
             initWith(getByName("release"))
             signingConfig = signingConfigs.getByName("devStable")
             versionNameSuffix = "-rc1"
+            isMinifyEnabled = true
+            isShrinkResources = true
             manifestPlaceholders["usesCleartextTraffic"] = "false"
-            buildConfigField("String", "PLAYER_URL", "\"https://sbp-padel-live-preview-sbp7.vercel.app/\"")
+            buildConfigField("String", "PLAYER_URL", buildConfigString(rcPlayerUrl))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             matchingFallbacks += listOf("release")
         }
         release {
@@ -55,7 +66,7 @@ android {
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("officialRelease")
             manifestPlaceholders["usesCleartextTraffic"] = "false"
-            buildConfigField("String", "PLAYER_URL", "\"https://sbp-padel-live-preview-sbp7.vercel.app/\"")
+            buildConfigField("String", "PLAYER_URL", buildConfigString(releasePlayerUrl))
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
