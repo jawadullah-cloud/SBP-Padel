@@ -1,0 +1,231 @@
+name: Vercel Staging Deployment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: sbp-padel-vercel-staging
+  cancel-in-progress: false
+
+env:
+  VERCEL_SCOPE: sbp7
+  API_PROJECT: sbp-padel-api-staging
+  PLAYER_PROJECT: sbp-padel-player-staging
+  ADMIN_PROJECT: sbp-padel-admin-staging
+  API_HOST: sbp-padel-api-staging.vercel.app
+  PLAYER_HOST: sbp-padel-player-staging.vercel.app
+  ADMIN_HOST: sbp-padel-admin-staging.vercel.app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      STAGING_DATABASE_URL: ${{ secrets.SBP_PADEL_STAGING_DATABASE_URL }}
+      STAGING_JWT_SECRET: ${{ secrets.SBP_PADEL_STAGING_JWT_SECRET }}
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in VERCEL_TOKEN STAGING_DATABASE_URL STAGING_JWT_SECRET; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Required repository secret is missing: $name"
+              missing=1
+            fi
+          done
+          if [[ ${#STAGING_JWT_SECRET} -lt 32 ]]; then
+            echo 'SBP_PADEL_STAGING_JWT_SECRET must be at least 32 characters.'
+            missing=1
+          fi
+          test "$missing" -eq 0
+
+      - name: Checkout backend-v1-dev
+        uses: actions/checkout@v6
+        with:
+          ref: backend-v1-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend
+        working-directory: backend
+        run: pip install -e .
+
+      - name: Normalize database URL without logging credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          db="$STAGING_DATABASE_URL"
+          if [[ "$db" == postgresql://* ]]; then
+            db="postgresql+asyncpg://${db#postgresql://}"
+          fi
+          if [[ "$db" != postgresql+asyncpg://* ]]; then
+            echo 'Staging DATABASE_URL must be PostgreSQL/asyncpg compatible.'
+            exit 1
+          fi
+          echo "::add-mask::$db"
+          printf '%s' "$db" > "$RUNNER_TEMP/sbp-padel-database-url"
+
+      - name: Run staging preflight and Alembic migrations
+        working-directory: backend
+        shell: bash
+        env:
+          ENVIRONMENT: staging
+          JWT_SECRET: ${{ secrets.SBP_PADEL_STAGING_JWT_SECRET }}
+          CORS_ORIGINS: https://sbp-padel-player-staging.vercel.app,https://sbp-padel-admin-staging.vercel.app
+          TRUSTED_HOSTS: sbp-padel-api-staging.vercel.app
+        run: |
+          set -euo pipefail
+          export DATABASE_URL="$(cat "$RUNNER_TEMP/sbp-padel-database-url")"
+          python scripts/production_preflight.py
+          alembic upgrade head
+          alembic current
+          alembic check
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Create or reuse Vercel staging projects
+        shell: bash
+        run: |
+          set -euo pipefail
+          for project in "$API_PROJECT" "$PLAYER_PROJECT" "$ADMIN_PROJECT"; do
+            vercel project add "$project" --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN" >/dev/null 2>&1 || true
+          done
+
+      - name: Link and configure API project
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel link --yes --project "$API_PROJECT" --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
+          db="$(cat "$RUNNER_TEMP/sbp-padel-database-url")"
+          set_env() {
+            local key="$1" value="$2"
+            vercel env rm "$key" production --yes --token "$VERCEL_TOKEN" >/dev/null 2>&1 || true
+            printf '%s' "$value" | vercel env add "$key" production --token "$VERCEL_TOKEN" >/dev/null
+          }
+          set_env ENVIRONMENT staging
+          set_env DATABASE_URL "$db"
+          set_env JWT_SECRET "$STAGING_JWT_SECRET"
+          set_env CORS_ORIGINS "https://$PLAYER_HOST,https://$ADMIN_HOST"
+          set_env TRUSTED_HOSTS "$API_HOST"
+
+      - name: Deploy API
+        id: api
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prod --yes --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "API deployed to $url"
+
+      - name: Verify API health through canonical staging hostname
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..12}; do
+            live="$(curl -fsS --max-time 15 "https://$API_HOST/health/live" || true)"
+            ready="$(curl -fsS --max-time 15 "https://$API_HOST/health/ready" || true)"
+            if [[ -n "$live" && -n "$ready" ]]; then
+              echo 'API live/readiness checks passed.'
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'API health checks did not become ready.'
+          exit 1
+
+      - name: Generate immutable Player staging entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed "s|__SBP_API_BASE__|https://$API_HOST/api/v1|g" docs/staging-entry.template.html > docs/staging-entry.html
+          grep -q "https://$API_HOST/api/v1" docs/staging-entry.html
+          if grep -q '__SBP_API_BASE__' docs/staging-entry.html; then
+            echo 'Player staging entry still contains an unresolved placeholder.'
+            exit 1
+          fi
+
+      - name: Link and deploy Player project
+        id: player
+        working-directory: docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel link --yes --project "$PLAYER_PROJECT" --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
+          url="$(vercel deploy --prod --yes --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Player deployed to $url"
+
+      - name: Verify Player staging entry and security headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 20 "https://$PLAYER_HOST/staging-entry.html" | grep -q "https://$API_HOST/api/v1"
+          headers="$(curl -fsSI --max-time 20 "https://$PLAYER_HOST/auth-preview.html")"
+          grep -qi '^content-security-policy:' <<<"$headers"
+          grep -qi '^x-content-type-options: *nosniff' <<<"$headers"
+          grep -qi '^x-frame-options: *DENY' <<<"$headers"
+
+      - name: Link and deploy Admin project
+        id: admin
+        working-directory: admin
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel link --yes --project "$ADMIN_PROJECT" --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
+          url="$(vercel deploy --prod --yes --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Admin deployed to $url"
+
+      - name: Verify Admin security headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(curl -fsSI --max-time 20 "https://$ADMIN_HOST/")"
+          grep -qi '^content-security-policy:' <<<"$headers"
+          grep -qi '^x-content-type-options: *nosniff' <<<"$headers"
+          grep -qi '^x-frame-options: *DENY' <<<"$headers"
+
+      - name: Record RC Player target and trigger Android build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rc_url="https://$PLAYER_HOST/staging-entry.html"
+          gh api --method PATCH \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/variables/SBP_PADEL_RC_PLAYER_URL" \
+            -f name='SBP_PADEL_RC_PLAYER_URL' -f value="$rc_url" >/dev/null 2>&1 || \
+          gh api --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/variables" \
+            -f name='SBP_PADEL_RC_PLAYER_URL' -f value="$rc_url" >/dev/null
+          gh workflow run android-apk.yml --ref backend-v1-dev
+          echo "Android RC target: $rc_url"
+
+      - name: Deployment summary
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## SBP-Padel staging
+          - API: https://$API_HOST
+          - Player: https://$PLAYER_HOST/staging-entry.html
+          - Admin: https://$ADMIN_HOST
+          - Database: managed Neon PostgreSQL staging resource
+          - Android RC workflow: triggered after successful HTTPS staging verification
+          EOF
