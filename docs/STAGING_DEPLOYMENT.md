@@ -1,63 +1,137 @@
 # SBP-Padel staging deployment runbook
 
-This is the provider-neutral deployment sequence. PITB/government production hosting remains an external decision. A Vercel deployment may be used as a temporary staging/UAT environment so the application can be exercised over real HTTPS before final infrastructure is agreed.
+This runbook covers the temporary HTTPS staging/UAT path. PITB/government production hosting remains a separate external decision. Vercel staging must not be treated as the final production-hosting decision.
 
-## Current staging status — 3 September 2026
+## Current verified staging state — 3 September 2026
 
-The connected Vercel team currently contains only the earlier `sbp-padel-live-preview` connectivity-test project. It is not the SBP-Padel application and must not be used as the Android release-candidate target.
+A real SBP-Padel staging environment now exists and has been verified end to end.
 
-A dedicated managed PostgreSQL staging resource has now been provisioned in Neon for SBP-Padel staging:
+Canonical staging origins:
 
-- project: `SBP-Padel Staging` (`late-scene-06157581`);
-- default branch: `staging` (`br-hidden-wave-ax5rz20a`);
-- database: `sbp_padel_staging`;
-- PostgreSQL 17;
-- TLS is required by the issued connection string;
-- credentials/connection URI are held only in the connected secret-bearing service and must not be committed to Git.
+- API: `https://sbp-padel-api-staging.vercel.app`
+- Player entry: `https://sbp-padel-player-staging.vercel.app/staging-entry.html`
+- Admin: `https://sbp-padel-admin-staging.vercel.app`
 
-Connectivity to the new database has been verified. The application schema has not yet been migrated into it because the current connected Vercel/GitHub tool surfaces do not expose a safe path to inject the database secret into a runnable repository checkout or Vercel environment. Run Alembic only after the real API project exists and the `DATABASE_URL` is stored in its deployment secret/config store.
+Dedicated Vercel projects:
 
-The repository is prepared for separate Vercel API, Player and optional Admin projects, but a real staging deployment still requires:
+- `sbp-padel-api-staging`
+- `sbp-padel-player-staging`
+- `sbp-padel-admin-staging`
 
-- Vercel project creation/import for the relevant repository roots;
-- deployment environment variables, including the provisioned PostgreSQL `DATABASE_URL`, a strong staging `JWT_SECRET`, exact HTTPS `CORS_ORIGINS` and `TRUSTED_HOSTS`;
-- migrations against the provisioned PostgreSQL database;
-- an explicit Player-to-API staging URL configuration;
-- SMTP if password-recovery delivery is to be tested;
-- Redis with `REDIS_REQUIRED=true` if staging is expected to exercise shared locking/rate limiting across more than one backend instance.
+The old `sbp-padel-live-preview` project remains only a historical connectivity test and must never be used as the Android RC target.
 
-The connected Vercel tool surface can inspect/deploy already-linked projects but does not currently expose project creation or environment-variable mutation for this workspace. Do not claim a real SBP-Padel Vercel application environment exists until those projects are actually created/configured and health-tested.
+Managed staging PostgreSQL:
 
-## 1. Provision dependencies
+- Neon project: `SBP-Padel Staging` (`late-scene-06157581`)
+- branch: `staging` (`br-hidden-wave-ax5rz20a`)
+- database: `sbp_padel_staging`
+- PostgreSQL 17
+- TLS required
+- credentials remain in secret stores only and must never be committed or printed
 
-- PostgreSQL database with backups enabled. Do not use ephemeral SQLite for an internet-facing staging environment.
-- Redis is optional for a single-instance staging experiment. For horizontally scaled production locking, prefer `REDIS_REQUIRED=true` with `REDIS_URL`.
-- SMTP is required in production and recommended in staging for password-recovery testing.
-- HTTPS origins for the Player/Admin applications and API.
-- Final API hostnames that can be placed in the backend trusted-host allowlist.
+The staging database has been migrated through Alembic revision `20260903_0006 (head)`. `alembic check` reports no pending upgrade operations.
 
-## 2. Configure backend
+### Verified workflow evidence
 
-Use `backend/.env.production.example` as the variable checklist, but store real values in the deployment platform's secret/config store rather than source control.
+Final full-chain staging workflow:
 
-For staging use `ENVIRONMENT=staging`; for public deployment use `ENVIRONMENT=production`.
+- workflow: `Vercel Staging Deployment`
+- run: `33763320654`
+- branch/head used by the deployment: `backend-v1-dev` at `5e1619a052882ad302b69c7041d361145b07004b`
+- result: **success**
 
-Set `TRUSTED_HOSTS` to the exact hostnames through which the API will be reached. Do not use a wildcard for a non-local deployment. Set `CORS_ORIGINS` to the explicit HTTPS Player/Admin browser origins. CORS origins and trusted hosts solve different problems and both must be configured.
+That run verified, in sequence:
 
-Security-sensitive defaults include:
+1. required repository secrets present;
+2. backend installation and staging preflight;
+3. PostgreSQL/Alembic migration state;
+4. API deployment;
+5. API `/health/live` and `/health/ready` through the canonical HTTPS hostname;
+6. deterministic Player staging bootstrap pointing only to the canonical staging API;
+7. Player deployment and CSP/browser-security headers;
+8. Admin native Next.js deployment and CSP/browser-security headers;
+9. direct dispatch of the Android release-candidate workflow;
+10. deployment summary generation.
 
-- player access tokens carry a server-checked token version;
-- HQ, venue-manager and venue-operator tokens use the shorter `STAFF_ACCESS_TOKEN_MINUTES` lifetime;
-- password changes/resets and staff administrative resets revoke older access tokens immediately;
-- public authentication/recovery routes are rate-limited, using Redis when configured;
-- each signed password-reset challenge has its own OTP-attempt limit in addition to endpoint/IP abuse controls;
-- production SMTP requires STARTTLS;
-- uploaded profile/venue images are decoded and checked against permitted image signatures rather than trusting only the data-URL prefix;
-- payment mutation/callback audit records contain route/method/status metadata only, not callback bodies, bearer tokens or provider credentials.
+Fresh Android workflow triggered by the successful staging run:
 
-## 3. Install and validate
+- workflow: `Android APKs`
+- run: `33763539038`
+- event: `workflow_dispatch`
+- head: `5e1619a052882ad302b69c7041d361145b07004b`
+- result: **success**
 
-From `backend/`:
+The Android run passed:
+
+- RC target validation;
+- debug build;
+- secure `releaseCandidate` build;
+- release-candidate manifest security verification;
+- debug artifact upload;
+- RC artifact upload.
+
+Fresh RC artifact:
+
+- name: `sbp-padel-1.0.0-rc1-apk`
+- artifact id: `9896586123`
+- digest: `sha256:9effe665ce7699e5fd07f1d6547281f6a8d2614e63451ae6690bbf790070bddf`
+- workflow retention expiry reported by GitHub: 2 December 2026
+
+A separate debug artifact was also produced. Never substitute the debug artifact for RC/UAT.
+
+## Staging deployment automation
+
+`.github/workflows/staging-vercel.yml` owns the guarded deployment sequence. It is manual by `workflow_dispatch` and also supports the repository staging-trigger file used during development verification.
+
+Required repository secrets:
+
+- `VERCEL_TOKEN`
+- `SBP_PADEL_STAGING_DATABASE_URL`
+- `SBP_PADEL_STAGING_JWT_SECRET`
+
+The staging JWT secret must be at least 32 characters.
+
+The workflow:
+
+1. runs backend production/staging preflight;
+2. upgrades/checks Alembic against the staging database;
+3. creates or reuses the dedicated Vercel staging projects;
+4. configures API production-environment variables inside the dedicated staging API project;
+5. deploys API, Player and Admin;
+6. verifies health/security gates through canonical hostnames;
+7. dispatches the Android workflow only after all web/API staging gates pass.
+
+Do not reintroduce the earlier attempt to mutate the repository `SBP_PADEL_RC_PLAYER_URL` Actions variable from the staging workflow. GitHub rejected that write for the workflow token. Android CI now has the verified canonical staging Player URL as its safe fallback and validates that the bootstrap points to the canonical staging API before enabling RC.
+
+## Database URL normalization
+
+Neon-issued connection URLs may contain libpq-style query parameters such as `sslmode` and `channel_binding`. SQLAlchemy/`asyncpg` does not accept those parameters in the same form.
+
+The backend now normalizes the PostgreSQL URL centrally for the asyncpg runtime so Alembic and the deployed FastAPI application follow the same compatible path. Do not solve this only in CI while leaving live application startup different.
+
+## Backend deployment configuration
+
+Use `backend/.env.production.example` as the non-secret checklist. Real values belong only in the selected hosting platform's secret/configuration store.
+
+For staging:
+
+```text
+ENVIRONMENT=staging
+DATABASE_URL=postgresql+asyncpg://...
+JWT_SECRET=<strong random secret, at least 32 characters>
+CORS_ORIGINS=https://sbp-padel-player-staging.vercel.app,https://sbp-padel-admin-staging.vercel.app
+TRUSTED_HOSTS=sbp-padel-api-staging.vercel.app
+```
+
+Current staging deliberately has no production PayZen credentials.
+
+Redis is optional for the present limited staging experiment. If horizontally scaled locking/rate limiting must fail closed, configure `REDIS_URL` and `REDIS_REQUIRED=true`.
+
+SMTP is still required before real password-recovery delivery can be treated as production-ready and is recommended before full staging UAT of recovery email delivery.
+
+## Alembic discipline
+
+From `backend/` the deployment validation sequence is:
 
 ```bash
 pip install -e .
@@ -67,105 +141,104 @@ alembic current
 alembic check
 ```
 
-The preflight output should show the expected CORS origins and trusted-host list while redacting database credentials.
+Do not use `Base.metadata.create_all()` as the staging/production migration mechanism. Startup schema creation remains limited to local development/test paths. Staging and production remain Alembic-driven.
 
-Do not use `Base.metadata.create_all()` as a staging/production migration mechanism. Application startup performs `create_all`/seed setup only for local `development` and automated `test` environments. Non-local deployment remains Alembic-driven.
+The fresh PostgreSQL migration chain is CI-tested. Later migrations must remain safe both for fresh databases and older databases being upgraded.
 
-The historical baseline migration creates its baseline tables through model metadata, so later migrations must remain safe when a fresh database already contains a model field represented by a later revision. Backend CI now proves a fresh PostgreSQL `alembic upgrade head` path and the token-version hardening revision explicitly handles both fresh and pre-hardening databases.
+## Vercel backend adapter
 
-## 4. Start backend
+The working Vercel API deployment uses an explicit Python function entrypoint under `backend/api/` routing the FastAPI ASGI application. Do not restore the discarded root `index.py` experiment: Vercel treated that file as static content rather than executing it as Python.
 
-Conventional VM/container example:
+The API project's canonical hostname is health-tested after deployment, so an apparently successful Vercel build is not enough by itself.
 
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
+## Player staging bootstrap
 
-Place it behind the selected HTTPS reverse proxy/load balancer and use an appropriate process supervisor for the chosen platform.
+`docs/staging-entry.template.html` is the deterministic staging bootstrap. The deployment workflow generates the served `staging-entry.html` by replacing its API placeholder with:
 
-Interactive FastAPI `/docs`, `/redoc` and `/openapi.json` endpoints are intentionally disabled outside development/test. Do not use their absence as a failed staging health signal.
+`https://sbp-padel-api-staging.vercel.app/api/v1`
 
-## 5. Vercel staging experiment
+The bootstrap writes that fixed endpoint into Player local storage before redirecting to the normal Player authentication surface.
 
-Vercel currently supports Python/FastAPI applications with an `app` entrypoint, so the backend does not need to be rewritten into JavaScript merely for this experiment.
+Do not replace this with a generic user-controlled `?api=` staging mechanism. A staging bootstrap that accepts an arbitrary remote API could route credentials to an attacker-controlled service.
 
-The repository contains Vercel preparation for temporary staging/UAT:
+The existing LAN/debug Android first-run query-API behavior is a separate local-development concern and must not weaken the hardened staging bootstrap.
 
-- `backend/pyproject.toml` declares the FastAPI entrypoint `app.main:app`;
-- `backend/vercel.json` configures the FastAPI function duration;
-- `docs/vercel.json` supplies Player CSP and baseline browser security headers;
-- `admin/next.config.mjs` supplies Admin CSP and browser security headers.
+## Admin staging
 
-Recommended Vercel project separation:
+The Admin Vercel project must use the `Next.js` framework preset with output directory set to auto detection. An earlier project-level output setting incorrectly expected a static `public/` output folder even though the application builds as Next.js.
 
-1. `sbp-padel-api-staging` with project root `backend/`;
-2. `sbp-padel-player-staging` with project root `docs/`;
-3. optionally `sbp-padel-admin-staging` with project root `admin/`.
+Security-header verification must use a normal GET response. Vercel/Next.js may return 404 for the HEAD probe even when GET `/` is healthy and returns the required headers.
 
-The backend project must use a persistent PostgreSQL `DATABASE_URL` and secure environment values before it is treated as a real application environment. Minimum staging variables are:
+Verified Admin headers include the repository CSP, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, HSTS and the additional configured browser protections.
 
-```text
-ENVIRONMENT=staging
-DATABASE_URL=postgresql+asyncpg://...
-JWT_SECRET=<strong random secret, at least 32 characters>
-CORS_ORIGINS=https://<player-host>,https://<admin-host>
-TRUSTED_HOSTS=<api-host>
-```
+## API health and edge checks
 
-Add `REDIS_URL`/`REDIS_REQUIRED=true` if shared locking/rate limiting must fail closed, and SMTP values when recovery delivery is to be tested.
+Required staging probes:
 
-Do not place PayZen credentials into Vercel until the official PayZen contract has been implemented and staging/UAT is intentionally approved for those credentials.
+- `GET /health/live`
+- `GET /health/ready`
 
-## 6. Health checks
+Interactive `/docs`, `/redoc` and `/openapi.json` are intentionally disabled outside development/test and are not staging health probes.
 
-- `GET /health/live` proves the API process is responsive.
-- `GET /health/ready` verifies database connectivity and, when `REDIS_REQUIRED=true`, Redis connectivity.
+Continue to verify:
 
-A deployment should not receive UAT or production traffic until readiness returns HTTP 200 through the real routed hostname, not merely through localhost inside a container/VM.
+- exact trusted host behavior;
+- exact Player/Admin CORS origins;
+- API `nosniff`, frame, referrer and no-store controls;
+- Player/Admin CSP and browser security headers;
+- authentication/recovery abuse controls;
+- password-reset challenge attempt limits;
+- token revocation after password changes/resets.
 
-## 7. Edge/security verification
+## Android release-candidate model
 
-Through the final HTTPS route, verify:
+Android variants remain deliberately separate:
 
-- an allowed Host header reaches the application successfully;
-- an unexpected Host header is rejected;
-- API responses include `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` and `Cache-Control: no-store`;
-- the Player and Admin portals serve their configured Content Security Policy and security headers;
-- TLS/HSTS behavior is configured at the HTTPS edge according to the selected hosting platform;
-- authentication/recovery rate limits return 429 after the configured threshold;
-- repeated incorrect OTPs against one signed reset challenge are blocked at the configured reset-code attempt limit;
-- a token issued before password reset/change no longer authorizes `/auth/me` afterward.
+- `debug`: LAN/development, cleartext allowed for local testing, disposable stable development signing key;
+- `releaseCandidate`: release-like HTTPS-only WebView configuration, disposable development signing key for installable UAT;
+- `release`: final hardened build intended for the SBP-controlled release key supplied outside Git.
 
-## 8. Android release-candidate sequencing
+Current base version is `1.0.0`, versionCode `13`; RC is `1.0.0-rc1`.
 
-The Android project separates three purposes:
+RC defaults to the verified staging Player entry when no repository override variable exists. CI still rejects the old Vercel connectivity-test domains, requires HTTPS, verifies the canonical staging bootstrap when using the default target, builds the secure release-candidate variant, verifies cleartext is disabled in the packaged manifest, and requires release-candidate minification output.
 
-- `debug`: LAN/development, cleartext allowed for local testing and signed with the disposable development key;
-- `releaseCandidate`: release-like HTTPS-only WebView configuration, still signed with the disposable development key for installable UAT builds;
-- `release`: HTTPS-only hardened configuration intended for the eventual SBP-controlled release signing key supplied outside Git.
+The current RC is technically build-verified but still requires manual device/product UAT before being considered accepted for release.
 
-`versionCode=13` and base `versionName=1.0.0`; the staging candidate is `1.0.0-rc1` when built.
+## Post-deploy functional UAT
 
-Neither RC nor release now hard-codes the old Vercel connectivity-test URL. RC reads `SBP_PADEL_RC_PLAYER_URL`; release reads `SBP_PADEL_PLAYER_URL`. Android CI refuses the old connectivity-test domains and skips RC production when no real staging Player URL is configured. When RC is enabled, CI requires HTTPS, verifies cleartext is disabled and verifies release-candidate minification output exists.
+Before treating staging as application/UAT complete, manually verify at minimum:
 
-Do not distribute a debug APK or an RC built for anything other than the actual approved staged Player origin as the staging release candidate.
-
-## 9. Post-deploy functional verification
-
-Verify at minimum:
-
-1. login and `/api/v1/auth/me`;
+1. Player login and `/api/v1/auth/me` behavior;
 2. public venue discovery and availability;
 3. HQ login and venue directory;
 4. venue-operations login and court schedule;
-5. create a controlled staging booking and verify slot locking;
-6. cancellation/reschedule and released-slot availability;
+5. controlled staging booking and slot locking;
+6. cancellation/reschedule with slot release;
 7. pass validation/check-in;
-8. password-reset delivery through the configured SMTP service;
-9. reset-code guessing protection and old-token revocation after password change/reset;
-10. backup and restore procedure for PostgreSQL;
-11. Player web deployment reports the intended current runtime build rather than a stale service-worker/runtime generation;
-12. Android release-candidate can load only the approved HTTPS Player origin and blocks cleartext/mixed-content navigation;
-13. payment initiation/callback test paths create safe audit entries without retaining raw provider callback bodies or authorization headers.
+8. staff/HQ flows that are part of the accepted product surface;
+9. Android RC first launch/login/navigation on a real device;
+10. no stale service-worker/runtime generation on Player;
+11. password reset once SMTP staging delivery is configured.
 
-Online Player payment remains a separate blocker until PayZen's real provider contract is supplied and integrated with authenticated callbacks/status verification, idempotency, reconciliation and the agreed manual refund process.
+Do not perform real payment-provider transactions in this environment until PayZen UAT credentials and the official integration contract are available and intentionally enabled.
+
+## Production blockers remain external
+
+Successful Vercel staging does **not** remove the final production blockers:
+
+- official PayZen machine-to-machine documentation, UAT credentials and network/onboarding requirements;
+- PITB/government production hosting decision and security review;
+- final PostgreSQL/backup/restore architecture for production;
+- production domains, SSL, exact CORS/trusted hosts and any VPN/OTI/static-IP whitelisting;
+- production Redis decision if multi-instance concurrency requires it;
+- SMTP provider/credentials;
+- SBP-controlled Android release signing key and distribution channel;
+- optional object storage before facility/profile image scale grows.
+
+Do not change the technology stack merely because production hosting is undecided. Establish PITB VM/container/Kubernetes and network support requirements first.
+
+## PayZen boundary
+
+Online Player payment remains intentionally unconfigured in staging. The provider abstraction, callback verification boundary, idempotency, server-authoritative pricing, late-payment safety, reconciliation model and manual refund governance remain in place.
+
+Do not invent PayZen endpoints, payloads, signatures or callback rules. Wait for PITB/PayZen's official API pack and UAT credentials before enabling real provider traffic.
