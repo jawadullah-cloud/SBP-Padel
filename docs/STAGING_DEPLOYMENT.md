@@ -2,6 +2,22 @@
 
 This is the provider-neutral deployment sequence. PITB/government production hosting remains an external decision. A Vercel deployment may be used as a temporary staging/UAT environment so the application can be exercised over real HTTPS before final infrastructure is agreed.
 
+## Current staging status — 3 September 2026
+
+The connected Vercel team currently contains only the earlier `sbp-padel-live-preview` connectivity-test project. It is not the SBP-Padel application and must not be used as the Android release-candidate target.
+
+The repository is prepared for separate Vercel API, Player and optional Admin projects, but a real staging deployment still requires:
+
+- Vercel project creation/import for the relevant repository roots;
+- a persistent PostgreSQL staging database and `DATABASE_URL`;
+- deployment environment variables, including a strong staging `JWT_SECRET`, exact HTTPS `CORS_ORIGINS` and `TRUSTED_HOSTS`;
+- migrations against that PostgreSQL database;
+- an explicit Player-to-API staging URL configuration;
+- SMTP if password-recovery delivery is to be tested;
+- Redis with `REDIS_REQUIRED=true` if staging is expected to exercise shared locking/rate limiting across more than one backend instance.
+
+The connected Vercel tool surface can inspect/deploy already-linked projects but does not currently expose project creation, environment-variable mutation or PostgreSQL provisioning for this workspace. Do not claim a real SBP-Padel Vercel environment exists until those external resources are actually provisioned and health-tested.
+
 ## 1. Provision dependencies
 
 - PostgreSQL database with backups enabled. Do not use ephemeral SQLite for an internet-facing staging environment.
@@ -18,14 +34,16 @@ For staging use `ENVIRONMENT=staging`; for public deployment use `ENVIRONMENT=pr
 
 Set `TRUSTED_HOSTS` to the exact hostnames through which the API will be reached. Do not use a wildcard for a non-local deployment. Set `CORS_ORIGINS` to the explicit HTTPS Player/Admin browser origins. CORS origins and trusted hosts solve different problems and both must be configured.
 
-Security-sensitive defaults now include:
+Security-sensitive defaults include:
 
-- player access tokens remain short-lived by configuration and carry a server-checked token version;
+- player access tokens carry a server-checked token version;
 - HQ, venue-manager and venue-operator tokens use the shorter `STAFF_ACCESS_TOKEN_MINUTES` lifetime;
 - password changes/resets and staff administrative resets revoke older access tokens immediately;
 - public authentication/recovery routes are rate-limited, using Redis when configured;
+- each signed password-reset challenge has its own OTP-attempt limit in addition to endpoint/IP abuse controls;
 - production SMTP requires STARTTLS;
-- uploaded profile/venue images are decoded and checked against permitted image signatures rather than trusting only the data-URL prefix.
+- uploaded profile/venue images are decoded and checked against permitted image signatures rather than trusting only the data-URL prefix;
+- payment mutation/callback audit records contain route/method/status metadata only, not callback bodies, bearer tokens or provider credentials.
 
 ## 3. Install and validate
 
@@ -41,7 +59,9 @@ alembic check
 
 The preflight output should show the expected CORS origins and trusted-host list while redacting database credentials.
 
-Do not use `Base.metadata.create_all()` as a production migration mechanism. Application startup only performs development `create_all`/seed behavior when `ENVIRONMENT=development`.
+Do not use `Base.metadata.create_all()` as a staging/production migration mechanism. Application startup performs `create_all`/seed setup only for local `development` and automated `test` environments. Non-local deployment remains Alembic-driven.
+
+The historical baseline migration creates its baseline tables through model metadata, so later migrations must remain safe when a fresh database already contains a model field represented by a later revision. Backend CI now proves a fresh PostgreSQL `alembic upgrade head` path and the token-version hardening revision explicitly handles both fresh and pre-hardening databases.
 
 ## 4. Start backend
 
@@ -57,11 +77,14 @@ Interactive FastAPI `/docs`, `/redoc` and `/openapi.json` endpoints are intentio
 
 ## 5. Vercel staging experiment
 
-The repository contains Vercel preparation only for temporary staging/UAT:
+Vercel currently supports Python/FastAPI applications with an `app` entrypoint, so the backend does not need to be rewritten into JavaScript merely for this experiment.
+
+The repository contains Vercel preparation for temporary staging/UAT:
 
 - `backend/pyproject.toml` declares the FastAPI entrypoint `app.main:app`;
 - `backend/vercel.json` configures the FastAPI function duration;
-- `docs/vercel.json` supplies baseline static Player security headers.
+- `docs/vercel.json` supplies Player CSP and baseline browser security headers;
+- `admin/next.config.mjs` supplies Admin CSP and browser security headers.
 
 Recommended Vercel project separation:
 
@@ -88,7 +111,7 @@ Do not place PayZen credentials into Vercel until the official PayZen contract h
 - `GET /health/live` proves the API process is responsive.
 - `GET /health/ready` verifies database connectivity and, when `REDIS_REQUIRED=true`, Redis connectivity.
 
-A deployment should not receive production traffic until readiness returns HTTP 200 through the real routed hostname, not merely through localhost inside a container/VM.
+A deployment should not receive UAT or production traffic until readiness returns HTTP 200 through the real routed hostname, not merely through localhost inside a container/VM.
 
 ## 7. Edge/security verification
 
@@ -97,20 +120,25 @@ Through the final HTTPS route, verify:
 - an allowed Host header reaches the application successfully;
 - an unexpected Host header is rejected;
 - API responses include `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` and `Cache-Control: no-store`;
-- the Admin portal serves its configured Content Security Policy and security headers;
+- the Player and Admin portals serve their configured Content Security Policy and security headers;
 - TLS/HSTS behavior is configured at the HTTPS edge according to the selected hosting platform;
 - authentication/recovery rate limits return 429 after the configured threshold;
+- repeated incorrect OTPs against one signed reset challenge are blocked at the configured reset-code attempt limit;
 - a token issued before password reset/change no longer authorizes `/auth/me` afterward.
 
 ## 8. Android release-candidate sequencing
 
-The Android project now separates three purposes:
+The Android project separates three purposes:
 
 - `debug`: LAN/development, cleartext allowed for local testing and signed with the disposable development key;
 - `releaseCandidate`: release-like HTTPS-only WebView configuration, still signed with the disposable development key for installable UAT builds;
 - `release`: HTTPS-only hardened configuration intended for the eventual SBP-controlled release signing key supplied outside Git.
 
-The release-candidate Player URL must be changed to the actual staged Player HTTPS origin once it exists. Do not distribute the current placeholder-target RC as the final live test APK.
+`versionCode=13` and base `versionName=1.0.0`; the staging candidate is `1.0.0-rc1` when built.
+
+Neither RC nor release now hard-codes the old Vercel connectivity-test URL. RC reads `SBP_PADEL_RC_PLAYER_URL`; release reads `SBP_PADEL_PLAYER_URL`. Android CI refuses the old connectivity-test domains and skips RC production when no real staging Player URL is configured. When RC is enabled, CI requires HTTPS, verifies cleartext is disabled and verifies release-candidate minification output exists.
+
+Do not distribute a debug APK or an RC built for anything other than the actual approved staged Player origin as the staging release candidate.
 
 ## 9. Post-deploy functional verification
 
@@ -124,9 +152,10 @@ Verify at minimum:
 6. cancellation/reschedule and released-slot availability;
 7. pass validation/check-in;
 8. password-reset delivery through the configured SMTP service;
-9. old-token revocation after password change/reset;
+9. reset-code guessing protection and old-token revocation after password change/reset;
 10. backup and restore procedure for PostgreSQL;
 11. Player web deployment reports the intended current runtime build rather than a stale service-worker/runtime generation;
-12. Android release-candidate can load only the approved HTTPS Player origin and blocks cleartext/mixed-content navigation.
+12. Android release-candidate can load only the approved HTTPS Player origin and blocks cleartext/mixed-content navigation;
+13. payment initiation/callback test paths create safe audit entries without retaining raw provider callback bodies or authorization headers.
 
 Online Player payment remains a separate blocker until PayZen's real provider contract is supplied and integrated with authenticated callbacks/status verification, idempotency, reconciliation and the agreed manual refund process.
