@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <title>SBP Padel · Staging</title>
+</head>
+<body>
+<script>
+(() => {
+  'use strict';
+  const apiBase = '__SBP_API_BASE__';
+  try {
+    const api = new URL(apiBase);
+    if (api.protocol !== 'https:' || !api.pathname.endsWith('/api/v1')) {
+      throw new Error('Invalid staging API origin');
+    }
+    localStorage.setItem('sbpPadelApiBase', apiBase.replace(/\/$/, ''));
+    sessionStorage.setItem('sbpPadelStagingRuntime', '1');
+    location.replace('./auth-preview.html');
+  } catch (error) {
+    document.body.textContent = 'SBP Padel staging configuration is invalid.';
+    console.error(error);
+  }
+})();
+</script>
+</body>
+</html>
