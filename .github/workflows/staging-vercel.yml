@@ -185,7 +185,7 @@ jobs:
           grep -qi '^x-content-type-options: *nosniff' <<<"$headers"
           grep -qi '^x-frame-options: *DENY' <<<"$headers"
 
-      - name: Link and deploy Admin project
+      - name: Link, configure and deploy Admin project
         id: admin
         working-directory: admin
         shell: bash
@@ -193,11 +193,13 @@ jobs:
           set -euo pipefail
           vercel link --yes --project "$ADMIN_PROJECT" --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
           vercel project update "$ADMIN_PROJECT" --framework nextjs --auto-detect output-directory --yes --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN" >/dev/null
+          vercel env rm NEXT_PUBLIC_API_URL production --yes --token "$VERCEL_TOKEN" >/dev/null 2>&1 || true
+          printf '%s' "https://$API_HOST/api/v1" | vercel env add NEXT_PUBLIC_API_URL production --token "$VERCEL_TOKEN" >/dev/null
           url="$(vercel deploy --prod --yes --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Admin deployed to $url"
 
-      - name: Verify Admin security headers
+      - name: Verify Admin security headers and API binding
         shell: bash
         run: |
           set -euo pipefail
@@ -205,6 +207,23 @@ jobs:
           grep -qi '^content-security-policy:' <<<"$headers"
           grep -qi '^x-content-type-options: *nosniff' <<<"$headers"
           grep -qi '^x-frame-options: *DENY' <<<"$headers"
+
+          pages="$(mktemp)"
+          curl -fsS --max-time 20 "https://$ADMIN_HOST/" > "$pages"
+          curl -fsS --max-time 20 "https://$ADMIN_HOST/hq" >> "$pages"
+          mapfile -t chunks < <(grep -oE 'src="/_next/[^" ]+\.js"' "$pages" | cut -d'"' -f2 | sort -u)
+          found=0
+          for chunk in "${chunks[@]}"; do
+            if curl -fsS --max-time 20 "https://$ADMIN_HOST$chunk" | grep -Fq "https://$API_HOST/api/v1"; then
+              found=1
+              break
+            fi
+          done
+          if [[ "$found" -ne 1 ]]; then
+            echo 'Admin browser bundle is not bound to the canonical staging API.'
+            exit 1
+          fi
+          echo 'Admin browser bundle is bound to the canonical staging API.'
 
       - name: Trigger Android release-candidate build
         env:
@@ -225,6 +244,7 @@ jobs:
           - API: https://$API_HOST
           - Player: https://$PLAYER_HOST/staging-entry.html
           - Admin: https://$ADMIN_HOST
+          - Admin API binding: https://$API_HOST/api/v1
           - Database: managed Neon PostgreSQL staging resource
           - Android RC workflow: triggered after successful HTTPS staging verification
           EOF
