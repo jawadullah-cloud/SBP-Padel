@@ -62,7 +62,6 @@ try {
     const signIn = playerPage.locator('#signin');
     await signIn.locator('input').nth(0).fill(playerEmail);
     await signIn.locator('input').nth(1).fill(playerPassword);
-
     const loginResponsePromise = playerPage.waitForResponse(r => r.url() === `${apiBase}/auth/login`, { timeout: 20_000 });
     await signIn.locator('[data-go="done"]').click();
     const loginResponse = await loginResponsePromise;
@@ -72,17 +71,8 @@ try {
     await playerPage.waitForSelector('#home', { timeout: 20_000 });
     await playerPage.waitForFunction(() => document.body.innerText.includes('Nishtar Park Sports Complex'), null, { timeout: 20_000 });
     await playerPage.waitForFunction(() => document.body.innerText.includes('Court 05'), null, { timeout: 20_000 });
-
-    // Validate the effective deployed runtime rather than one implementation's exact
-    // request sequence. mobile-runtime may hydrate cached/public venue data with a
-    // cache-buster while player-live performs its own direct venue/detail requests.
-    const successfulVenueResponses = playerEvents.filter(event =>
-      event.type === 'api-response' &&
-      event.status === 200 &&
-      event.url.startsWith(`${apiBase}/venues`),
-    );
+    const successfulVenueResponses = playerEvents.filter(event => event.type === 'api-response' && event.status === 200 && event.url.startsWith(`${apiBase}/venues`));
     if (!successfulVenueResponses.length) throw new Error('Player UI did not successfully hydrate venue data from the staging API.');
-
     const playerToken = await playerPage.evaluate(() => localStorage.getItem('sbpPadelAccessToken'));
     if (!playerToken) throw new Error('Player UI did not persist an authenticated access token.');
     const hardErrors = playerEvents.filter(event => event.type === 'pageerror' || event.type === 'console-error' || event.type === 'requestfailed');
@@ -108,14 +98,19 @@ try {
     const operationsToken = await adminPage.evaluate(() => localStorage.getItem('sbp_padel_ops_token'));
     if (!operationsToken) throw new Error('Admin operations UI did not persist an authenticated access token.');
 
+    // Navigating from Operations to HQ intentionally aborts in-flight Operations reads;
+    // clear those navigation artefacts before validating the independent HQ runtime.
+    adminEvents.length = 0;
     await adminPage.goto(`${adminBase}/hq`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     await adminPage.getByPlaceholder('Email').fill(adminEmail);
     await adminPage.getByPlaceholder('Password').fill(adminPassword);
     await adminPage.getByRole('button', { name: 'SIGN IN' }).click();
     await adminPage.waitForFunction(() => document.body.innerText.includes('Central Dashboard'), null, { timeout: 20_000 });
-    await adminPage.waitForFunction(() => document.body.innerText.includes('Nishtar Park Sports Complex'), null, { timeout: 20_000 });
+    await adminPage.waitForFunction(() => document.body.innerText.includes('5\nCourts'), null, { timeout: 20_000 });
     const hqToken = await adminPage.evaluate(() => localStorage.getItem('sbp_padel_hq_token'));
     if (!hqToken) throw new Error('HQ UI did not persist an authenticated access token.');
+    const dashboardOk = adminEvents.some(event => event.type === 'api-response' && event.status === 200 && event.url === `${apiBase}/admin/dashboard`);
+    if (!dashboardOk) throw new Error('HQ UI did not successfully load the staging admin dashboard API.');
     const hardErrors = adminEvents.filter(event => event.type === 'pageerror' || event.type === 'console-error' || event.type === 'requestfailed');
     if (hardErrors.length) throw new Error(`Admin browser errors: ${JSON.stringify(hardErrors)}`);
   } catch (error) {
