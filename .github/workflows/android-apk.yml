@@ -5,14 +5,6 @@ on:
     branches: [backend-v1-dev]
     paths:
       - 'android/**'
-      - 'docs/mobile-runtime.js'
-      - 'docs/digital-pass-live.js'
-      - 'docs/player-venues-live.js'
-      - 'docs/player-profile-live.js'
-      - 'docs/player-bookings-live.js'
-      - 'dev_player_server.py'
-      - 'run_backend_lan.ps1'
-      - 'run_player_lan.ps1'
       - '.github/workflows/android-apk.yml'
   workflow_dispatch:
 
@@ -28,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      SBP_PADEL_RC_PLAYER_URL: ${{ vars.SBP_PADEL_RC_PLAYER_URL || 'https://sbp-padel-player-staging.vercel.app/staging-entry.html' }}
+      SBP_PADEL_RC_API_URL: https://sbp-padel-api-staging.vercel.app/api/v1
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -51,38 +43,23 @@ jobs:
       - name: Verify development signing key
         working-directory: android
         run: keytool -list -keystore dev-signing.keystore -storepass sbppadeldev -alias sbppadeldev
-      - name: Validate release-candidate target
-        id: rc
+      - name: Validate native release-candidate API target
         shell: bash
         run: |
           set -euo pipefail
-          url="${SBP_PADEL_RC_PLAYER_URL:-}"
-          if [[ -z "$url" ]]; then
-            echo 'No SBP_PADEL_RC_PLAYER_URL is configured; secure RC build will be skipped.'
-            echo 'enabled=false' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [[ "$url" != https://* ]]; then
-            echo 'Release-candidate Player URL must use HTTPS.'; exit 1
-          fi
-          if [[ "$url" == *sbp-padel-live-preview-sbp7.vercel.app* || "$url" == *sbp-padel-live-preview.vercel.app* ]]; then
-            echo 'The old Vercel connectivity-test page must not be used as an Android release-candidate target.'; exit 1
-          fi
-          if [[ "$url" == 'https://sbp-padel-player-staging.vercel.app/staging-entry.html' ]]; then
-            curl -fsS --max-time 20 "$url" | grep -q 'https://sbp-padel-api-staging.vercel.app/api/v1'
-          fi
-          echo 'enabled=true' >> "$GITHUB_OUTPUT"
-      - name: Build debug APK
+          url="${SBP_PADEL_RC_API_URL:-}"
+          [[ "$url" == https://* ]] || { echo 'Native RC API URL must use HTTPS.'; exit 1; }
+          [[ "$url" == 'https://sbp-padel-api-staging.vercel.app/api/v1' ]] || { echo 'Native RC must target canonical staging API.'; exit 1; }
+          curl -fsS --max-time 20 'https://sbp-padel-api-staging.vercel.app/health/live' | grep -q 'healthy'
+      - name: Build native debug APK
         working-directory: android
         run: gradle :app:assembleDebug --stacktrace
-      - name: Build secure release-candidate APK
-        if: steps.rc.outputs.enabled == 'true'
+      - name: Build native secure release-candidate APK
         working-directory: android
         run: gradle :app:assembleReleaseCandidate --stacktrace
-      - name: Verify debug APK exists
+      - name: Verify native debug APK exists
         run: test -f android/app/build/outputs/apk/debug/app-debug.apk
-      - name: Verify release-candidate output and manifest security
-        if: steps.rc.outputs.enabled == 'true'
+      - name: Verify native release-candidate output and manifest security
         shell: bash
         run: |
           set -euo pipefail
@@ -93,18 +70,20 @@ jobs:
           "$AAPT" dump xmltree "$APK" AndroidManifest.xml > /tmp/manifest.txt
           grep -q 'android:usesCleartextTraffic' /tmp/manifest.txt
           if grep 'android:usesCleartextTraffic' /tmp/manifest.txt | grep -q '0xffffffff'; then
-            echo 'Release candidate unexpectedly permits cleartext traffic'; exit 1
+            echo 'Native release candidate unexpectedly permits cleartext traffic'; exit 1
           fi
-      - name: Upload debug APK
+          if unzip -l "$APK" | grep -qi 'webview'; then
+            echo 'Unexpected WebView-named packaged resource found in native RC'; exit 1
+          fi
+      - name: Upload native debug APK
         uses: actions/upload-artifact@v6
         with:
-          name: sbp-padel-debug-apk
+          name: sbp-padel-native-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      - name: Upload release-candidate APK
-        if: steps.rc.outputs.enabled == 'true'
+      - name: Upload native release-candidate APK
         uses: actions/upload-artifact@v6
         with:
-          name: sbp-padel-1.0.0-rc1-apk
+          name: sbp-padel-1.0.0-rc2-native-apk
           path: android/app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk
           if-no-files-found: error
