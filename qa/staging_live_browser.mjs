@@ -11,15 +11,7 @@ const adminEmail = process.env.SBP_STAGING_ADMIN_EMAIL;
 const adminPassword = process.env.SBP_STAGING_ADMIN_PASSWORD;
 const diagnosticsDir = path.resolve('test-results');
 
-for (const [name, value] of Object.entries({
-  playerEntry,
-  adminBase,
-  apiBase,
-  playerEmail,
-  playerPassword,
-  adminEmail,
-  adminPassword,
-})) {
+for (const [name, value] of Object.entries({ playerEntry, adminBase, apiBase, playerEmail, playerPassword, adminEmail, adminPassword })) {
   if (!value) throw new Error(`Missing required staging browser variable: ${name}`);
 }
 
@@ -45,17 +37,11 @@ async function dumpPage(page, name, events = []) {
 function observe(page, events) {
   page.on('pageerror', error => events.push({ type: 'pageerror', message: String(error) }));
   page.on('console', message => {
-    if (message.type() === 'error' || message.type() === 'warning') {
-      events.push({ type: `console-${message.type()}`, message: message.text() });
-    }
+    if (message.type() === 'error' || message.type() === 'warning') events.push({ type: `console-${message.type()}`, message: message.text() });
   });
-  page.on('requestfailed', request => {
-    events.push({ type: 'requestfailed', url: request.url(), method: request.method(), failure: request.failure()?.errorText || null });
-  });
+  page.on('requestfailed', request => events.push({ type: 'requestfailed', url: request.url(), method: request.method(), failure: request.failure()?.errorText || null }));
   page.on('response', response => {
-    if (response.url().startsWith(apiBase)) {
-      events.push({ type: 'api-response', url: response.url(), status: response.status() });
-    }
+    if (response.url().startsWith(apiBase)) events.push({ type: 'api-response', url: response.url(), status: response.status() });
   });
 }
 
@@ -70,33 +56,42 @@ try {
     await playerPage.goto(playerEntry, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     await playerPage.waitForURL(/auth-preview\.html/, { timeout: 15_000 });
     const configuredApi = await playerPage.evaluate(() => localStorage.getItem('sbpPadelApiBase'));
-    if (configuredApi !== apiBase) {
-      throw new Error(`Player bootstrap API mismatch: ${configuredApi}`);
-    }
+    if (configuredApi !== apiBase) throw new Error(`Player bootstrap API mismatch: ${configuredApi}`);
 
     await playerPage.locator('#splash [data-go="signin"]').click();
     const signIn = playerPage.locator('#signin');
     await signIn.locator('input').nth(0).fill(playerEmail);
     await signIn.locator('input').nth(1).fill(playerPassword);
-    const loginResponsePromise = playerPage.waitForResponse(response => response.url() === `${apiBase}/auth/login`, { timeout: 20_000 });
+
+    // Register every expected response listener before login. The Player index starts
+    // hydration immediately after navigation, so attaching these after #home appears
+    // races fast staging responses and can produce a false timeout.
+    const loginResponsePromise = playerPage.waitForResponse(r => r.url() === `${apiBase}/auth/login`, { timeout: 20_000 });
+    const meResponsePromise = playerPage.waitForResponse(r => r.url() === `${apiBase}/auth/me`, { timeout: 30_000 });
+    const venuesResponsePromise = playerPage.waitForResponse(r => r.url() === `${apiBase}/venues`, { timeout: 30_000 });
+    const venueDetailResponsePromise = playerPage.waitForResponse(
+      r => r.url().startsWith(`${apiBase}/venues/`) && !r.url().includes('/availability'),
+      { timeout: 30_000 },
+    );
+
     await signIn.locator('[data-go="done"]').click();
     const loginResponse = await loginResponsePromise;
     if (loginResponse.status() !== 200) throw new Error(`Player UI login returned HTTP ${loginResponse.status()}`);
 
     await playerPage.waitForURL(url => !url.pathname.endsWith('/auth-preview.html'), { timeout: 20_000 });
     await playerPage.waitForSelector('#home', { timeout: 20_000 });
-    const meResponse = await playerPage.waitForResponse(response => response.url() === `${apiBase}/auth/me`, { timeout: 20_000 });
+
+    const [meResponse, venuesResponse, venueDetailResponse] = await Promise.all([
+      meResponsePromise,
+      venuesResponsePromise,
+      venueDetailResponsePromise,
+    ]);
     if (meResponse.status() !== 200) throw new Error(`Player /auth/me returned HTTP ${meResponse.status()}`);
-    const venuesResponse = await playerPage.waitForResponse(response => response.url() === `${apiBase}/venues`, { timeout: 20_000 });
     if (venuesResponse.status() !== 200) throw new Error(`Player /venues returned HTTP ${venuesResponse.status()}`);
     const venues = await venuesResponse.json();
     if (!Array.isArray(venues) || !venues.some(v => v.name === 'Nishtar Park Sports Complex')) {
       throw new Error(`Player /venues response did not include Nishtar Park Sports Complex: ${JSON.stringify(venues)}`);
     }
-    const venueDetailResponse = await playerPage.waitForResponse(
-      response => response.url().startsWith(`${apiBase}/venues/`) && !response.url().includes('/availability'),
-      { timeout: 20_000 },
-    );
     if (venueDetailResponse.status() !== 200) throw new Error(`Player venue detail returned HTTP ${venueDetailResponse.status()}`);
 
     await playerPage.waitForFunction(() => document.body.innerText.includes('Nishtar Park Sports Complex'), null, { timeout: 20_000 });
