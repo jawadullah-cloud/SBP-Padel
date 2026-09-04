@@ -50,7 +50,8 @@ jobs:
           url="${SBP_PADEL_RC_API_URL:-}"
           [[ "$url" == https://* ]] || { echo 'Native RC API URL must use HTTPS.'; exit 1; }
           [[ "$url" == 'https://sbp-padel-api-staging.vercel.app/api/v1' ]] || { echo 'Native RC must target canonical staging API.'; exit 1; }
-          curl -fsS --max-time 20 'https://sbp-padel-api-staging.vercel.app/health/live' | grep -q 'healthy'
+          curl -fsS --max-time 20 'https://sbp-padel-api-staging.vercel.app/health/live' >/dev/null
+          curl -fsS --max-time 20 'https://sbp-padel-api-staging.vercel.app/health/ready' >/dev/null
       - name: Build native debug APK
         working-directory: android
         run: gradle :app:assembleDebug --stacktrace
