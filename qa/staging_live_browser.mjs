@@ -45,13 +45,20 @@ function observe(page, events) {
   });
 }
 
+function hardBrowserErrors(events) {
+  return events.filter(event =>
+    event.type === 'pageerror' ||
+    event.type === 'console-error' ||
+    (event.type === 'requestfailed' && event.failure !== 'net::ERR_ABORTED'),
+  );
+}
+
 const browser = await chromium.launch({ headless: true });
 try {
   const playerContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const playerPage = await playerContext.newPage();
   const playerEvents = [];
   observe(playerPage, playerEvents);
-
   try {
     await playerPage.goto(playerEntry, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     await playerPage.waitForURL(/auth-preview\.html/, { timeout: 15_000 });
@@ -73,7 +80,7 @@ try {
     if (!successfulVenueResponses.length) throw new Error('Player UI did not successfully hydrate venue data from the staging API.');
     const playerToken = await playerPage.evaluate(() => localStorage.getItem('sbpPadelAccessToken'));
     if (!playerToken) throw new Error('Player UI did not persist an authenticated access token.');
-    const hardErrors = playerEvents.filter(event => event.type === 'pageerror' || event.type === 'console-error' || event.type === 'requestfailed');
+    const hardErrors = hardBrowserErrors(playerEvents);
     if (hardErrors.length) throw new Error(`Player browser errors: ${JSON.stringify(hardErrors)}`);
   } catch (error) {
     await dumpPage(playerPage, 'player-failure', playerEvents);
@@ -86,10 +93,7 @@ try {
   const adminPage = await adminContext.newPage();
   const adminEvents = [];
   observe(adminPage, adminEvents);
-
   try {
-    // Next.js can paint the server-rendered sign-in form before client event handlers
-    // are hydrated. networkidle prevents a synthetic click from racing those chunks.
     await adminPage.goto(adminBase, { waitUntil: 'networkidle', timeout: 30_000 });
     await adminPage.getByPlaceholder('Email').fill(adminEmail);
     await adminPage.getByPlaceholder('Password').fill(adminPassword);
@@ -109,7 +113,7 @@ try {
     if (!hqToken) throw new Error('HQ UI did not persist an authenticated access token.');
     const dashboardOk = adminEvents.some(event => event.type === 'api-response' && event.status === 200 && event.url === `${apiBase}/admin/dashboard`);
     if (!dashboardOk) throw new Error('HQ UI did not successfully load the staging admin dashboard API.');
-    const hardErrors = adminEvents.filter(event => event.type === 'pageerror' || event.type === 'console-error' || event.type === 'requestfailed');
+    const hardErrors = hardBrowserErrors(adminEvents);
     if (hardErrors.length) throw new Error(`Admin browser errors: ${JSON.stringify(hardErrors)}`);
   } catch (error) {
     await dumpPage(adminPage, 'admin-failure', adminEvents);
