@@ -136,6 +136,15 @@ jobs:
           print('Live player registration/authentication and active-policy smoke passed.')
           PY
 
+      - name: Exercise live booking hold, cancellation and slot release
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SBP_STAGING_API_BASE="$API_BASE"
+          export SBP_STAGING_PLAYER_EMAIL="$(cat "$RUNNER_TEMP/player-email")"
+          export SBP_STAGING_PLAYER_PASSWORD="$(cat "$RUNNER_TEMP/player-password")"
+          node qa/staging_booking_lifecycle.mjs
+
       - name: Exercise deployed Player and Admin browser flows
         shell: bash
         run: |
