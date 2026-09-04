@@ -347,7 +347,7 @@ private fun LockedBookings(session: LockedSession) {
         }
         when {
             loading -> item { Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
-            error != null -> item { LockedEmptyState(error) }
+            error != null -> item { LockedEmptyState(error ?: "Unable to load bookings.") }
             bookings.isEmpty() -> item { LockedEmptyState("No bookings yet. Your next court session will appear here.") }
             else -> items(bookings) { booking ->
                 Card(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
