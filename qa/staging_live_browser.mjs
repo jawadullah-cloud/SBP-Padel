@@ -57,7 +57,6 @@ try {
     await playerPage.waitForURL(/auth-preview\.html/, { timeout: 15_000 });
     const configuredApi = await playerPage.evaluate(() => localStorage.getItem('sbpPadelApiBase'));
     if (configuredApi !== apiBase) throw new Error(`Player bootstrap API mismatch: ${configuredApi}`);
-
     await playerPage.locator('#splash [data-go="signin"]').click();
     const signIn = playerPage.locator('#signin');
     await signIn.locator('input').nth(0).fill(playerEmail);
@@ -66,7 +65,6 @@ try {
     await signIn.locator('[data-go="done"]').click();
     const loginResponse = await loginResponsePromise;
     if (loginResponse.status() !== 200) throw new Error(`Player UI login returned HTTP ${loginResponse.status()}`);
-
     await playerPage.waitForURL(url => !url.pathname.endsWith('/auth-preview.html'), { timeout: 20_000 });
     await playerPage.waitForSelector('#home', { timeout: 20_000 });
     await playerPage.waitForFunction(() => document.body.innerText.includes('Nishtar Park Sports Complex'), null, { timeout: 20_000 });
@@ -90,7 +88,9 @@ try {
   observe(adminPage, adminEvents);
 
   try {
-    await adminPage.goto(adminBase, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    // Next.js can paint the server-rendered sign-in form before client event handlers
+    // are hydrated. networkidle prevents a synthetic click from racing those chunks.
+    await adminPage.goto(adminBase, { waitUntil: 'networkidle', timeout: 30_000 });
     await adminPage.getByPlaceholder('Email').fill(adminEmail);
     await adminPage.getByPlaceholder('Password').fill(adminPassword);
     await adminPage.getByRole('button', { name: 'SIGN IN' }).click();
@@ -98,10 +98,8 @@ try {
     const operationsToken = await adminPage.evaluate(() => localStorage.getItem('sbp_padel_ops_token'));
     if (!operationsToken) throw new Error('Admin operations UI did not persist an authenticated access token.');
 
-    // Navigating from Operations to HQ intentionally aborts in-flight Operations reads;
-    // clear those navigation artefacts before validating the independent HQ runtime.
     adminEvents.length = 0;
-    await adminPage.goto(`${adminBase}/hq`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await adminPage.goto(`${adminBase}/hq`, { waitUntil: 'networkidle', timeout: 30_000 });
     await adminPage.getByPlaceholder('Email').fill(adminEmail);
     await adminPage.getByPlaceholder('Password').fill(adminPassword);
     await adminPage.getByRole('button', { name: 'SIGN IN' }).click();
