@@ -9,7 +9,7 @@ from sqlalchemy import delete, select
 from app.core.config import settings, validate_runtime_settings
 from app.core.security import hash_password
 from app.db.session import SessionLocal
-from app.models.domain import User, UserRole
+from app.models.domain import Booking, BookingSlot, Notification, User, UserRole
 
 CONFIRMATION = "SBP_PADEL_EPHEMERAL_UAT_ONLY"
 ALLOWED_SUFFIX = "@sbp-padel-uat.invalid"
@@ -65,9 +65,25 @@ async def create_user(role_name: str) -> None:
 async def delete_user() -> None:
     email, _ = _guard()
     async with SessionLocal() as session:
-        await session.execute(delete(User).where(User.email == email))
+        user = await session.scalar(select(User).where(User.email == email))
+        if user is None:
+            print(f"Ephemeral staging UAT account already absent: {email}")
+            return
+        booking_ids = list((await session.scalars(select(Booking.id).where(Booking.user_id == user.id))).all())
+        # The live staging lifecycle smoke creates only unpaid bookings. Refuse to
+        # broaden this helper into payment/refund deletion: those records require
+        # explicit financial-test cleanup rather than an account-cleanup shortcut.
+        if booking_ids:
+            from app.models.domain import Payment
+            payment = await session.scalar(select(Payment.id).where(Payment.booking_id.in_(booking_ids)).limit(1))
+            if payment is not None:
+                raise RuntimeError("Refusing to delete an ephemeral user with payment records.")
+            await session.execute(delete(BookingSlot).where(BookingSlot.booking_id.in_(booking_ids)))
+            await session.execute(delete(Booking).where(Booking.id.in_(booking_ids)))
+        await session.execute(delete(Notification).where(Notification.user_id == user.id))
+        await session.execute(delete(User).where(User.id == user.id))
         await session.commit()
-    print(f"Removed ephemeral staging UAT account: {email}")
+    print(f"Removed ephemeral staging UAT account and unpaid booking fixtures: {email}")
 
 
 async def main() -> None:
