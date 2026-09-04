@@ -6,8 +6,8 @@
     <application
         android:allowBackup="false"
         android:enableOnBackInvokedCallback="true"
-        android:icon="@drawable/sbp_padel_logo"
-        android:roundIcon="@drawable/sbp_padel_logo"
+        android:icon="@drawable/ic_sbp_padel_native"
+        android:roundIcon="@drawable/ic_sbp_padel_native"
         android:label="SBP Padel"
         android:usesCleartextTraffic="${usesCleartextTraffic}"
         android:theme="@android:style/Theme.Material.NoActionBar">
