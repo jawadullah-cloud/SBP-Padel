@@ -6,59 +6,59 @@ Last verified: 4 September 2026.
 
 The earlier Android `1.0.0-rc1` build is a hardened WebView staging shell only. It is retained as historical connectivity/UAT evidence and must not be treated as the product UI candidate.
 
-The Android client is now migrating to a genuine native Jetpack Compose application that talks directly to the SBP-Padel backend API over HTTPS. The legacy WebView `MainActivity.java` has been removed from the active Android client.
+The Android client is migrating to a genuine native Jetpack Compose application that talks directly to the SBP-Padel backend API over HTTPS. The legacy WebView `MainActivity.java` has been removed from the active Android client.
 
-## First native release-candidate preview
+## Design preservation lock — 4 September 2026
 
-Native Android workflow run `33852341052` on head `4a9f8a8bffa350b51b08c206d4f15904cbd56141` completed **success**.
+The first native `rc2` preview proved Android/Compose/API connectivity but introduced a simplified visual redesign. That visual direction was rejected and must not be used as the product baseline.
 
-Produced artifact:
+The accepted mature Player runtime remains the immutable product-design reference for the native port. Native screens must preserve the established experience from `docs/index.html`, `docs/styles.css`, `docs/home3.css`, `docs/bookings-module.css`, `docs/BOOKING_FLOW_V2.md` and `docs/REGRESSION_LOCKS_20260826.md`, including:
 
-- name: `sbp-padel-1.0.0-rc2-native-apk`
-- artifact id: `9928953690`
-- digest: `sha256:bc03f99bce734d892d13837222d1b50fb50d95803709ec45047dc37f8fa9d3e9`
-- versionCode: `14`
-- versionName: `1.0.0-rc2`
-- target: `https://sbp-padel-api-staging.vercel.app/api/v1`
+- dark-first premium SBP Padel visual identity with the matching accepted light theme;
+- lime accent, deep green/ink surfaces and the `PLAY. PADEL.` hero language;
+- established Home, Courts, Venue Detail, My Bookings and Profile information hierarchy;
+- four-tab Home / Bookings / Courts / Profile navigation;
+- Venue → Date → Court → Time → Review → Payment → Confirmation booking sequence;
+- the existing five-stage booking progress treatment and server-authoritative pricing/policy behavior;
+- Review must never create the booking; the pending-payment booking is created only at the final payment boundary after a refreshed quote;
+- confirmation, digital pass/QR, booking detail, cancellation/reschedule and profile modules are to be ported without product redesign;
+- previously accepted behavior remains protected by the existing regression locks.
 
-The workflow verified the canonical HTTPS staging API, built both native debug and minified release-candidate variants, verified the RC packaged manifest does not permit cleartext traffic, and uploaded the native APK artifacts. Security CI run `33852341042` for the same head also passed its complete Git-history secret scan.
+A native implementation may replace HTML/CSS mechanics with Compose equivalents, but it must not silently simplify, restyle or remove an accepted product surface. Any deliberate visual redesign requires explicit manual approval before it can replace the locked design.
 
-## Native surface currently implemented
+## Historical first native preview
 
-The first native preview provides:
+Native Android workflow run `33852341052` on head `4a9f8a8bffa350b51b08c206d4f15904cbd56141` completed successfully and produced `sbp-padel-1.0.0-rc2-native-apk`. This artifact is retained only as historical native-connectivity evidence. It is not an accepted visual/product release candidate.
+
+## Current native migration direction
+
+The native client keeps the useful technical foundation from the first preview:
 
 - Jetpack Compose activity rather than a WebView;
-- native sign-in and player registration against `/auth/login` and `/auth/register`;
-- authenticated session validation through `/auth/me`;
-- native Home, Courts, My Bookings and Profile bottom-navigation surfaces;
-- hosted venue discovery from `/venues` and venue/court detail from `/venues/{id}`;
-- authenticated booking-history retrieval from `/bookings/me`;
-- dark and light app themes;
-- new native launcher/app mark rather than the legacy JPG logo;
-- HTTPS-only RC connectivity directly to the hosted staging API, with no local Player or backend server required.
+- direct HTTPS API connectivity;
+- native sign-in and player registration;
+- authenticated session validation;
+- hosted venue/court and booking data;
+- dark/light theme capability;
+- minified secure RC builds with cleartext disabled.
 
-## Important product status
+The current migration is rebuilding those technical capabilities inside the locked Player design rather than designing a new UI.
 
-`rc2` is the **first native product-preview milestone**, not feature parity with the mature web Player yet and not production release approval.
+Still to reach full native product parity:
 
-Still to port/refine natively before the Android client can replace the current Player surface completely:
-
-- venue availability/date/slot selection and native quote/checkout;
-- full booking detail, cancellation/reschedule and policy UX;
-- QR/digital pass and check-in-facing player UX where applicable;
+- complete visual parity review for Home, venue discovery and venue detail;
+- full locked booking flow including payment/provider handoff and confirmation;
+- booking detail, cancellation/reschedule and refund-status UX;
+- QR/digital pass;
 - notifications;
-- profile editing/avatar flow;
-- password recovery once SMTP staging is configured;
-- Google sign-in if retained in the accepted product scope;
-- native location/distance UX where retained;
-- exact accepted SBP branding assets and final typography/design polish;
-- secure token persistence backed by Android Keystore rather than the present preview persistence;
-- real-device UI/accessibility/product QA across supported Android sizes.
-
-Do not restore the WebView shell as the release candidate simply because it has wider legacy feature coverage. Port missing flows into the native client deliberately while keeping backend/API behavior authoritative.
+- profile editing/avatar, Saved Players, Favourites and Help;
+- native location/distance and Next Available parity;
+- exact accepted branding assets and final typography review;
+- Android Keystore-backed token persistence;
+- real-device visual/accessibility QA across supported Android sizes.
 
 ## Staging data note
 
-The hosted Neon staging database is independent of the historical local development database. It currently contains the controlled Nishtar Park staging reference data rather than every venue/court created locally during development. Native Android therefore correctly shows the hosted staging records. Data that should become part of shared UAT must be intentionally created/migrated into staging rather than copied implicitly from a developer workstation.
+The hosted Neon staging database is independent of the historical local development database. It currently contains the controlled Nishtar Park staging reference data rather than every venue/court created locally during development. Data intended for shared UAT must be intentionally created or migrated into staging rather than copied implicitly from a developer workstation.
 
 Production PayZen credentials, PITB production hosting, SBP production signing and final distribution remain separate external gates.
