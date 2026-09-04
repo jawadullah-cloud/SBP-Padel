@@ -47,7 +47,7 @@ android {
             signingConfig = signingConfigs.getByName("devStable")
             versionNameSuffix = "-rc1"
             manifestPlaceholders["usesCleartextTraffic"] = "false"
-            buildConfigField("String", "PLAYER_URL", "\"https://sbp-padel-live-preview-sbp7.vercel.app/\"")
+            buildConfigField("String", "PLAYER_URL", "\"https://sbp-padel-player-staging.vercel.app/staging-entry.html\"")
             matchingFallbacks += listOf("release")
         }
         release {
@@ -55,7 +55,7 @@ android {
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("officialRelease")
             manifestPlaceholders["usesCleartextTraffic"] = "false"
-            buildConfigField("String", "PLAYER_URL", "\"https://sbp-padel-live-preview-sbp7.vercel.app/\"")
+            buildConfigField("String", "PLAYER_URL", "\"https://sbp-padel-player-staging.vercel.app/staging-entry.html\"")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
