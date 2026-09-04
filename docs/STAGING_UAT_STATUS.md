@@ -13,23 +13,30 @@ This file records runtime/UAT evidence only. `docs/STAGING_DEPLOYMENT.md` remain
 
 Staging reference data is intentionally limited to Nishtar Park Sports Complex, five courts, reference pricing bands and policy version `2026-staging-uat-1`. The guarded reference bootstrap creates no users/passwords and refuses non-staging environments.
 
-## Proven live browser/authentication state
+## Proven live browser/authentication and booking state
 
-`Staging Auth Smoke` run `33843390933` on head `edd36b560221a00faa64a3ffc91105ab271dec37` completed **success**.
+`Staging Auth Smoke` run `33844787329` on head `4ef39732edfad5855c8c3e7f7bd2aa6e80c57c0c` completed **success**.
 
-It proved over the canonical public HTTPS deployments:
+It proved over the canonical public HTTPS deployments and staging Neon database:
 
 1. ephemeral HQ admin creation with generated masked credentials;
 2. live admin login and protected HQ APIs;
 3. ephemeral Player registration/authenticated identity and active staging policy;
-4. deployed Player staging bootstrap binds the canonical staging API;
-5. deployed Player UI login succeeds, persists an access token and hydrates Nishtar Park/court data from the live API;
-6. deployed Admin Operations sign-in succeeds and loads the staging venue;
-7. deployed HQ sign-in succeeds, renders Central Dashboard and live court totals, and receives the live `/admin/dashboard` response;
-8. temporary admin/player accounts are deleted after the test;
-9. deleted credentials are verified to return 401 afterward.
+4. a real future Player quote can be obtained from the deployed API;
+5. a real pending-payment booking can be created and its selected slot becomes unavailable;
+6. the new booking appears in authenticated `My Bookings` and its persisted status is `pending_payment`;
+7. cancelling that unpaid booking succeeds without creating a refund;
+8. the cancelled booking releases the slot and the same slot becomes available again;
+9. deployed Player staging bootstrap binds the canonical staging API;
+10. deployed Player UI login succeeds, persists an access token and hydrates Nishtar Park/court data from the live API;
+11. deployed Admin Operations sign-in succeeds and loads the staging venue;
+12. deployed HQ sign-in succeeds, renders Central Dashboard and live court totals, and receives the live `/admin/dashboard` response;
+13. temporary admin/player accounts and their unpaid booking fixtures are deleted after the test;
+14. deleted credentials are verified to return 401 afterward.
 
-Security CI run `33843390871` for the same head also completed **success**.
+The lifecycle harness reported: `Live staging booking lifecycle passed for 2026-09-07: quote -> hold -> booking history -> cancellation -> slot release.` The deployed browser harness reported: `Deployed Player, Admin operations and HQ browser smoke passed.`
+
+The ephemeral cleanup helper is deliberately conservative: it operates only in `ENVIRONMENT=staging`, only for generated `@sbp-padel-uat.invalid` accounts with the explicit UAT confirmation flag, refuses to remove an account that has payment records, and removes only its unpaid booking fixtures before deleting the account.
 
 The browser harness intentionally treats `net::ERR_ABORTED` requests caused by deliberate page navigation as browser cancellation rather than a network failure, while page errors, console errors and other failed requests remain hard failures. Admin navigation waits for Next.js client hydration before interacting so CI does not click an SSR form before handlers are attached.
 
@@ -41,9 +48,9 @@ The guarded Vercel staging pipeline has previously completed end to end, includi
 
 ## Remaining UAT / external blockers
 
-Automated live staging now covers infrastructure, auth, reference-data hydration and the main Player/Admin/HQ entry surfaces. Still required before production acceptance:
+Automated live staging now covers infrastructure, authentication, reference-data hydration, the main Player/Admin/HQ entry surfaces, and the unpaid booking hold/cancellation/slot-release lifecycle. Still required before production acceptance:
 
-- controlled staging booking lifecycle/slot-locking/cancellation/reschedule/pass/check-in UAT where compatible with the deliberately unconfigured payment provider;
+- paid/confirmed booking, refund, reschedule, pass and check-in live UAT once a real PayZen-compatible staging payment path exists; do not use the development-only payment simulator in staging;
 - real-device Android RC product UAT;
 - SMTP staging configuration before password-recovery delivery can be accepted;
 - official PayZen API/onboarding/UAT material before any real payment traffic;
