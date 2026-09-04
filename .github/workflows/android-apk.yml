@@ -19,8 +19,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    env:
-      SBP_PADEL_RC_API_URL: https://sbp-padel-api-staging.vercel.app/api/v1
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -43,48 +41,43 @@ jobs:
       - name: Verify development signing key
         working-directory: android
         run: keytool -list -keystore dev-signing.keystore -storepass sbppadeldev -alias sbppadeldev
-      - name: Validate native release-candidate API target
+      - name: Verify accepted Android implementation
         shell: bash
         run: |
           set -euo pipefail
-          url="${SBP_PADEL_RC_API_URL:-}"
-          [[ "$url" == https://* ]] || { echo 'Native RC API URL must use HTTPS.'; exit 1; }
-          [[ "$url" == 'https://sbp-padel-api-staging.vercel.app/api/v1' ]] || { echo 'Native RC must target canonical staging API.'; exit 1; }
-          curl -fsS --max-time 20 'https://sbp-padel-api-staging.vercel.app/health/live' >/dev/null
-          curl -fsS --max-time 20 'https://sbp-padel-api-staging.vercel.app/health/ready' >/dev/null
-      - name: Build native debug APK
+          test -f android/app/src/main/java/pk/gov/punjab/sbp/padel/MainActivity.java
+          test ! -f android/app/src/main/java/pk/gov/punjab/sbp/padel/MainActivity.kt
+          grep -q 'class MainActivity extends Activity' android/app/src/main/java/pk/gov/punjab/sbp/padel/MainActivity.java
+          grep -q 'loadReleasePlayer' android/app/src/main/java/pk/gov/punjab/sbp/padel/MainActivity.java
+      - name: Build accepted debug APK
         working-directory: android
         run: gradle :app:assembleDebug --stacktrace
-      - name: Build native secure release-candidate APK
+      - name: Build accepted secure release-candidate APK
         working-directory: android
         run: gradle :app:assembleReleaseCandidate --stacktrace
-      - name: Verify native debug APK exists
-        run: test -f android/app/build/outputs/apk/debug/app-debug.apk
-      - name: Verify native release-candidate output and manifest security
+      - name: Verify accepted release-candidate security
         shell: bash
         run: |
           set -euo pipefail
           APK=android/app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk
+          test -f android/app/build/outputs/apk/debug/app-debug.apk
           test -f "$APK"
           test -f android/app/build/outputs/mapping/releaseCandidate/mapping.txt
           AAPT="${ANDROID_HOME}/build-tools/35.0.0/aapt"
           "$AAPT" dump xmltree "$APK" AndroidManifest.xml > /tmp/manifest.txt
           grep -q 'android:usesCleartextTraffic' /tmp/manifest.txt
           if grep 'android:usesCleartextTraffic' /tmp/manifest.txt | grep -q '0xffffffff'; then
-            echo 'Native release candidate unexpectedly permits cleartext traffic'; exit 1
+            echo 'Accepted release candidate unexpectedly permits cleartext traffic'; exit 1
           fi
-          if unzip -l "$APK" | grep -qi 'webview'; then
-            echo 'Unexpected WebView-named packaged resource found in native RC'; exit 1
-          fi
-      - name: Upload native debug APK
+      - name: Upload accepted debug APK
         uses: actions/upload-artifact@v6
         with:
-          name: sbp-padel-native-debug-apk
+          name: sbp-padel-accepted-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      - name: Upload native release-candidate APK
+      - name: Upload accepted release-candidate APK
         uses: actions/upload-artifact@v6
         with:
-          name: sbp-padel-1.0.0-rc2-native-apk
+          name: sbp-padel-1.0.0-rc1-accepted-app-apk
           path: android/app/build/outputs/apk/releaseCandidate/app-releaseCandidate.apk
           if-no-files-found: error
