@@ -49,25 +49,21 @@ fun NativeBookingFlow(
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    fun refresh() {
+    LaunchedEffect(date, venueId) {
         loading = true
         error = null
         selectedCourt = null
         selectedTimes = emptyList()
         quote = null
-        scope.launch {
-            try {
-                availability = NativeBookingApi.availability(venueId, date.toString())
-                if (policy == null) policy = NativeBookingApi.activePolicy()
-            } catch (e: Exception) {
-                error = e.message
-            } finally {
-                loading = false
-            }
+        try {
+            availability = NativeBookingApi.availability(venueId, date.toString())
+            if (policy == null) policy = NativeBookingApi.activePolicy()
+        } catch (e: Exception) {
+            error = e.message
+        } finally {
+            loading = false
         }
     }
-
-    LaunchedEffect(date, venueId) { refresh() }
 
     LazyColumn(modifier = Modifier.padding(horizontal = 20.dp)) {
         item {
@@ -76,7 +72,10 @@ fun NativeBookingFlow(
             Text(venueName, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                OutlinedButton(onClick = { date = date.minusDays(1).coerceAtLeast(LocalDate.now()) }) { Text("PREVIOUS") }
+                OutlinedButton(onClick = {
+                    val previous = date.minusDays(1)
+                    date = if (previous.isBefore(LocalDate.now())) LocalDate.now() else previous
+                }) { Text("PREVIOUS") }
                 Column { Text(date.toString(), fontWeight = FontWeight.Black); Text(date.dayOfWeek.name, style = MaterialTheme.typography.labelSmall) }
                 OutlinedButton(onClick = { date = date.plusDays(1) }) { Text("NEXT") }
             }
@@ -130,17 +129,14 @@ fun NativeBookingFlow(
             item {
                 Spacer(Modifier.height(14.dp))
                 if (quote == null) {
-                    Button(
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = {
-                            loading = true
-                            scope.launch {
-                                try { quote = NativeBookingApi.quote(venueId, selectedCourt!!.courtId, date.toString(), selectedTimes) }
-                                catch (e: Exception) { error = e.message }
-                                finally { loading = false }
-                            }
+                    Button(modifier = Modifier.fillMaxWidth(), onClick = {
+                        loading = true
+                        scope.launch {
+                            try { quote = NativeBookingApi.quote(venueId, selectedCourt!!.courtId, date.toString(), selectedTimes) }
+                            catch (e: Exception) { error = e.message }
+                            finally { loading = false }
                         }
-                    ) { Text("REVIEW BOOKING", fontWeight = FontWeight.Black) }
+                    }) { Text("REVIEW BOOKING", fontWeight = FontWeight.Black) }
                 }
             }
         }
@@ -159,20 +155,16 @@ fun NativeBookingFlow(
                         Spacer(Modifier.height(10.dp))
                         Text("By confirming, you accept ${policy?.title ?: "the current SBP booking policy"}.", style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(12.dp))
-                        Button(
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = policy != null && !loading,
-                            onClick = {
-                                loading = true
-                                scope.launch {
-                                    try {
-                                        val booking = NativeBookingApi.createBooking(token, venueId, selectedCourt!!.courtId, date.toString(), selectedTimes, policy!!.id)
-                                        onBooked(booking)
-                                    } catch (e: Exception) { error = e.message }
-                                    finally { loading = false }
-                                }
+                        Button(modifier = Modifier.fillMaxWidth(), enabled = policy != null && !loading, onClick = {
+                            loading = true
+                            scope.launch {
+                                try {
+                                    val booking = NativeBookingApi.createBooking(token, venueId, selectedCourt!!.courtId, date.toString(), selectedTimes, policy!!.id)
+                                    onBooked(booking)
+                                } catch (e: Exception) { error = e.message }
+                                finally { loading = false }
                             }
-                        ) { Text("CONFIRM & HOLD COURT", fontWeight = FontWeight.Black) }
+                        }) { Text("CONFIRM & HOLD COURT", fontWeight = FontWeight.Black) }
                     }
                 }
                 OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("CLOSE") }
